@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
+import { DateSelector } from './ticker/DateSelector';
 import { TickerContent } from './ticker/TickerContent';
 import { Info } from 'lucide-react';
 import {
@@ -9,7 +10,7 @@ import {
   SPORT_KEYS
 } from '@/utils/oddsApi';
 import { DEFAULT_SPORT } from '@/utils/config/sportKeys';
-import { TickerData } from '@/utils/types/sports';
+import { TickerData, TickerGame } from '@/utils/types/sports';
 import { getDateInTimeZone, isDateOnDayInTimeZone } from '@/utils/helpers/dateFormatting';
 
 export function MatchupTicker() {
@@ -17,6 +18,9 @@ export function MatchupTicker() {
   const [data, setData] = useState<TickerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [noGames, setNoGames] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('Today');
+  const [availableDates, setAvailableDates] = useState<string[]>(['Today']);
+  const [currentGames, setCurrentGames] = useState<TickerGame[]>([]);
 
   /* ========== fetch when sport changes ========== */
   useEffect(() => {
@@ -38,6 +42,8 @@ export function MatchupTicker() {
         if (games.length === 0) {
           setNoGames(true);
           setData(null);
+          setAvailableDates(['Today']);
+          setSelectedDate('Today');
           return;
         }
 
@@ -80,19 +86,32 @@ export function MatchupTicker() {
           }
         });
 
-        const days = (['Yesterday', 'Today', 'Tomorrow'] as const)
-          .filter(l => buckets[l].length)
-          .map(label => ({
-            label,
-            date: label,
-            games: convertToTickerGames(buckets[label], sportKey)
-          }));
+        // Determine which dates have games
+        const dates = (['Yesterday', 'Today', 'Tomorrow'] as const)
+          .filter(l => buckets[l].length);
+        
+        // Default to Today if it has games, otherwise use the first available date
+        let initialSelectedDate = 'Today';
+        if (!buckets.Today.length && dates.length > 0) {
+          initialSelectedDate = dates[0];
+        }
+        
+        setAvailableDates(dates);
+        setSelectedDate(initialSelectedDate);
+
+        const days = dates.map(label => ({
+          label,
+          date: label,
+          games: convertToTickerGames(buckets[label], sportKey)
+        }));
 
         setData({ sport, days });
       } catch (err) {
         console.error('[Ticker] fetch failed', err);
         setNoGames(true);
         setData(null);
+        setAvailableDates(['Today']);
+        setSelectedDate('Today');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -102,6 +121,16 @@ export function MatchupTicker() {
       cancelled = true;
     };
   }, [sport]);
+
+  // Update current games when selected date or data changes
+  useEffect(() => {
+    if (data && data.days) {
+      const dayData = data.days.find(day => day.label === selectedDate);
+      setCurrentGames(dayData?.games || []);
+    } else {
+      setCurrentGames([]);
+    }
+  }, [selectedDate, data]);
 
   /* ========== UI ========== */
   if (loading)
@@ -115,14 +144,23 @@ export function MatchupTicker() {
     <div className="w-full bg-edge-bg border-b overflow-hidden py-1">
       <div className="container">
         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-2">
-          <div className="flex items-center">
-            <h3 className="text-sm font-semibold text-foreground mr-3">Game Matchups</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-foreground">Game Matchups</h3>
             <SportSelector 
               selectedSport={sport} 
               onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
             />
           </div>
-          <div className="flex items-center text-xs text-muted-foreground">
+          
+          {availableDates.length > 1 && (
+            <DateSelector 
+              selectedDate={selectedDate}
+              availableDates={availableDates}
+              onDateChange={setSelectedDate}
+            />
+          )}
+          
+          <div className="flex items-center text-xs text-muted-foreground ml-auto">
             <Info className="h-3.5 w-3.5 mr-1.5" />
             <span>Latest odds and upcoming games for {sport.toUpperCase()}</span>
           </div>
@@ -136,7 +174,7 @@ export function MatchupTicker() {
               <p className="text-sm">No upcoming games scheduled for {sport.toUpperCase()}</p>
             </div>
           ) : (
-            data && <TickerContent data={data} />
+            <TickerContent games={currentGames} />
           )}
         </div>
       </div>
