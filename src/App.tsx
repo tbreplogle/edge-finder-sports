@@ -30,7 +30,7 @@ const App = () => (
           <Route path="/account" element={<Account />} />
           <Route path="/history" element={<History />} />
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
-          {/* Redirect any unknown routes to home page */}
+          {/* 404 route - redirects to home page */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

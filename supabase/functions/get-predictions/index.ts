@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizePredictions } from "../utils/sanitize.ts";
+import { seedGames } from "../utils/seed.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,62 @@ const SPORTS = [
   { key: 'mlb', script: 'predict_mlb.R', csv: '/tmp/mlb.csv' }
 ];
 
+// Simple in-memory rate limiter
+const rateLimiter = {
+  ipRequests: new Map<string, { count: number, resetTime: number }>(),
+  limit: 100, // Max requests per window
+  windowMs: 60 * 60 * 1000, // 1-hour window
+  
+  isRateLimited(ip: string): boolean {
+    const now = Date.now();
+    const record = this.ipRequests.get(ip);
+    
+    // If no record exists or window has expired, create a new record
+    if (!record || now > record.resetTime) {
+      this.ipRequests.set(ip, { count: 1, resetTime: now + this.windowMs });
+      return false;
+    }
+    
+    // Increment request count
+    record.count += 1;
+    
+    // Check if over limit
+    return record.count > this.limit;
+  },
+  
+  getRemainingRequests(ip: string): number {
+    const record = this.ipRequests.get(ip);
+    if (!record) return this.limit;
+    return Math.max(0, this.limit - record.count);
+  }
+};
+
+// Data validation function
+function validatePrediction(game: any): boolean {
+  // Check for valid prediction values (prevent unreasonable numbers)
+  if (game.predictedMargin !== null && Math.abs(game.predictedMargin) > 100) {
+    console.warn(`Data quality issue: predictedMargin out of bounds: ${game.predictedMargin} for game ${game.id}`);
+    return false;
+  }
+  
+  if (game.marketSpread !== null && Math.abs(game.marketSpread) > 100) {
+    console.warn(`Data quality issue: marketSpread out of bounds: ${game.marketSpread} for game ${game.id}`);
+    return false;
+  }
+  
+  if (game.edge !== null && Math.abs(game.edge) > 50) {
+    console.warn(`Data quality issue: edge out of bounds: ${game.edge} for game ${game.id}`);
+    return false;
+  }
+  
+  if (game.confidence !== null && (game.confidence < 0 || game.confidence > 100)) {
+    console.warn(`Data quality issue: confidence out of bounds: ${game.confidence} for game ${game.id}`);
+    return false;
+  }
+  
+  return true;
+}
+
 serve(async (req) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
@@ -22,6 +79,28 @@ serve(async (req) => {
   }
 
   try {
+    // Get client IP for rate limiting
+    const ip = req.headers.get('x-forwarded-for') || 'unknown';
+    
+    // Check rate limit for non-authenticated requests
+    const authHeader = req.headers.get('Authorization');
+    const isAuthenticated = authHeader && authHeader.startsWith('Bearer ');
+    
+    if (!isAuthenticated && rateLimiter.isRateLimited(ip)) {
+      return new Response(JSON.stringify({ 
+        error: 'Rate limit exceeded. Please try again later.',
+        retryAfter: '1 hour' 
+      }), {
+        status: 429,
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': new Date(Date.now() + 3600000).toISOString()
+        }
+      });
+    }
+
     // Create a Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -29,13 +108,12 @@ serve(async (req) => {
     );
 
     // Get authorization header
-    const authHeader = req.headers.get('Authorization');
     let userRole = 'guest'; // Default role is guest (anonymous)
     let userId = null;
     
     // If user is authenticated, fetch their role
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '');
+    if (isAuthenticated) {
+      const token = authHeader!.replace('Bearer ', '');
       const { data: { user }, error } = await supabase.auth.getUser(token);
       
       if (!error && user) {
@@ -74,13 +152,34 @@ serve(async (req) => {
     // Check if we should have games today based on the sport season
     // This simulates our daily prediction generation job
     const inSeason = checkIfInSeason(sport, today);
+    const isDev = Deno.env.get('ENVIRONMENT') === 'development';
     
     if (inSeason) {
       mockGames = generateMockGames(sport, today);
+    } else if (isDev) {
+      // For development environments, always return seed data so UI can be tested
+      const seedGame = seedGames.find(game => game.sport === sport.toLowerCase());
+      if (seedGame) {
+        mockGames = [seedGame];
+        console.log(`Returning seed data for ${sport} in development environment`);
+      }
+    }
+
+    // Apply data quality validation
+    const validGames = mockGames.filter(validatePrediction);
+    if (validGames.length !== mockGames.length) {
+      console.warn(`Filtered out ${mockGames.length - validGames.length} games that failed data validation`);
     }
 
     // Sanitize the predictions based on user role
-    const sanitizedGames = sanitizePredictions(mockGames, userRole);
+    const sanitizedGames = sanitizePredictions(validGames, userRole);
+
+    // Add rate limit headers for non-authenticated users
+    const headers = { ...corsHeaders, 'Content-Type': 'application/json' };
+    if (!isAuthenticated) {
+      headers['X-RateLimit-Limit'] = rateLimiter.limit.toString();
+      headers['X-RateLimit-Remaining'] = rateLimiter.getRemainingRequests(ip).toString();
+    }
 
     return new Response(JSON.stringify({ 
       data: sanitizedGames,
@@ -88,10 +187,7 @@ serve(async (req) => {
       generatedDate: chicagoDate,
       refreshTime: "08:00 AM CT"
     }), {
-      headers: { 
-        ...corsHeaders,
-        'Content-Type': 'application/json' 
-      }
+      headers
     });
 
   } catch (error) {
