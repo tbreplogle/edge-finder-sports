@@ -1,8 +1,40 @@
 
 // Helper to get abbreviations for team names
 export function getTeamAbbreviation(teamName: string): string {
-  // This is a simplified version - in a real app, you'd have a complete mapping
+  // Complete mapping of team names to abbreviations
   const teamMap: Record<string, string> = {
+    // MLB
+    'Arizona Diamondbacks': 'ARI',
+    'Atlanta Braves': 'ATL',
+    'Baltimore Orioles': 'BAL',
+    'Boston Red Sox': 'BOS',
+    'Chicago Cubs': 'CHC',
+    'Chicago White Sox': 'CWS',
+    'Cincinnati Reds': 'CIN',
+    'Cleveland Guardians': 'CLE',
+    'Colorado Rockies': 'COL',
+    'Detroit Tigers': 'DET',
+    'Houston Astros': 'HOU',
+    'Kansas City Royals': 'KC',
+    'Los Angeles Angels': 'LAA',
+    'Los Angeles Dodgers': 'LAD',
+    'Miami Marlins': 'MIA',
+    'Milwaukee Brewers': 'MIL',
+    'Minnesota Twins': 'MIN',
+    'New York Mets': 'NYM',
+    'New York Yankees': 'NYY',
+    'Oakland Athletics': 'OAK',
+    'Philadelphia Phillies': 'PHI',
+    'Pittsburgh Pirates': 'PIT',
+    'San Diego Padres': 'SD',
+    'San Francisco Giants': 'SF',
+    'Seattle Mariners': 'SEA',
+    'St. Louis Cardinals': 'STL',
+    'Tampa Bay Rays': 'TB',
+    'Texas Rangers': 'TEX',
+    'Toronto Blue Jays': 'TOR',
+    'Washington Nationals': 'WSH',
+    
     // NFL
     'Kansas City Chiefs': 'KC',
     'San Francisco 49ers': 'SF',
@@ -22,15 +54,6 @@ export function getTeamAbbreviation(teamName: string): string {
     'Kansas Jayhawks': 'KAN',
     'Baylor Bears': 'BAY',
     'Duke Blue Devils': 'DUKE',
-    
-    // MLB
-    'New York Yankees': 'NYY',
-    'Los Angeles Dodgers': 'LAD',
-    'Boston Red Sox': 'BOS',
-    'Chicago Cubs': 'CHC',
-    'Houston Astros': 'HOU',
-    
-    // Add more mappings as needed
   };
   
   return teamMap[teamName] || teamName.split(' ').pop()?.substring(0, 3).toUpperCase() || teamName.substring(0, 3).toUpperCase();

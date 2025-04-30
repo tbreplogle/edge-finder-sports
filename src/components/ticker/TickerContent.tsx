@@ -26,8 +26,8 @@ export const TickerContent = ({ data }: TickerContentProps) => {
           ))}
         </CarouselContent>
         <div className="hidden sm:block">
-          <CarouselPrevious className="absolute -left-4 sm:-left-10 lg:-left-16 top-1/2 -translate-y-1/2 z-10" />
-          <CarouselNext className="absolute -right-4 sm:-right-10 lg:-right-16 top-1/2 -translate-y-1/2 z-10" />
+          <CarouselPrevious className="absolute -left-4 sm:-left-12 lg:-left-20 top-1/2 -translate-y-1/2 z-10" />
+          <CarouselNext className="absolute -right-4 sm:-right-12 lg:-right-20 top-1/2 -translate-y-1/2 z-10" />
         </div>
       </Carousel>
     </div>
