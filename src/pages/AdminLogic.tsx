@@ -8,10 +8,17 @@ import { useNavigate } from "react-router-dom";
 import { SPORT_KEYS, SportKey } from "@/utils/config/sportKeys";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, Download, Code } from "lucide-react";
+import { RefreshCw, Download, Code, Eye } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const DEFAULT_CODE = `/**
  * Input: games[] from Odds-API for this sport
@@ -62,15 +69,26 @@ def predict(games):
 
 type LanguageType = "typescript" | "r" | "python";
 
+interface Prediction {
+  game_id: string;
+  predicted_margin: number;
+  predicted_total: number;
+  confidence_pct: number;
+}
+
 const AdminLogic = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [code, setCode] = useState(DEFAULT_CODE);
   const [sport, setSport] = useState<SportKey>("NFL");
   const [running, setRunning] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [language, setLanguage] = useState<LanguageType>("typescript");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<Prediction[]>([]);
+  const [gamesCount, setGamesCount] = useState(0);
   
   // Check if user is admin
   useEffect(() => {
@@ -152,13 +170,17 @@ const AdminLogic = () => {
     }
   }, [language]);
   
-  const runCode = async () => {
+  const runCode = async (previewOnly = false) => {
     setError(null);
-    setRunning(true);
+    if (previewOnly) {
+      setPreviewing(true);
+    } else {
+      setRunning(true);
+    }
     
     try {
       const response = await supabase.functions.invoke('run-prediction-code', {
-        body: { sport, code, language }
+        body: { sport, code, language, previewOnly }
       });
       
       if (response.error) {
@@ -171,6 +193,14 @@ const AdminLogic = () => {
         setError(result.error);
         toast.error("Error Running Code", {
           description: result.error
+        });
+      } else if (previewOnly && result.preview) {
+        // Handle preview data
+        setPreviewData(result.predictions);
+        setGamesCount(result.gamesCount);
+        setPreviewOpen(true);
+        toast.success("Preview Ready", {
+          description: `Generated ${result.predictions.length} predictions.`
         });
       } else {
         toast.success("Success", {
@@ -185,7 +215,12 @@ const AdminLogic = () => {
       });
     } finally {
       setRunning(false);
+      setPreviewing(false);
     }
+  };
+  
+  const previewCode = async () => {
+    await runCode(true);
   };
   
   // Export code as a downloadable file
@@ -328,8 +363,27 @@ const AdminLogic = () => {
             </Select>
             
             <Button
-              onClick={runCode}
-              disabled={running}
+              onClick={previewCode}
+              disabled={running || previewing}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              {previewing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Previewing...
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Run & Preview
+                </>
+              )}
+            </Button>
+            
+            <Button
+              onClick={() => runCode(false)}
+              disabled={running || previewing}
               className="bg-edge-secondary hover:bg-edge-secondary/90"
             >
               {running ? (
@@ -386,6 +440,73 @@ const AdminLogic = () => {
             }}
           />
         </div>
+        
+        {/* Preview Dialog */}
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Prediction Preview</DialogTitle>
+              <DialogDescription>
+                Preview of {previewData.length} predictions (from {gamesCount} games)
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="mt-4">
+              {previewData.length > 0 ? (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="px-4 py-2 text-left">#</th>
+                        <th className="px-4 py-2 text-left">Game ID</th>
+                        <th className="px-4 py-2 text-right">Margin</th>
+                        <th className="px-4 py-2 text-right">Total</th>
+                        <th className="px-4 py-2 text-right">Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewData.slice(0, 20).map((pred, idx) => (
+                        <tr key={idx} className="border-t">
+                          <td className="px-4 py-2">{idx + 1}</td>
+                          <td className="px-4 py-2 font-mono text-xs">{pred.game_id}</td>
+                          <td className="px-4 py-2 text-right">{pred.predicted_margin.toFixed(1)}</td>
+                          <td className="px-4 py-2 text-right">{pred.predicted_total.toFixed(1)}</td>
+                          <td className="px-4 py-2 text-right">{pred.confidence_pct.toFixed(0)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {previewData.length > 20 && (
+                    <div className="py-3 px-4 text-center text-sm text-muted-foreground border-t">
+                      Showing 20 of {previewData.length} predictions
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No predictions generated
+                </div>
+              )}
+              
+              <div className="flex justify-end mt-4 gap-4">
+                <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+                  Close
+                </Button>
+                <Button 
+                  disabled={running}
+                  onClick={() => {
+                    setPreviewOpen(false);
+                    runCode(false);
+                  }}
+                  className="bg-edge-secondary hover:bg-edge-secondary/90"
+                >
+                  Publish These Predictions
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

@@ -259,7 +259,7 @@ serve(async (req) => {
     }
     
     // Parse the request body
-    const { sport, code, language } = await req.json();
+    const { sport, code, language, previewOnly } = await req.json();
     
     if (!sport || !code) {
       return new Response(
@@ -280,6 +280,19 @@ serve(async (req) => {
     
     // Execute the code with the specified language
     const predictions = await executeCode(code, games, language);
+    
+    // If preview only mode is enabled, return the predictions without saving to the database
+    if (previewOnly) {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          preview: true,
+          predictions,
+          gamesCount: games.length 
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     // Save the predictions
     const inserted = await savePredictions(predictions, sport);
