@@ -17,7 +17,7 @@ export const TickerContent = ({ games }: TickerContentProps) => {
           loop: true,
           slidesToScroll: 1,
         }}
-        className="w-full px-8 sm:px-12 md:px-16" // Responsive padding
+        className="w-full px-4 sm:px-8 md:px-12 lg:px-16" // More responsive padding
       >
         <CarouselContent className="-ml-2 sm:-ml-3">
           {games.length > 0 ? (
@@ -37,8 +37,8 @@ export const TickerContent = ({ games }: TickerContentProps) => {
         </CarouselContent>
         {games.length > 0 && (
           <>
-            <CarouselPrevious className="absolute -left-2 sm:-left-4 md:-left-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
-            <CarouselNext className="absolute -right-2 sm:-right-4 md:-right-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselPrevious className="absolute -left-1 sm:-left-2 md:-left-4 lg:-left-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselNext className="absolute -right-1 sm:-right-2 md:-right-4 lg:-right-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
           </>
         )}
       </Carousel>

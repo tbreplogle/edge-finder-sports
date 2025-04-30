@@ -37,7 +37,7 @@
 /* Responsive containers */
 .responsive-container {
   width: 100%;
-  max-width: 1920px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 0 1rem;
 }
@@ -54,9 +54,16 @@
   }
 }
 
+@media (min-width: 1536px) {
+  .responsive-container {
+    padding: 0 2.5rem;
+  }
+}
+
 /* Additional responsive utilities */
 .card {
   padding: 1em;
+  width: 100%;
 }
 
 @media (min-width: 640px) {
@@ -68,6 +75,36 @@
 @media (min-width: 1024px) {
   .card {
     padding: 2em;
+  }
+}
+
+/* Full width containers */
+.full-width-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Responsive sections */
+.responsive-section {
+  width: 100%;
+  padding: 2rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .responsive-section {
+    padding: 3rem 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-section {
+    padding: 4rem 2rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .responsive-section {
+    padding: 5rem 2.5rem;
   }
 }
 
