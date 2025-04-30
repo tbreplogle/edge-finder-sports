@@ -87,7 +87,7 @@ export function AuthForm({ type }: AuthFormProps) {
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-foreground">Email</Label>
             <Input 
               id="email"
               type="email" 
@@ -95,17 +95,19 @@ export function AuthForm({ type }: AuthFormProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="text-foreground"
             />
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-foreground">Password</Label>
             <Input 
               id="password"
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="text-foreground"
             />
           </div>
           

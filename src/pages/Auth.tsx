@@ -58,7 +58,7 @@ const Auth = () => {
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full p-6 bg-card rounded-lg shadow-md border">
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-2xl font-bold text-foreground">
               {action === "login" && "Sign In"}
               {action === "register" && "Create an Account"}
               {action === "forgot-password" && "Reset Password"}
@@ -73,13 +73,13 @@ const Auth = () => {
           {action === "forgot-password" ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium">
+                <label htmlFor="email" className="block text-sm font-medium text-foreground">
                   Email
                 </label>
                 <input 
                   type="email" 
                   id="email" 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
                   placeholder="your@email.com"
                 />
               </div>
