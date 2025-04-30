@@ -98,16 +98,20 @@ export function MatchupTicker() {
   /* ========== UI ========== */
   if (loading)
     return (
-      <div className="w-full bg-muted/20 h-12 flex items-center justify-center">
+      <div className="w-full bg-muted/30 h-14 flex items-center justify-center border-b">
         <p className="text-xs text-muted-foreground">Loading matchup data…</p>
       </div>
     );
 
   return (
-    <div className="w-full bg-muted/20 border-b overflow-hidden">
-      <div className="container py-2">
+    <div className="w-full bg-muted/30 border-b overflow-hidden">
+      <div className="container py-3">
         <div className="flex justify-between items-center mb-2">
-          <h3 className="text-sm font-medium">Match-ups</h3>
+          <div className="flex items-center">
+            <h3 className="text-sm font-medium mr-2">Match-ups</h3>
+            <div className="hidden md:block h-4 w-px bg-border mx-2"></div>
+            <span className="hidden md:block text-xs text-muted-foreground">Browse upcoming games and odds</span>
+          </div>
           <SportSelector 
             selectedSport={sport} 
             onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
@@ -115,9 +119,9 @@ export function MatchupTicker() {
         </div>
 
         {noGames ? (
-          <div className="flex items-center justify-center p-2 bg-card
+          <div className="flex items-center justify-center p-3 bg-card
                           border border-border/30 rounded-md">
-            <p className="text-sm text-muted-foreground">No games scheduled</p>
+            <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
           </div>
         ) : (
           data && <TickerContent data={data} />
