@@ -81,7 +81,7 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false }: MobileNa
               <Button 
                 className="w-full" 
                 onClick={() => {
-                  navigate("/profile");
+                  navigate("/account");
                   onClose();
                 }}
               >

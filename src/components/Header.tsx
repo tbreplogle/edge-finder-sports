@@ -37,6 +37,10 @@ export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean 
     }
   }, [isAuthenticated]);
 
+  const handleLogout = () => {
+    navigate("/auth/logout");
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
@@ -149,10 +153,7 @@ export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean 
                       <DropdownMenuSeparator />
                     </DropdownMenuGroup>
                   )}
-                  <DropdownMenuItem onClick={() => {
-                    localStorage.removeItem("user");
-                    navigate("/auth/logout");
-                  }}>
+                  <DropdownMenuItem onClick={handleLogout}>
                     Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

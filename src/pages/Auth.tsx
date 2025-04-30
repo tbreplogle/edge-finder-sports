@@ -3,13 +3,32 @@ import { AuthForm } from "@/components/AuthForm";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useParams, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useToast } from "@/components/ui/use-toast";
 
 const Auth = () => {
   const { action } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
-  // Types: login, register, forgot-password
+  // Types: login, register, forgot-password, logout
   const validActions = ["login", "register", "forgot-password", "logout"];
+  
+  useEffect(() => {
+    if (action === "logout") {
+      // Clear user data from local storage
+      localStorage.removeItem("user");
+      
+      // Show toast notification
+      toast({
+        title: "Logged out successfully",
+        description: "You have been logged out of your account.",
+      });
+      
+      // Redirect to home page
+      navigate("/", { replace: true });
+    }
+  }, [action, navigate, toast]);
   
   if (!action || !validActions.includes(action)) {
     navigate("/auth/login");
@@ -17,9 +36,7 @@ const Auth = () => {
   }
   
   if (action === "logout") {
-    // For demo, just redirect to home
-    navigate("/");
-    return null;
+    return null; // Will be handled by the useEffect
   }
   
   return (
