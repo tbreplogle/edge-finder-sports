@@ -142,7 +142,7 @@ export function MatchupTicker() {
 
   return (
     <div className="w-full bg-edge-bg border-b overflow-hidden py-1">
-      <div className="w-full mx-auto px-2 sm:px-4 lg:px-6">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row gap-2 md:gap-3 items-start md:items-center mb-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <h3 className="text-xs sm:text-sm font-semibold text-foreground">Game Matchups</h3>
@@ -170,7 +170,7 @@ export function MatchupTicker() {
         <div className="mb-2">
           {noGames ? (
             <div className="flex items-center justify-center p-3 sm:p-4 bg-edge-primary
-                          border border-edge-neutral/30 text-white">
+                          border border-edge-neutral/30 text-white rounded-md">
               <p className="text-xs sm:text-sm">No upcoming games scheduled for {sport.toUpperCase()}</p>
             </div>
           ) : (

@@ -32,8 +32,8 @@ export default function Index() {
 
   return (
     <AppLayout>
-      <section className="py-12 bg-edge-primary/10">
-        <div className="container">
+      <section className="py-12 bg-edge-primary/10 w-full">
+        <div className="max-w-6xl mx-auto w-full">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl mb-6">
               Sports Predictions & Betting Edges
@@ -62,8 +62,8 @@ export default function Index() {
       </section>
 
       {/* Featured Games */}
-      <section className="py-12 md:py-16">
-        <div className="container">
+      <section className="py-12 md:py-16 w-full">
+        <div className="max-w-6xl mx-auto w-full">
           <h2 className="text-2xl md:text-3xl font-bold mb-6">Featured Games</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FeaturedGame isPreview={true} />
@@ -73,8 +73,8 @@ export default function Index() {
         </div>
       </section>
 
-      <section className="py-12 bg-edge-bg">
-        <div className="container">
+      <section className="py-12 bg-edge-bg w-full">
+        <div className="max-w-6xl mx-auto w-full">
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Ready to get started?</h2>
             <p className="text-muted-foreground mb-6">
