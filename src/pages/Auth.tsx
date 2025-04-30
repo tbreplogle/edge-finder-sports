@@ -1,4 +1,3 @@
-
 import { AuthForm } from "@/components/AuthForm";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -16,8 +15,16 @@ const Auth = () => {
   
   useEffect(() => {
     if (action === "logout") {
+      // Check if "remember me" was set
+      const rememberLogin = localStorage.getItem("rememberLogin");
+      
       // Clear user data from local storage
       localStorage.removeItem("user");
+      
+      // Keep "rememberLogin" setting if it exists
+      if (!rememberLogin) {
+        localStorage.removeItem("rememberLogin");
+      }
       
       // Show toast notification
       toast({

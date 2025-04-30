@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface AuthFormProps {
   type: "login" | "register";
@@ -21,6 +21,7 @@ export function AuthForm({ type }: AuthFormProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,12 +33,21 @@ export function AuthForm({ type }: AuthFormProps) {
       // Check for admin login
       if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
         // Store login state in localStorage with admin role
-        localStorage.setItem("user", JSON.stringify({
+        const userData = {
           email: ADMIN_EMAIL,
           role: "admin",
           name: "Admin User",
           is_admin: true
-        }));
+        };
+        
+        if (rememberMe) {
+          localStorage.setItem("user", JSON.stringify(userData));
+          localStorage.setItem("rememberLogin", "true");
+        } else {
+          // If not "remember me", use sessionStorage instead which clears when browser is closed
+          localStorage.setItem("user", JSON.stringify(userData));
+          localStorage.removeItem("rememberLogin");
+        }
         
         // Show success toast
         toast.success("Welcome back, Admin!");
@@ -53,12 +63,21 @@ export function AuthForm({ type }: AuthFormProps) {
       // For demo purposes, allow any login with min requirements
       if (email.includes("@") && password.length >= 4) {
         // Store basic user info
-        localStorage.setItem("user", JSON.stringify({
+        const userData = {
           email: email,
           role: "user",
           name: "User",
           is_admin: false
-        }));
+        };
+        
+        if (rememberMe) {
+          localStorage.setItem("user", JSON.stringify(userData));
+          localStorage.setItem("rememberLogin", "true");
+        } else {
+          // If not "remember me", keep in localStorage but don't set the remember flag
+          localStorage.setItem("user", JSON.stringify(userData));
+          localStorage.removeItem("rememberLogin");
+        }
         
         // Simulate authentication delay
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -109,6 +128,20 @@ export function AuthForm({ type }: AuthFormProps) {
               required
               className="text-foreground"
             />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="rememberMe" 
+              checked={rememberMe} 
+              onCheckedChange={(checked) => setRememberMe(checked === true)}
+            />
+            <label
+              htmlFor="rememberMe"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Remember me
+            </label>
           </div>
           
           <Button 
@@ -165,11 +198,21 @@ export function AuthForm({ type }: AuthFormProps) {
           onClick={() => {
             setIsLoading(true);
             setTimeout(() => {
-              localStorage.setItem("user", JSON.stringify({
+              const userData = {
                 email: "google-user@example.com",
                 role: "user",
-                name: "Google User"
-              }));
+                name: "Google User",
+                is_admin: false
+              };
+              
+              if (rememberMe) {
+                localStorage.setItem("user", JSON.stringify(userData));
+                localStorage.setItem("rememberLogin", "true");
+              } else {
+                localStorage.setItem("user", JSON.stringify(userData));
+                localStorage.removeItem("rememberLogin");
+              }
+              
               navigate("/dashboard");
             }, 1000);
           }}

@@ -14,9 +14,15 @@ interface AppLayoutProps {
 export function AppLayout({ children, showHeader = true, isAuthenticated = false }: AppLayoutProps) {
   const isMobile = useIsMobile();
   
+  // Check for authentication status from localStorage if not provided
+  const checkAuthentication = () => {
+    if (isAuthenticated) return true;
+    return !!localStorage.getItem("user");
+  };
+  
   return (
     <div className="flex flex-col min-h-screen w-full">
-      {showHeader && <Header isAuthenticated={isAuthenticated} />}
+      {showHeader && <Header isAuthenticated={checkAuthentication()} />}
       
       <MatchupTicker />
       

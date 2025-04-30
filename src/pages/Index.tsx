@@ -20,10 +20,7 @@ export default function Index() {
         setIsAdmin(user.is_admin === true);
         setIsPaid(user.role === "premium" || user.is_admin === true);
         
-        // Redirect to /admin if the user is an admin
-        if (user.is_admin === true) {
-          navigate('/admin/sports/nfl');
-        }
+        // Removed automatic redirect to admin page
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
@@ -31,7 +28,7 @@ export default function Index() {
   }, [navigate]);
 
   return (
-    <AppLayout>
+    <AppLayout isAuthenticated={!!localStorage.getItem("user")}>
       <section className="w-full py-8 sm:py-10 md:py-12 lg:py-16 bg-edge-primary/10">
         <div className="w-full mx-auto">
           <div className="max-w-3xl mx-auto text-center">
