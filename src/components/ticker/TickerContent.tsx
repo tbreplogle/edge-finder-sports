@@ -9,6 +9,15 @@ interface TickerContentProps {
 }
 
 export const TickerContent = ({ data }: TickerContentProps) => {
+  // Sort days to ensure Today comes before Tomorrow
+  const sortedDays = [...data.days].sort((a, b) => {
+    if (a.label === 'Today') return -1;
+    if (b.label === 'Today') return 1;
+    if (a.label === 'Yesterday') return -1;
+    if (b.label === 'Yesterday') return 1;
+    return 0;
+  });
+
   return (
     <div className="relative w-full px-0">
       <Carousel 
@@ -19,16 +28,14 @@ export const TickerContent = ({ data }: TickerContentProps) => {
         className="w-full"
       >
         <CarouselContent className="-ml-3">
-          {data.days.map((day) => (
-            <CarouselItem key={day.date} className="pl-3 md:basis-auto">
+          {sortedDays.map((day) => (
+            <CarouselItem key={day.date} className="pl-3 md:basis-full">
               <TickerDayGroup day={day} />
             </CarouselItem>
           ))}
         </CarouselContent>
-        <div className="hidden sm:block">
-          <CarouselPrevious className="absolute left-0 -translate-x-full top-1/2 -translate-y-1/2 z-10" />
-          <CarouselNext className="absolute right-0 translate-x-full top-1/2 -translate-y-1/2 z-10" />
-        </div>
+        <CarouselPrevious className="absolute -left-4 lg:-left-12 top-1/2 -translate-y-1/2 z-10" />
+        <CarouselNext className="absolute -right-4 lg:-right-12 top-1/2 -translate-y-1/2 z-10" />
       </Carousel>
     </div>
   );

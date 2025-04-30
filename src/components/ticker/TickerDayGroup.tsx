@@ -16,17 +16,17 @@ export const TickerDayGroup = ({ day }: TickerDayGroupProps) => {
         <Badge variant="secondary" className="text-xs font-medium bg-edge-neutral text-white border-none mr-2.5 whitespace-nowrap px-3 py-1">
           {day.label}
         </Badge>
-        <ScrollArea className="w-full">
-          <div className="flex gap-0">
-            {day.games.length > 0 ? (
-              day.games.map((game) => (
+        <div className="flex overflow-hidden">
+          {day.games.length > 0 ? (
+            <div className="flex">
+              {day.games.map((game) => (
                 <TickerGameItem key={game.id} game={game} />
-              ))
-            ) : (
-              <span className="text-xs text-muted-foreground italic px-2">No games scheduled</span>
-            )}
-          </div>
-        </ScrollArea>
+              ))}
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground italic px-2">No games scheduled</span>
+          )}
+        </div>
       </div>
     </div>
   );
