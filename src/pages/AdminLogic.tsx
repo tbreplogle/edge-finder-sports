@@ -31,32 +31,60 @@ const AdminLogic = () => {
   const [sport, setSport] = useState<SportKey>("NFL");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Check if user is admin
   useEffect(() => {
     const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      
-      if (!data.session) {
-        console.log("No session found, redirecting to login");
-        navigate("/auth/login");
-        return;
-      }
-      
-      const user = data.session.user;
-      const isAdminUser = user.user_metadata?.is_admin === true;
-      console.log("AdminLogic page - User admin status:", isAdminUser);
-      
-      if (!isAdminUser) {
-        console.log("User is not admin, redirecting to home");
-        toast("Access Denied", {
-          description: "You need admin privileges to access this page."
+      try {
+        setIsLoading(true);
+        // First check locally stored user data
+        const userStr = localStorage.getItem("user");
+        let localAdminStatus = false;
+        
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            localAdminStatus = !!userData.is_admin;
+            console.log("AdminLogic - Local admin status:", localAdminStatus);
+          } catch (e) {
+            console.error("Error parsing user data:", e);
+          }
+        }
+        
+        // Then verify with Supabase session
+        const { data } = await supabase.auth.getSession();
+        
+        if (data.session) {
+          const user = data.session.user;
+          const isAdminUser = user.user_metadata?.is_admin === true;
+          console.log("AdminLogic - Supabase admin status:", isAdminUser);
+          
+          if (isAdminUser || localAdminStatus) {
+            setIsAdmin(true);
+          } else {
+            // Not an admin, show toast and redirect
+            toast.error("Access Denied", {
+              description: "You need admin privileges to access this page."
+            });
+            navigate("/");
+          }
+        } else {
+          // No session, redirect to login
+          toast.error("Authentication Required", {
+            description: "Please log in to continue."
+          });
+          navigate("/auth/login");
+        }
+      } catch (error) {
+        console.error("Error verifying admin status:", error);
+        toast.error("Authentication Error", {
+          description: "Please try logging in again."
         });
-        navigate("/");
-        return;
+        navigate("/auth/login");
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsAdmin(true);
     };
     
     checkAuth();
@@ -79,18 +107,18 @@ const AdminLogic = () => {
       
       if (result.error) {
         setError(result.error);
-        toast("Error Running Code", {
+        toast.error("Error Running Code", {
           description: result.error
         });
       } else {
-        toast("Success", {
+        toast.success("Success", {
           description: `Inserted ${result.inserted} predictions.`
         });
       }
     } catch (err: any) {
       console.error("Error running code:", err);
       setError(err.message || "An unexpected error occurred");
-      toast("Error", {
+      toast.error("Error", {
         description: err.message || "Failed to run code"
       });
     } finally {
@@ -107,8 +135,32 @@ const AdminLogic = () => {
     setSport(value as SportKey);
   };
   
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="container py-12 text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading admin panel...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+  
   if (!isAdmin) {
-    return null;
+    return (
+      <AppLayout>
+        <div className="container py-12 text-center">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p className="mb-6">You need admin privileges to access this page.</p>
+          <Button 
+            onClick={() => navigate("/")}
+            className="bg-edge-secondary hover:bg-edge-secondary/90"
+          >
+            Return to Home
+          </Button>
+        </div>
+      </AppLayout>
+    );
   }
   
   return (

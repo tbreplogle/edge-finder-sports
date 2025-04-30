@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,6 @@ interface MobileNavProps {
 
 export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = false }: MobileNavProps) {
   const navigate = useNavigate();
-  const [isAdminState, setIsAdminState] = useState(isAdmin);
-  
-  useEffect(() => {
-    setIsAdminState(isAdmin);
-  }, [isAdmin]);
   
   useEffect(() => {
     if (isOpen) {
@@ -31,13 +26,10 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = 
     };
   }, [isOpen]);
   
-  // Debug the admin status
-  useEffect(() => {
-    console.log("MobileNav received isAdmin prop:", isAdmin);
-    console.log("MobileNav internal isAdminState:", isAdminState);
-  }, [isAdmin, isAdminState]);
-  
   if (!isOpen) return null;
+
+  // Always display admin tab, access control is handled at the page level
+  const showAdminTab = true;
   
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
@@ -85,7 +77,7 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = 
           >
             Pricing
           </a>
-          {isAdminState && (
+          {showAdminTab && (
             <div className="border-l-2 border-edge-secondary pl-3">
               <span className="text-sm font-semibold text-edge-secondary">ADMIN</span>
               <a 

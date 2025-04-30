@@ -36,19 +36,13 @@ interface HeaderProps {
 export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  // Store the admin status locally to prevent flickering
-  const [isAdminState, setIsAdminState] = useState(isAdmin);
-  
-  useEffect(() => {
-    console.log("Header received isAdmin prop:", isAdmin);
-    setIsAdminState(isAdmin);
-  }, [isAdmin]);
   
   const handleLogout = () => {
     navigate("/auth/logout");
   };
 
-  console.log("Header rendering with isAdmin:", isAdminState);
+  // Always display the Admin tab, access is controlled at the page level
+  const showAdminTab = true;
 
   return (
     <header className="w-full border-b py-3 sm:py-4">
@@ -81,30 +75,13 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                 Pricing
               </Link>
               
-              {isAdminState && (
-                <NavigationMenu>
-                  <NavigationMenuList>
-                    <NavigationMenuItem>
-                      <NavigationMenuTrigger className="px-3 py-2 text-sm font-medium bg-edge-secondary/10 text-edge-secondary rounded-md hover:bg-edge-secondary/20">
-                        Admin
-                      </NavigationMenuTrigger>
-                      <NavigationMenuContent>
-                        <div className="w-[200px] p-2">
-                          <Link
-                            to="/admin/logic"
-                            className="block px-4 py-2 hover:bg-edge-secondary/10 rounded-md"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigate("/admin/logic");
-                            }}
-                          >
-                            Logic Lab
-                          </Link>
-                        </div>
-                      </NavigationMenuContent>
-                    </NavigationMenuItem>
-                  </NavigationMenuList>
-                </NavigationMenu>
+              {showAdminTab && (
+                <Link 
+                  to="/admin/logic"
+                  className="px-3 py-2 text-sm font-medium bg-edge-secondary/10 text-edge-secondary rounded-md hover:bg-edge-secondary/20"
+                >
+                  Admin: Logic Lab
+                </Link>
               )}
             </nav>
           </div>
@@ -133,7 +110,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                     Account Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {isAdminState && (
+                  {showAdminTab && (
                     <DropdownMenuGroup>
                       <DropdownMenuLabel className="text-edge-secondary font-bold">Admin</DropdownMenuLabel>
                       <DropdownMenuItem 
@@ -170,7 +147,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
         </div>
       </div>
       
-      <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} isAuthenticated={isAuthenticated} isAdmin={isAdminState} />
+      <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} isAuthenticated={isAuthenticated} isAdmin={isAdmin} />
     </header>
   );
 }

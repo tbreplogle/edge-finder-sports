@@ -24,6 +24,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Make Home page the default route */}
           <Route path="/" element={<Index />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/auth/:action" element={<Auth />} />
@@ -32,8 +33,8 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
           <Route path="/admin/logic" element={<AdminLogic />} />
-          {/* Catch-all route */}
-          <Route path="*" element={<NotFound />} />
+          {/* Redirect any unknown routes to home page */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
