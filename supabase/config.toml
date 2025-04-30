@@ -1,1 +1,5 @@
+
 project_id = "kubpsfiahmxqubspefdg"
+
+[functions.get-predictions]
+verify_jwt = false

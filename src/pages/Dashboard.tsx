@@ -3,161 +3,107 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SportTabs } from "@/components/SportTabs";
 import { TabsContent } from "@/components/ui/tabs";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { GameCard, GameProps } from "@/components/GameCard";
 import { PremiumBanner } from "@/components/PremiumBanner";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [sport, setSport] = useState<string>("nfl");
-  // This would normally come from an API
-  const mockGames: GameProps[] = useMemo(() => [
-    {
-      id: "nfl-1",
-      sport: "nfl",
-      homeTeam: "Chiefs",
-      awayTeam: "Raiders",
-      startTime: "2025-05-01T19:00:00",
-      marketSpread: -7.5,
-      predictedMargin: -9.2,
-      edge: 1.7,
-      confidence: 65,
-      rawFactors: {
-        home_offense_rank: 3,
-        home_defense_rank: 8,
-        away_offense_rank: 22,
-        away_defense_rank: 14,
-        home_field_advantage: 2.5,
-        injuries_impact: -0.5
+  const [games, setGames] = useState<GameProps[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  
+  // Check authentication state
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsAuthenticated(!!data.session);
+      
+      if (!data.session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login to view the dashboard",
+          variant: "default",
+        });
+        navigate("/auth/login");
       }
-    },
-    {
-      id: "nfl-2",
-      sport: "nfl",
-      homeTeam: "Eagles",
-      awayTeam: "Cowboys",
-      startTime: "2025-05-01T16:25:00",
-      marketSpread: -3,
-      predictedMargin: -6.5,
-      edge: 3.5,
-      confidence: 72,
-      isPremium: true,
-      rawFactors: {
-        home_offense_rank: 5,
-        home_defense_rank: 7,
-        away_offense_rank: 2,
-        away_defense_rank: 15,
-        home_field_advantage: 2.5,
-        injuries_impact: -0.2
+    };
+    
+    checkAuth();
+    
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setIsAuthenticated(!!session);
+        if (!session && event === "SIGNED_OUT") {
+          navigate("/");
+        }
       }
-    },
-    {
-      id: "nfl-3",
-      sport: "nfl",
-      homeTeam: "Packers",
-      awayTeam: "Bears",
-      startTime: "2025-05-01T13:00:00",
-      marketSpread: -6,
-      predictedMargin: -4.2,
-      edge: -1.8,
-      confidence: 58,
-      rawFactors: {
-        home_offense_rank: 8,
-        home_defense_rank: 12,
-        away_offense_rank: 18,
-        away_defense_rank: 10,
-        home_field_advantage: 2.5,
-        injuries_impact: -1.0
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate, toast]);
+  
+  // Fetch games from the edge function
+  useEffect(() => {
+    const fetchGames = async () => {
+      if (!isAuthenticated) return;
+      
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || '';
+        
+        const response = await supabase.functions.invoke('get-predictions', {
+          body: { sport },
+          headers: session ? {
+            Authorization: `Bearer ${token}`
+          } : {}
+        });
+        
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        
+        setGames(response.data.data || []);
+      } catch (error) {
+        console.error('Error fetching games:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load predictions. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
       }
-    },
-    {
-      id: "ncaaf-1",
-      sport: "ncaaf",
-      homeTeam: "Georgia",
-      awayTeam: "Alabama",
-      startTime: "2025-05-01T15:30:00",
-      marketSpread: -4.5,
-      predictedMargin: -7.8,
-      edge: 3.3,
-      confidence: 68,
-      isPremium: true,
-      rawFactors: {
-        home_offense_rank: 2,
-        home_defense_rank: 1,
-        away_offense_rank: 3,
-        away_defense_rank: 5,
-        home_field_advantage: 3.0,
-        recruitment_class_diff: 0.5
-      }
-    },
-    {
-      id: "ncaaf-2",
-      sport: "ncaaf",
-      homeTeam: "Ohio State",
-      awayTeam: "Michigan",
-      startTime: "2025-05-01T12:00:00",
-      marketSpread: -2.5,
-      predictedMargin: -1.3,
-      edge: -1.2,
-      confidence: 55,
-      isPremium: true,
-      rawFactors: {
-        home_offense_rank: 4,
-        home_defense_rank: 6,
-        away_offense_rank: 7,
-        away_defense_rank: 2,
-        home_field_advantage: 3.0,
-        recruitment_class_diff: -0.2
-      }
-    },
-    {
-      id: "ncaab-1",
-      sport: "ncaab",
-      homeTeam: "Duke",
-      awayTeam: "UNC",
-      startTime: "2025-05-01T21:00:00",
-      marketSpread: -3,
-      predictedMargin: -6.2,
-      edge: 3.2,
-      confidence: 70,
-      isPremium: true,
-      rawFactors: {
-        home_offense_efficiency: 118.5,
-        home_defense_efficiency: 95.2,
-        away_offense_efficiency: 115.8,
-        away_defense_efficiency: 97.3,
-        tempo_adjustment: 1.2
-      }
-    },
-    {
-      id: "mlb-1",
-      sport: "mlb",
-      homeTeam: "Dodgers",
-      awayTeam: "Giants",
-      startTime: "2025-05-01T19:10:00",
-      marketSpread: -1.5,
-      predictedMargin: -2.8,
-      edge: 1.3,
-      confidence: 63,
-      isPremium: true,
-      rawFactors: {
-        home_starting_pitcher_era: 2.85,
-        away_starting_pitcher_era: 3.75,
-        home_batting_average: 0.265,
-        away_batting_average: 0.248,
-        ballpark_factor: 102
-      }
-    },
-  ], []);
+    };
+    
+    if (isAuthenticated) {
+      fetchGames();
+    }
+  }, [sport, isAuthenticated, toast]);
   
   const filteredGames = useMemo(() => {
-    return mockGames.filter(game => game.sport === sport);
-  }, [mockGames, sport]);
+    return games.filter(game => game.sport === sport);
+  }, [games, sport]);
+  
+  // If not authenticated, don't render the dashboard
+  if (!isAuthenticated) {
+    return null;
+  }
   
   return (
     <div className="flex flex-col min-h-screen">
-      <Header isAuthenticated={true} />
+      <Header isAuthenticated={isAuthenticated} />
       
       <main className="flex-1 container py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -176,12 +122,18 @@ const Dashboard = () => {
         
         <SportTabs activeTab={sport} onTabChange={setSport}>
           <TabsContent value="nfl" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredGames.map(game => (
-                <GameCard key={game.id} {...game} />
-              ))}
-            </div>
-            {filteredGames.length === 0 && (
+            {loading ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading NFL predictions...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredGames.map(game => (
+                  <GameCard key={game.id} {...game} />
+                ))}
+              </div>
+            )}
+            {!loading && filteredGames.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">No NFL games scheduled for today.</p>
               </div>
@@ -189,12 +141,18 @@ const Dashboard = () => {
           </TabsContent>
           
           <TabsContent value="ncaaf" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredGames.map(game => (
-                <GameCard key={game.id} {...game} />
-              ))}
-            </div>
-            {filteredGames.length === 0 && (
+            {loading ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading NCAAF predictions...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredGames.map(game => (
+                  <GameCard key={game.id} {...game} />
+                ))}
+              </div>
+            )}
+            {!loading && filteredGames.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">No NCAAF games scheduled for today.</p>
               </div>
@@ -202,12 +160,18 @@ const Dashboard = () => {
           </TabsContent>
           
           <TabsContent value="ncaab" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredGames.map(game => (
-                <GameCard key={game.id} {...game} />
-              ))}
-            </div>
-            {filteredGames.length === 0 && (
+            {loading ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading NCAAB predictions...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredGames.map(game => (
+                  <GameCard key={game.id} {...game} />
+                ))}
+              </div>
+            )}
+            {!loading && filteredGames.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">No NCAAB games scheduled for today.</p>
               </div>
@@ -215,12 +179,18 @@ const Dashboard = () => {
           </TabsContent>
           
           <TabsContent value="mlb" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredGames.map(game => (
-                <GameCard key={game.id} {...game} />
-              ))}
-            </div>
-            {filteredGames.length === 0 && (
+            {loading ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading MLB predictions...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredGames.map(game => (
+                  <GameCard key={game.id} {...game} />
+                ))}
+              </div>
+            )}
+            {!loading && filteredGames.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">No MLB games scheduled for today.</p>
               </div>
