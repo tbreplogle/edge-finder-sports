@@ -6,6 +6,7 @@ import { MatchupTicker } from "@/components/MatchupTicker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useLocation } from "react-router-dom";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, showHeader = true, isAuthenticated = false }: AppLayoutProps) {
   const isMobile = useIsMobile();
+  const location = useLocation();
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     // Initialize from localStorage if available
     try {
@@ -28,6 +30,9 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
     }
     return false;
   });
+  
+  // Check if current route is home or dashboard to show the ticker
+  const shouldShowTicker = location.pathname === "/" || location.pathname === "/dashboard";
   
   // Check for authentication status from localStorage if not provided
   const checkAuthentication = () => {
@@ -151,7 +156,7 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
     <div className="flex flex-col min-h-screen w-full">
       {showHeader && <Header isAuthenticated={checkAuthentication()} isAdmin={isAdmin} />}
       
-      <MatchupTicker />
+      {shouldShowTicker && <MatchupTicker />}
       
       <main className="flex-1 w-full">
         <div className="w-full max-w-7xl 3xl:max-w-screen-3xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
