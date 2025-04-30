@@ -1,5 +1,6 @@
 
 import { ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export function Footer() {
   return (
@@ -12,24 +13,24 @@ export function Footer() {
           </span>
         </p>
         <div className="flex items-center justify-center md:justify-end gap-4">
-          <a 
-            href="/terms" 
+          <Link 
+            to="/terms" 
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Terms
-          </a>
-          <a 
-            href="/privacy" 
+          </Link>
+          <Link 
+            to="/privacy" 
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Privacy
-          </a>
-          <a 
-            href="/contact" 
+          </Link>
+          <Link 
+            to="/contact" 
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Contact
-          </a>
+          </Link>
         </div>
       </div>
     </footer>

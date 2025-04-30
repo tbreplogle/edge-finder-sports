@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +14,9 @@ import SportLogic from "./pages/SportLogic";
 import History from "./pages/History";
 import SportLogicTemplate from "./pages/SportLogicTemplate";
 import AdminLogic from "./pages/AdminLogic";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Contact from "./pages/Contact";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +36,9 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
           <Route path="/admin/logic" element={<AdminLogic />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/contact" element={<Contact />} />
           {/* Redirect any unknown routes to home page */}
           <Route path="*" element={<NotFound />} />
         </Routes>
