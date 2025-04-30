@@ -7,7 +7,7 @@ export function Footer() {
     <footer className="border-t py-6 md:py-8">
       <div className="container flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <p className="text-center md:text-left text-sm text-muted-foreground">
-          © {new Date().getFullYear()} PlayEdge. All rights reserved. 
+          © {new Date().getFullYear()} Game Intel. All rights reserved. 
           <span className="block md:inline md:ml-2">
             Predictions are opinion only—no guarantees—gamble responsibly.
           </span>

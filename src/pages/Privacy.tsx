@@ -11,7 +11,7 @@ export default function Privacy() {
           
           <div className="prose prose-invert max-w-none">
             <p className="text-lg mb-6">
-              At Play Edge, we respect your privacy and are committed to protecting your personal data. 
+              At Game Intel, we respect your privacy and are committed to protecting your personal data. 
               This Privacy Policy explains how we collect, use, and safeguard your information when you 
               use our website and services.
             </p>
@@ -156,7 +156,7 @@ export default function Privacy() {
                 If you have any questions about this Privacy Policy or our data practices, please contact us at:
               </p>
               <address className="not-italic mt-3">
-                <p>Email: privacy@playedge.com</p>
+                <p>Email: privacy@gameintel.com</p>
                 <p>Address: 123 Sports Way, Suite 500</p>
                 <p>Las Vegas, NV 89109</p>
               </address>
