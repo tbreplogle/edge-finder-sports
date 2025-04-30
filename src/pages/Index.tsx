@@ -13,12 +13,16 @@ import {
 import { useNavigate } from "react-router-dom";
 import { FeaturedGame } from "@/components/FeaturedGame";
 import { LatestNews } from "@/components/LatestNews";
+import { MatchupTicker } from "@/components/MatchupTicker";
 
 const Index = () => {
   const navigate = useNavigate();
 
   return (
     <div className="flex flex-col min-h-screen">
+      {/* Matchup Ticker */}
+      <MatchupTicker />
+      
       <Header />
       
       <main className="flex-1">
