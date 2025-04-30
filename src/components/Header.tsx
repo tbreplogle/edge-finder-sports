@@ -1,3 +1,4 @@
+
 import { Bell, Menu, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -27,20 +28,9 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   
-  useEffect(() => {
-    if (isAuthenticated) {
-      const userStr = localStorage.getItem("user");
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr);
-          setIsAdmin(user.is_admin === true);
-        } catch (e) {
-          console.error("Error parsing user data:", e);
-        }
-      }
-    }
-  }, [isAuthenticated]);
-
+  // Removing this useEffect since isAdmin is already passed as a prop
+  // We don't need to check it again from localStorage
+  
   const handleLogout = () => {
     navigate("/auth/logout");
   };

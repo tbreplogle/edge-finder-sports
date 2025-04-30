@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { SPORT_KEYS, SportKey } from "@/utils/config/sportKeys";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { RefreshCw } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -46,10 +46,8 @@ const AdminLogic = () => {
       const isAdmin = user.user_metadata?.is_admin === true;
       
       if (!isAdmin) {
-        toast({
-          title: "Access Denied",
-          description: "You need admin privileges to access this page.",
-          variant: "destructive"
+        toast("Access Denied", {
+          description: "You need admin privileges to access this page."
         });
         navigate("/");
         return;
@@ -78,24 +76,19 @@ const AdminLogic = () => {
       
       if (result.error) {
         setError(result.error);
-        toast({
-          title: "Error Running Code",
-          description: result.error,
-          variant: "destructive"
+        toast("Error Running Code", {
+          description: result.error
         });
       } else {
-        toast({
-          title: "Success",
+        toast("Success", {
           description: `Inserted ${result.inserted} predictions.`
         });
       }
     } catch (err: any) {
       console.error("Error running code:", err);
       setError(err.message || "An unexpected error occurred");
-      toast({
-        title: "Error",
-        description: err.message || "Failed to run code",
-        variant: "destructive"
+      toast("Error", {
+        description: err.message || "Failed to run code"
       });
     } finally {
       setRunning(false);

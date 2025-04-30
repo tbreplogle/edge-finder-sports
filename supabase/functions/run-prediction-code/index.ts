@@ -2,7 +2,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../utils/cors.ts";
 import { supabaseAdmin } from "../utils/supabaseAdmin.ts";
-import { SPORT_KEYS } from "../../src/utils/config/sportKeys.ts";
+
+// Define sport keys directly in this file to avoid import issues
+const SPORT_KEYS = {
+  NFL  : 'americanfootball_nfl',
+  NCAAF: 'americanfootball_ncaaf',
+  NCAAB: 'basketball_ncaa',  // ✅ college hoops
+  MLB  : 'baseball_mlb'      // ✅ baseball
+};
 
 // Define function to check if a user is an admin
 const isAdmin = async (token: string) => {
