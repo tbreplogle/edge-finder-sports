@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,7 +62,18 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
-				}
+				},
+				// Custom PlayEdge colors
+				'edge-primary': '#1a2b4c',
+				'edge-secondary': '#38b000',
+				'edge-accent': '#d90429',
+				'edge-neutral': '#2d3748',
+				'edge-bg': '#0f172a',
+				'edge-text': '#f8fafc',
+				'edge-nfl': '#013369',
+				'edge-mlb': '#bf0d3e',
+				'edge-ncaab': '#ff8200',
+				'edge-ncaaf': '#7b1fa2'
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -84,11 +96,16 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-edge': {
+					'0%, 100%': { opacity: '1' },
+					'50%': { opacity: '0.7' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-edge': 'pulse-edge 2s ease-in-out infinite'
 			}
 		}
 	},
