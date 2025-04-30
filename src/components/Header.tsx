@@ -1,4 +1,3 @@
-
 import { Bell, Menu, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -17,11 +16,16 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
+import { Link } from "react-router-dom";
 
-export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
+interface HeaderProps {
+  isAuthenticated?: boolean;
+  isAdmin?: boolean;
+}
+
+export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   
   useEffect(() => {
     if (isAuthenticated) {
@@ -42,8 +46,8 @@ export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean 
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
+    <header className="w-full border-b py-3 sm:py-4">
+      <div className="container flex items-center justify-between">
         <div className="flex items-center gap-2 md:gap-4">
           <Button 
             variant="ghost" 
@@ -60,56 +64,24 @@ export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean 
             <span className="hidden md:inline">Play</span>
             <span>Edge</span>
           </a>
-          <nav className="hidden md:flex items-center gap-6 text-sm">
-            <a 
-              href="/dashboard"
-              className="text-foreground/70 transition-colors hover:text-foreground"
-            >
-              Dashboard
-            </a>
-            <a 
-              href="/history"
-              className="text-foreground/70 transition-colors hover:text-foreground"
-            >
-              History
-            </a>
-            <a 
-              href="/pricing"
-              className="text-foreground/70 transition-colors hover:text-foreground"
-            >
-              Pricing
-            </a>
-            {isAdmin && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="text-foreground/70 transition-colors hover:text-foreground">
-                    Admin
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Admin Tools</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>Sport Logic</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/nfl-logic")}>
-                        NFL
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaaf-logic")}>
-                        NCAAF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaab-logic")}>
-                        NCAAB
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/mlb-logic")}>
-                        MLB
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </nav>
+          <div className="hidden md:flex items-center space-x-1">
+            <nav className="flex items-center space-x-1">
+              <Link to="/dashboard" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
+                Dashboard
+              </Link>
+              <Link to="/history" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
+                History
+              </Link>
+              <Link to="/pricing" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
+                Pricing
+              </Link>
+              {isAdmin && (
+                <Link to="/admin/logic" className="px-3 py-2 text-sm font-medium text-edge-secondary hover:text-edge-secondary/80">
+                  Logic Lab
+                </Link>
+              )}
+            </nav>
+          </div>
         </div>
         
         <div className="flex items-center gap-2">

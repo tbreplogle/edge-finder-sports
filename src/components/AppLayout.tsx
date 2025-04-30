@@ -1,9 +1,10 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { MatchupTicker } from "@/components/MatchupTicker";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -13,6 +14,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, showHeader = true, isAuthenticated = false }: AppLayoutProps) {
   const isMobile = useIsMobile();
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Check for authentication status from localStorage if not provided
   const checkAuthentication = () => {
@@ -20,9 +22,39 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
     return !!localStorage.getItem("user");
   };
   
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const { data } = await supabase.auth.getSession();
+      
+      if (data.session) {
+        const user = data.session.user;
+        setIsAdmin(user.user_metadata?.is_admin === true);
+      } else {
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAdminStatus();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session?.user) {
+          setIsAdmin(session.user.user_metadata?.is_admin === true);
+        } else {
+          setIsAdmin(false);
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+  
   return (
     <div className="flex flex-col min-h-screen w-full">
-      {showHeader && <Header isAuthenticated={checkAuthentication()} />}
+      {showHeader && <Header isAuthenticated={checkAuthentication()} isAdmin={isAdmin} />}
       
       <MatchupTicker />
       

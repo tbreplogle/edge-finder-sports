@@ -1,4 +1,3 @@
-
 import { AppLayout } from "@/components/AppLayout";
 import { SportTabs } from "@/components/SportTabs";
 import { TabsContent } from "@/components/ui/tabs";
@@ -74,7 +73,7 @@ const Dashboard = () => {
     };
   }, []);
   
-  // Fetch games from the edge function
+  // Add real-time functionality to the fetchGames function
   const fetchGames = async (skipLoading = false) => {
     if (!skipLoading) {
       setLoading(true);
@@ -131,6 +130,27 @@ const Dashboard = () => {
   const handleRefresh = () => {
     fetchGames(true);
   };
+  
+  // Add subscription to prediction changes
+  useEffect(() => {
+    // Set up a subscription to predictions table changes
+    const channel = supabase
+      .channel('predictions-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'predictions' },
+        (payload) => {
+          console.log('Predictions updated:', payload);
+          // Refresh the data when predictions are updated
+          fetchGames(true); 
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sport]); // Re-subscribe when sport changes
   
   const filteredGames = useMemo(() => {
     return games.filter(game => game.sport === sport);
