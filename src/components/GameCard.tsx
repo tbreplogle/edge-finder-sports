@@ -73,13 +73,13 @@ export function GameCard({
   
   const isPositiveEdge = edge !== null && edge > 0;
   
-  // Admin users see all data unblurred regardless of premium status
-  // Paid users see all data except extremely high value edges that are premium
-  // Free users see basic edges but premium edges are blurred
-  // Preview games are always shown with full data
+  // Determine if content should be masked (premium protection)
   const shouldMask = predictedMargin === null || 
                      (edge === null) || 
                      (!isAdmin && isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame);
+  
+  // Check if card is locked (guest/free user)
+  const isLocked = (predictedMargin === null || edge === null) && !isPreviewGame;
   
   // Format the market spread for display
   const formattedMarketSpread = marketSpread > 0 
@@ -89,17 +89,21 @@ export function GameCard({
       : "Pick'em";
   
   return (
-    <Card className={cn(
-      "edge-card", 
-      `edge-sport-${sport}`,
-      isPreviewGame && "ring-2 ring-edge-secondary ring-opacity-50"
-    )}>
+    <Card 
+      className={cn(
+        "edge-card relative focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary",
+        `edge-sport-${sport}`,
+        isLocked ? "bg-slate-800/70 border-slate-700 hover:bg-slate-700/70" : "",
+        isPreviewGame ? "ring-2 ring-edge-secondary ring-opacity-50" : ""
+      )}
+      tabIndex={0}
+    >
       <CardContent className="p-4">
         <div className="flex flex-col gap-2">
           <div className="flex justify-between items-start">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline">
+                <Badge variant="outline" className={isLocked ? "text-slate-400" : ""}>
                   {sport.toUpperCase()}
                 </Badge>
                 {isPreviewGame && (
@@ -109,8 +113,10 @@ export function GameCard({
                   </Badge>
                 )}
               </div>
-              <h3 className="font-bold text-lg">{awayTeam} @ {homeTeam}</h3>
-              <div className="flex items-center text-sm text-muted-foreground mt-1">
+              <h3 className={cn("font-bold text-lg", isLocked ? "text-slate-400" : "")}>
+                {awayTeam} @ {homeTeam}
+              </h3>
+              <div className={cn("flex items-center text-sm mt-1", isLocked ? "text-slate-400" : "text-muted-foreground")}>
                 <Clock className="w-3 h-3 mr-1" />
                 <span>{formattedDate}</span>
               </div>
@@ -126,42 +132,33 @@ export function GameCard({
           
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
-              <div className="text-sm text-muted-foreground">Market Spread</div>
-              <div className="font-medium">{formattedMarketSpread}</div>
+              <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>Market Spread</div>
+              <div className={cn("font-medium", isLocked ? "text-slate-400" : "")}>
+                {formattedMarketSpread}
+              </div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Predicted Margin</div>
-              <div className={cn("font-medium premium-content-wrapper", shouldMask ? "relative" : "")}>
-                {/* Content is always visible, but may be masked */}
-                <span>
-                  {predictedMargin !== null ? (
-                    predictedMargin > 0 
-                      ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
-                      : predictedMargin < 0 
-                        ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
-                        : "Even"
-                  ) : (
-                    "Not available"
-                  )}
-                </span>
-                
-                {/* Overlay mask for premium content */}
-                {shouldMask && !isPreviewGame && predictedMargin === null && (
-                  <div className="premium-mask">
-                    <LockIcon className="w-4 h-4 mr-1" />
-                  </div>
+              <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>Predicted Margin</div>
+              <div className={cn("font-medium", isLocked ? "text-slate-400" : "")}>
+                {predictedMargin !== null ? (
+                  predictedMargin > 0 
+                    ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
+                    : predictedMargin < 0 
+                      ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
+                      : "Even"
+                ) : (
+                  <span className="italic font-medium">Premium</span>
                 )}
               </div>
             </div>
           </div>
           
           <div className="mt-2">
-            <div className="text-sm text-muted-foreground mb-1">Edge</div>
+            <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>Edge</div>
             <div className={cn(
-              "font-bold text-lg flex items-center gap-1.5 premium-content-wrapper",
-              shouldMask ? "relative" : ""
+              "font-bold text-lg flex items-center gap-1.5",
+              isLocked ? "text-slate-400" : ""
             )}>
-              {/* Content is always visible, but may be masked */}
               {edge !== null ? (
                 <>
                   {isPositiveEdge ? (
@@ -181,23 +178,13 @@ export function GameCard({
                   )}
                 </>
               ) : (
-                <span>Not available</span>
+                <span className="italic font-medium">Premium</span>
               )}
               
               {confidence && (
-                <span className="ml-auto text-sm text-muted-foreground">
+                <span className={cn("ml-auto text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>
                   {confidence}% confidence
                 </span>
-              )}
-              
-              {/* Overlay mask for premium content */}
-              {shouldMask && !isPreviewGame && edge === null && (
-                <div className="premium-mask">
-                  <div className="flex items-center">
-                    <LockIcon className="w-4 h-4 mr-1" />
-                    <span className="text-sm">2.0+ pts</span>
-                  </div>
-                </div>
               )}
             </div>
           </div>
@@ -229,6 +216,24 @@ export function GameCard({
           )}
         </div>
       </CardContent>
+      
+      {/* Locked overlay for premium content */}
+      {isLocked && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center 
+                      backdrop-blur-sm bg-black/30 rounded-lg transition
+                      hover:bg-black/15 z-10">
+          <LockIcon className="h-6 w-6 text-slate-500 opacity-70 mb-1" />
+          <span className="italic text-slate-400 font-medium">Premium</span>
+          <Button 
+            variant="default" 
+            size="sm"
+            className="mt-3 opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
+            onClick={() => window.location.href = '/pricing'}
+          >
+            Unlock game
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
