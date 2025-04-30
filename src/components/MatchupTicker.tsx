@@ -4,7 +4,7 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { fetchOdds, SPORT_KEYS, convertToTickerGames, TickerGame, TickerDay, TickerData } from "@/utils/oddsApi";
+import { fetchOdds, SPORT_KEYS, convertToTickerGames, TickerGame, TickerDay, TickerData, DEFAULT_SPORT } from "@/utils/oddsApi";
 import { BasketballIcon, FootballIcon, BaseballIcon } from "./SportIcons";
 
 // Component for rendering a single game in the ticker
@@ -12,14 +12,25 @@ const TickerGameItem = ({ game }: { game: TickerGame }) => {
   const isFinal = game.final;
   const isBaseball = game.sport_key?.includes('baseball');
   
-  // Display appropriate odds based on sport
+  // Display appropriate odds based on sport and predictions
   let oddsDisplay;
   if (isBaseball && game.moneyline !== undefined) {
     // For baseball, show moneyline with correct sign
     const moneylineSign = game.moneyline > 0 ? '+' : '';
     oddsDisplay = <div className="text-xs">{game.home} {moneylineSign}{game.moneyline}</div>;
+  } else if (game.predicted_margin !== undefined) {
+    // Show predicted margin if available
+    const predictedTeam = game.predicted_margin > 0 ? game.home : game.away;
+    const predictedValue = Math.abs(game.predicted_margin).toFixed(1);
+    const predictedSign = game.predicted_margin > 0 ? '+' : '-';
+    oddsDisplay = (
+      <div className="text-xs flex items-center">
+        <span className="text-edge-secondary font-medium">{predictedTeam} {predictedSign}{predictedValue}</span>
+        <span className="ml-1 text-muted-foreground text-[10px]">(pred)</span>
+      </div>
+    );
   } else {
-    // For other sports, show spread with correct sign
+    // Default to showing spread
     const spreadTeam = game.spread > 0 ? game.home : game.away;
     const spreadValue = Math.abs(game.spread);
     const spreadSign = game.spread > 0 ? '+' : '-';
@@ -95,7 +106,7 @@ const getSportIcon = (sport: string) => {
 };
 
 export function MatchupTicker() {
-  const [selectedSport, setSelectedSport] = useState<string>("nfl");
+  const [selectedSport, setSelectedSport] = useState<string>(DEFAULT_SPORT);
   const [tickerData, setTickerData] = useState<TickerData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -217,25 +228,25 @@ export function MatchupTicker() {
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="nfl" className="flex items-center">
+              <SelectItem value="NFL" className="flex items-center">
                 <div className="flex items-center">
                   <FootballIcon className="h-4 w-4 mr-2" />
                   <span>NFL</span>
                 </div>
               </SelectItem>
-              <SelectItem value="ncaaf" className="flex items-center">
+              <SelectItem value="NCAAF" className="flex items-center">
                 <div className="flex items-center">
                   <FootballIcon className="h-4 w-4 mr-2" />
                   <span>NCAAF</span>
                 </div>
               </SelectItem>
-              <SelectItem value="ncaab" className="flex items-center">
+              <SelectItem value="NCAAB" className="flex items-center">
                 <div className="flex items-center">
                   <BasketballIcon className="h-4 w-4 mr-2" />
                   <span>NCAAB</span>
                 </div>
               </SelectItem>
-              <SelectItem value="mlb" className="flex items-center">
+              <SelectItem value="MLB" className="flex items-center">
                 <div className="flex items-center">
                   <BaseballIcon className="h-4 w-4 mr-2" />
                   <span>MLB</span>
@@ -285,7 +296,10 @@ const sampleTickerData: TickerData = {
           score_home: 24,
           score_away: 21,
           spread: -3,
-          total: 44
+          total: 44,
+          predicted_margin: -2.7,
+          predicted_total: 42,
+          consensus: 58
         },
         {
           id: "nfl-2",
@@ -295,7 +309,10 @@ const sampleTickerData: TickerData = {
           score_home: 28,
           score_away: 17,
           spread: -4.5,
-          total: 46
+          total: 46,
+          predicted_margin: -5.2,
+          predicted_total: 44,
+          consensus: 61
         }
       ]
     },
@@ -310,7 +327,9 @@ const sampleTickerData: TickerData = {
           tip: "7:30 PM CT",
           spread: -6,
           consensus: 59,
-          total: 45
+          total: 45,
+          predicted_margin: -5.4,
+          predicted_total: 47
         },
         {
           id: "nfl-4",
@@ -319,7 +338,9 @@ const sampleTickerData: TickerData = {
           tip: "8:00 PM CT",
           spread: -3.5,
           consensus: 67,
-          total: 42
+          total: 42,
+          predicted_margin: -4.2,
+          predicted_total: 40
         }
       ]
     },
@@ -334,7 +355,9 @@ const sampleTickerData: TickerData = {
           tip: "6:30 PM CT",
           spread: -1.5,
           consensus: 52,
-          total: 48
+          total: 48,
+          predicted_margin: -0.9,
+          predicted_total: 46
         },
         {
           id: "nfl-6",
@@ -343,7 +366,9 @@ const sampleTickerData: TickerData = {
           tip: "7:00 PM CT",
           spread: -2,
           consensus: 61,
-          total: 47
+          total: 47,
+          predicted_margin: -2.7,
+          predicted_total: 49
         }
       ]
     }

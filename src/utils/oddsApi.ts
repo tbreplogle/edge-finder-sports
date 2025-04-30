@@ -1,15 +1,17 @@
 
 import axios from 'axios';
+import { dummyFromOdds, GameWithMarket, GameWithPrediction } from './generateDummyPrediction';
 
 // Sport key mapping
-export const SPORT_KEYS = {
-  nfl: "americanfootball_nfl",
-  ncaaf: "americanfootball_ncaaf",
-  ncaab: "basketball_ncaab",
-  mlb: "baseball_mlb"
+export const SPORT_KEYS: Record<string, string> = {
+  NFL: "americanfootball_nfl",
+  NCAAF: "americanfootball_ncaaf",
+  NCAAB: "basketball_ncaab",
+  MLB: "baseball_mlb"
 };
 
 export type SportKey = keyof typeof SPORT_KEYS;
+export const DEFAULT_SPORT: SportKey = "NFL";
 
 // API response types
 export interface OddsApiGame {
@@ -69,7 +71,7 @@ export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
   }
 }
 
-// Helper for converting Odds API response to our TickerGame format
+// Helper for converting Odds API response to our TickerGame format with dummy predictions
 export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'America/Chicago'): TickerGame[] {
   return games.map(game => {
     // Extract spread from first bookmaker with spreads market
@@ -89,8 +91,6 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
         const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
         if (homeOutcome && homeOutcome.point !== undefined) {
           spread = homeOutcome.point;
-          // Generate random consensus between 50-80% for demo purposes
-          consensus = Math.floor(Math.random() * 31) + 50;
           break;
         }
       }
@@ -109,6 +109,27 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
 
     const date = new Date(game.commence_time);
     
+    // Create base game object
+    const baseGame: GameWithMarket = {
+      id: game.id,
+      home_team: game.home_team,
+      away_team: game.away_team,
+      home: getTeamAbbreviation(game.home_team),
+      away: getTeamAbbreviation(game.away_team),
+      tip: formatGameTime(date, timeZone),
+      market_spread: isBaseball ? null : spread,
+      market_total: total,
+      spread,
+      moneyline,
+      total,
+      final: false,
+      sport_key: game.sport_key
+    };
+
+    // Generate dummy predictions
+    const withPredictions = dummyFromOdds(baseGame);
+    
+    // Map predictions to our TickerGame format
     return {
       id: game.id,
       home: getTeamAbbreviation(game.home_team),
@@ -117,9 +138,11 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
       spread,
       moneyline,
       total,
-      consensus,
-      final: false, // The API doesn't provide final status, so we'll assume it's not final
-      sport_key: game.sport_key
+      consensus: withPredictions.confidence_pct,
+      final: false,
+      sport_key: game.sport_key,
+      predicted_margin: withPredictions.predicted_margin,
+      predicted_total: withPredictions.predicted_total
     };
   });
 }
@@ -137,20 +160,6 @@ function formatGameTime(date: Date, timeZone: string): string {
 function getTeamAbbreviation(teamName: string): string {
   // This is a simplified version - in a real app, you'd have a complete mapping
   const teamMap: Record<string, string> = {
-    // NBA
-    'Milwaukee Bucks': 'MIL',
-    'Indiana Pacers': 'IND',
-    'Denver Nuggets': 'DEN',
-    'Los Angeles Lakers': 'LAL',
-    'Golden State Warriors': 'GS',
-    'Houston Rockets': 'HOU',
-    'Boston Celtics': 'BOS',
-    'New York Knicks': 'NYK',
-    'Phoenix Suns': 'PHX',
-    'Dallas Mavericks': 'DAL',
-    'Philadelphia 76ers': 'PHI',
-    'Miami Heat': 'MIA',
-    
     // NFL
     'Kansas City Chiefs': 'KC',
     'San Francisco 49ers': 'SF',
@@ -158,6 +167,25 @@ function getTeamAbbreviation(teamName: string): string {
     'Buffalo Bills': 'BUF',
     'Philadelphia Eagles': 'PHI',
     'Baltimore Ravens': 'BAL',
+    
+    // NCAAF
+    'Georgia Bulldogs': 'UGA',
+    'Michigan Wolverines': 'MICH',
+    'Alabama Crimson Tide': 'BAMA',
+    'Ohio State Buckeyes': 'OSU',
+    
+    // NCAAB
+    'Gonzaga Bulldogs': 'GON',
+    'Kansas Jayhawks': 'KAN',
+    'Baylor Bears': 'BAY',
+    'Duke Blue Devils': 'DUKE',
+    
+    // MLB
+    'New York Yankees': 'NYY',
+    'Los Angeles Dodgers': 'LAD',
+    'Boston Red Sox': 'BOS',
+    'Chicago Cubs': 'CHC',
+    'Houston Astros': 'HOU',
     
     // Add more mappings as needed
   };
@@ -179,6 +207,8 @@ export interface TickerGame {
   total?: number;
   consensus?: number;
   sport_key?: string;
+  predicted_margin?: number;
+  predicted_total?: number | null;
 }
 
 export interface TickerDay {
