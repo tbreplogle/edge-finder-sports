@@ -23,7 +23,7 @@ export function getTeamAbbreviation(teamName: string): string {
     'Minnesota Twins': 'MIN',
     'New York Mets': 'NYM',
     'New York Yankees': 'NYY',
-    'Oakland Athletics': 'OAK',
+    'Oakland Athletics': 'ATH',
     'Philadelphia Phillies': 'PHI',
     'Pittsburgh Pirates': 'PIT',
     'San Diego Padres': 'SD',
