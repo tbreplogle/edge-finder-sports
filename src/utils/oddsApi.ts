@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { dummyFromOdds, GameWithMarket, GameWithPrediction } from './generateDummyPrediction';
 
@@ -6,7 +5,7 @@ import { dummyFromOdds, GameWithMarket, GameWithPrediction } from './generateDum
 export const SPORT_KEYS: Record<string, string> = {
   NFL: "americanfootball_nfl",
   NCAAF: "americanfootball_ncaaf",
-  NCAAB: "basketball_ncaab",
+  NCAAB: "basketball_ncaa", // Updated to correct NCAAB endpoint
   MLB: "baseball_mlb"
 };
 
@@ -49,7 +48,8 @@ const BASE_URL = 'https://api.the-odds-api.com/v4/sports';
 
 export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
   try {
-    const markets = sportKey.includes('baseball') ? 'h2h,spreads,totals' : 'spreads,totals';
+    // For baseball, we want h2h (moneyline) instead of spreads
+    const markets = sportKey.includes('baseball') ? 'h2h,totals' : 'spreads,totals';
     
     const { data } = await axios.get(
       `${BASE_URL}/${sportKey}/odds`,
@@ -87,7 +87,7 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
       const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
       const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
       
-      if (spreadsMarket) {
+      if (spreadsMarket && !isBaseball) {
         const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
         if (homeOutcome && homeOutcome.point !== undefined) {
           spread = homeOutcome.point;
@@ -95,10 +95,11 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
         }
       }
       
-      if (isBaseball && h2hMarket) {
+      if (h2hMarket && isBaseball) {
         const homeOutcome = h2hMarket.outcomes.find(o => o.name === game.home_team);
         if (homeOutcome && homeOutcome.price) {
           moneyline = homeOutcome.price;
+          break; // Exit loop once we've found the moneyline
         }
       }
       
@@ -135,7 +136,7 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
       home: getTeamAbbreviation(game.home_team),
       away: getTeamAbbreviation(game.away_team),
       tip: formatGameTime(date, timeZone),
-      spread,
+      spread: isBaseball ? 0 : spread, // Set spread to 0 for baseball
       moneyline,
       total,
       consensus: withPredictions.confidence_pct,
