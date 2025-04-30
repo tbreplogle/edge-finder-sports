@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,11 @@ interface MobileNavProps {
 
 export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = false }: MobileNavProps) {
   const navigate = useNavigate();
+  const [isAdminState, setIsAdminState] = useState(isAdmin);
+  
+  useEffect(() => {
+    setIsAdminState(isAdmin);
+  }, [isAdmin]);
   
   useEffect(() => {
     if (isOpen) {
@@ -25,6 +30,12 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = 
       document.body.classList.remove("overflow-hidden");
     };
   }, [isOpen]);
+  
+  // Debug the admin status
+  useEffect(() => {
+    console.log("MobileNav received isAdmin prop:", isAdmin);
+    console.log("MobileNav internal isAdminState:", isAdminState);
+  }, [isAdmin, isAdminState]);
   
   if (!isOpen) return null;
   
@@ -74,18 +85,21 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = 
           >
             Pricing
           </a>
-          {isAdmin && (
-            <a 
-              href="/admin/logic"
-              className="py-2 text-edge-secondary transition-colors hover:text-edge-secondary/80"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/admin/logic");
-                onClose();
-              }}
-            >
-              Logic Lab
-            </a>
+          {isAdminState && (
+            <div className="border-l-2 border-edge-secondary pl-3">
+              <span className="text-sm font-semibold text-edge-secondary">ADMIN</span>
+              <a 
+                href="/admin/logic"
+                className="block py-2 text-edge-secondary transition-colors hover:text-edge-secondary/80"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate("/admin/logic");
+                  onClose();
+                }}
+              >
+                Logic Lab
+              </a>
+            </div>
           )}
         </nav>
         

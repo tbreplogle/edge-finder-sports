@@ -15,7 +15,19 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, showHeader = true, isAuthenticated = false }: AppLayoutProps) {
   const isMobile = useIsMobile();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    // Initialize from localStorage if available
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        return !!userData.is_admin;
+      }
+    } catch (e) {
+      console.error("Error reading from localStorage:", e);
+    }
+    return false;
+  });
   
   // Check for authentication status from localStorage if not provided
   const checkAuthentication = () => {
@@ -25,46 +37,73 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
   
   // Check if user is admin
   useEffect(() => {
+    let isMounted = true;
+    
     const checkAdminStatus = async () => {
       try {
         // First check locally stored user data
         const userStr = localStorage.getItem("user");
+        let localAdminStatus = false;
+        
         if (userStr) {
-          const userData = JSON.parse(userStr);
-          if (userData.is_admin) {
-            console.log("Found admin status in localStorage");
-            setIsAdmin(true);
-            return;
+          try {
+            const userData = JSON.parse(userStr);
+            localAdminStatus = !!userData.is_admin;
+            if (isMounted && localAdminStatus) {
+              console.log("Found admin status TRUE in localStorage");
+              setIsAdmin(true);
+            }
+          } catch (e) {
+            console.error("Error parsing user data:", e);
           }
         }
         
-        // Then check with Supabase
+        // Then verify with Supabase regardless of local status
         const { data } = await supabase.auth.getSession();
         
-        if (data.session) {
+        if (data.session && isMounted) {
           const user = data.session.user;
           const isAdminUser = user.user_metadata?.is_admin === true;
           console.log("User admin status from Supabase:", isAdminUser);
-          setIsAdmin(isAdminUser);
           
-          // Update localStorage if needed
-          if (isAdminUser && userStr) {
-            try {
-              const userData = JSON.parse(userStr);
-              if (!userData.is_admin) {
-                userData.is_admin = true;
-                localStorage.setItem("user", JSON.stringify(userData));
+          if (isAdminUser) {
+            setIsAdmin(true);
+            
+            // Update localStorage if needed
+            if (userStr) {
+              try {
+                const userData = JSON.parse(userStr);
+                if (!userData.is_admin) {
+                  userData.is_admin = true;
+                  localStorage.setItem("user", JSON.stringify(userData));
+                  console.log("Updated localStorage with admin status");
+                }
+              } catch (e) {
+                console.error("Error updating localStorage:", e);
               }
-            } catch (e) {
-              console.error("Error updating localStorage:", e);
+            }
+          } else if (localAdminStatus !== isAdminUser) {
+            // If Supabase says not admin but localStorage says admin, correct it
+            setIsAdmin(false);
+            if (userStr) {
+              try {
+                const userData = JSON.parse(userStr);
+                userData.is_admin = false;
+                localStorage.setItem("user", JSON.stringify(userData));
+                console.log("Corrected localStorage admin status to false");
+              } catch (e) {
+                console.error("Error updating localStorage:", e);
+              }
             }
           }
-        } else {
+        } else if (isMounted) {
           setIsAdmin(false);
         }
       } catch (error) {
         console.error("Error checking admin status:", error);
-        toast.error("Failed to verify admin status");
+        if (isMounted) {
+          toast.error("Failed to verify admin status");
+        }
       }
     };
     
@@ -72,22 +111,41 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!isMounted) return;
+        
         if (session?.user) {
           const isAdminUser = session.user.user_metadata?.is_admin === true;
           console.log("Auth state changed - user admin status:", isAdminUser);
           setIsAdmin(isAdminUser);
+          
+          // Update localStorage
+          try {
+            const userStr = localStorage.getItem("user");
+            if (userStr) {
+              const userData = JSON.parse(userStr);
+              if (userData.is_admin !== isAdminUser) {
+                userData.is_admin = isAdminUser;
+                localStorage.setItem("user", JSON.stringify(userData));
+                console.log("Updated localStorage admin status on auth change:", isAdminUser);
+              }
+            }
+          } catch (e) {
+            console.error("Error updating localStorage on auth change:", e);
+          }
         } else {
           setIsAdmin(false);
+          console.log("Auth state changed - user logged out or no session");
         }
       }
     );
     
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
   
-  console.log("AppLayout isAdmin status:", isAdmin);
+  console.log("AppLayout rendering with isAdmin status:", isAdmin);
   
   return (
     <div className="flex flex-col min-h-screen w-full">

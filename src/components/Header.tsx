@@ -3,7 +3,7 @@ import { Bell, Menu, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +18,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
 import { Link } from "react-router-dom";
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
+} from "@/components/ui/navigation-menu";
 
 interface HeaderProps {
   isAuthenticated?: boolean;
@@ -27,12 +36,19 @@ interface HeaderProps {
 export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Store the admin status locally to prevent flickering
+  const [isAdminState, setIsAdminState] = useState(isAdmin);
+  
+  useEffect(() => {
+    console.log("Header received isAdmin prop:", isAdmin);
+    setIsAdminState(isAdmin);
+  }, [isAdmin]);
   
   const handleLogout = () => {
     navigate("/auth/logout");
   };
 
-  console.log("Header rendering with isAdmin:", isAdmin);
+  console.log("Header rendering with isAdmin:", isAdminState);
 
   return (
     <header className="w-full border-b py-3 sm:py-4">
@@ -64,13 +80,31 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
               <Link to="/pricing" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
                 Pricing
               </Link>
-              {isAdmin && (
-                <Link 
-                  to="/admin/logic" 
-                  className="px-3 py-2 text-sm font-medium bg-edge-secondary/10 text-edge-secondary rounded-md hover:bg-edge-secondary/20"
-                >
-                  Admin: Logic Lab
-                </Link>
+              
+              {isAdminState && (
+                <NavigationMenu>
+                  <NavigationMenuList>
+                    <NavigationMenuItem>
+                      <NavigationMenuTrigger className="px-3 py-2 text-sm font-medium bg-edge-secondary/10 text-edge-secondary rounded-md hover:bg-edge-secondary/20">
+                        Admin
+                      </NavigationMenuTrigger>
+                      <NavigationMenuContent>
+                        <div className="w-[200px] p-2">
+                          <Link
+                            to="/admin/logic"
+                            className="block px-4 py-2 hover:bg-edge-secondary/10 rounded-md"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigate("/admin/logic");
+                            }}
+                          >
+                            Logic Lab
+                          </Link>
+                        </div>
+                      </NavigationMenuContent>
+                    </NavigationMenuItem>
+                  </NavigationMenuList>
+                </NavigationMenu>
               )}
             </nav>
           </div>
@@ -99,7 +133,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                     Account Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {isAdmin && (
+                  {isAdminState && (
                     <DropdownMenuGroup>
                       <DropdownMenuLabel className="text-edge-secondary font-bold">Admin</DropdownMenuLabel>
                       <DropdownMenuItem 
@@ -136,7 +170,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
         </div>
       </div>
       
-      <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} isAuthenticated={isAuthenticated} isAdmin={isAdmin} />
+      <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} isAuthenticated={isAuthenticated} isAdmin={isAdminState} />
     </header>
   );
 }
