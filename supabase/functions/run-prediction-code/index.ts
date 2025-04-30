@@ -203,7 +203,7 @@ function executePythonCode(code: string, games: any[]) {
     // In a production environment, you would use a proper Python runtime or API
     
     // Parse the Python code to find function parameters and return structure
-    if (!code.includes("def predict") && !code.includes("games"):) {
+    if (!code.includes("def predict") && !code.includes("games")) {
       throw new Error("Python code must define a 'predict' function taking 'games' parameter");
     }
     
