@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,6 @@ interface FeaturedGame {
   marketSpread: number;
   predictedMargin: number;
   edge: number;
-  confidence?: number;
 }
 
 export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
@@ -203,12 +201,6 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
                       {game.edge.toFixed(1)} pts
                     </span>
                   </>
-                )}
-                
-                {game.confidence && (
-                  <span className="ml-auto text-white/70 text-xs">
-                    {game.confidence}% confidence
-                  </span>
                 )}
               </div>
             </div>

@@ -4,6 +4,7 @@ import { SportSelector } from './ticker/SportSelector';
 import { TickerContent } from './ticker/TickerContent';
 import { Separator } from '@/components/ui/separator';
 import { FeaturedGame } from './FeaturedGame';
+import { LiveScores } from './LiveScores';
 import {
   fetchOdds,
   convertToTickerGames,
@@ -135,6 +136,11 @@ export function MatchupTicker() {
               data && <TickerContent data={data} />
             )}
           </div>
+        </div>
+
+        {/* LiveScores component instead of LatestNews */}
+        <div className="mt-8">
+          <LiveScores />
         </div>
       </div>
     </div>
