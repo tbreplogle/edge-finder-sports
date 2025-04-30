@@ -1,46 +1,13 @@
+
 import axios from 'axios';
-import { dummyFromOdds, GameWithMarket, GameWithPrediction } from './generateDummyPrediction';
+import { dummyFromOdds, GameWithMarket } from './generateDummyPrediction';
+import { SPORT_KEYS, SportKey } from './config/sportKeys';
+import { getTeamAbbreviation } from './helpers/teamAbbreviations';
+import { formatGameTime } from './helpers/dateFormatting';
+import { OddsApiGame, TickerGame } from './types/sports';
 
-// Sport key mapping
-export const SPORT_KEYS: Record<string, string> = {
-  NFL: "americanfootball_nfl",
-  NCAAF: "americanfootball_ncaaf",
-  NCAAB: "basketball_ncaa", // Updated to correct NCAAB endpoint
-  MLB: "baseball_mlb"
-};
-
-export type SportKey = keyof typeof SPORT_KEYS;
-export const DEFAULT_SPORT: SportKey = "NFL";
-
-// API response types
-export interface OddsApiGame {
-  id: string;
-  sport_key: string;
-  sport_title: string;
-  commence_time: string;
-  home_team: string;
-  away_team: string;
-  bookmakers: Bookmaker[];
-}
-
-interface Bookmaker {
-  key: string;
-  title: string;
-  last_update: string;
-  markets: Market[];
-}
-
-interface Market {
-  key: string;
-  last_update: string;
-  outcomes: Outcome[];
-}
-
-interface Outcome {
-  name: string;
-  price: number;
-  point?: number;
-}
+// Re-export keys for backward compatibility
+export { SPORT_KEYS, SportKey, DEFAULT_SPORT } from './config/sportKeys';
 
 // The Odds API client
 const ODDS_API_KEY = 'ca659a5203c1cfc6a0275ebd54c57262';
@@ -78,8 +45,7 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
     let spread = 0;
     let moneyline = undefined;
     let total = undefined;
-    let consensus = undefined;
-    let isBaseball = game.sport_key.includes('baseball');
+    const isBaseball = game.sport_key.includes('baseball');
 
     // Find the first bookmaker with spreads
     for (const bookmaker of game.bookmakers) {
@@ -148,77 +114,7 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
   });
 }
 
-// Helper function to format game time
-function formatGameTime(date: Date, timeZone: string): string {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-  });
-}
-
-// Helper to get abbreviations for team names
-function getTeamAbbreviation(teamName: string): string {
-  // This is a simplified version - in a real app, you'd have a complete mapping
-  const teamMap: Record<string, string> = {
-    // NFL
-    'Kansas City Chiefs': 'KC',
-    'San Francisco 49ers': 'SF',
-    'Dallas Cowboys': 'DAL',
-    'Buffalo Bills': 'BUF',
-    'Philadelphia Eagles': 'PHI',
-    'Baltimore Ravens': 'BAL',
-    
-    // NCAAF
-    'Georgia Bulldogs': 'UGA',
-    'Michigan Wolverines': 'MICH',
-    'Alabama Crimson Tide': 'BAMA',
-    'Ohio State Buckeyes': 'OSU',
-    
-    // NCAAB
-    'Gonzaga Bulldogs': 'GON',
-    'Kansas Jayhawks': 'KAN',
-    'Baylor Bears': 'BAY',
-    'Duke Blue Devils': 'DUKE',
-    
-    // MLB
-    'New York Yankees': 'NYY',
-    'Los Angeles Dodgers': 'LAD',
-    'Boston Red Sox': 'BOS',
-    'Chicago Cubs': 'CHC',
-    'Houston Astros': 'HOU',
-    
-    // Add more mappings as needed
-  };
-  
-  return teamMap[teamName] || teamName.split(' ').pop()?.substring(0, 3).toUpperCase() || teamName.substring(0, 3).toUpperCase();
-}
-
-// Types for the ticker data structure
-export interface TickerGame {
-  id?: string;
-  home: string;
-  away: string;
-  tip?: string;
-  final?: boolean;
-  score_home?: number;
-  score_away?: number;
-  spread: number;
-  moneyline?: number;
-  total?: number;
-  consensus?: number;
-  sport_key?: string;
-  predicted_margin?: number;
-  predicted_total?: number | null;
-}
-
-export interface TickerDay {
-  label: string;
-  date: string;
-  games: TickerGame[];
-}
-
-export interface TickerData {
-  sport: string;
-  days: TickerDay[];
-}
+// Re-export TickerGame type for backward compatibility
+export type { TickerGame } from './types/sports';
+export type { TickerDay } from './types/sports';
+export type { TickerData } from './types/sports';
