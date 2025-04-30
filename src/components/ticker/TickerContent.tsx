@@ -37,8 +37,8 @@ export const TickerContent = ({ games }: TickerContentProps) => {
         </CarouselContent>
         {games.length > 0 && (
           <>
-            <CarouselPrevious className="absolute -left-4 lg:-left-6 xl:-left-8 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
-            <CarouselNext className="absolute -right-4 lg:-right-6 xl:-right-8 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselPrevious className="absolute -left-10 lg:-left-12 xl:-left-14 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselNext className="absolute -right-10 lg:-right-12 xl:-right-14 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
           </>
         )}
       </Carousel>
