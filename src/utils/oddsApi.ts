@@ -7,7 +7,8 @@ import { formatGameTime } from './helpers/dateFormatting';
 import { OddsApiGame, TickerGame } from './types/sports';
 
 // Re-export keys for backward compatibility
-export { SPORT_KEYS, SportKey, DEFAULT_SPORT } from './config/sportKeys';
+export { SPORT_KEYS, DEFAULT_SPORT } from './config/sportKeys';
+export type { SportKey } from './config/sportKeys';
 
 // The Odds API client
 const ODDS_API_KEY = 'ca659a5203c1cfc6a0275ebd54c57262';
