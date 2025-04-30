@@ -1,8 +1,3 @@
-// --------------- src/components/MatchupTicker.tsx ---------------
-// FULL FILE — replace your existing MatchupTicker.tsx with this.
-// • Guarantees the “Loading matchup data…” spinner always clears
-// • Logs the fetch result so you can see what’s happening
-// • Shows “No games scheduled” if Odds-API returns an empty array
 
 import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
@@ -11,9 +6,9 @@ import {
   fetchOdds,
   convertToTickerGames,
   SPORT_KEYS,
-  DEFAULT_SPORT,
   TickerData
 } from '@/utils/oddsApi';
+import { DEFAULT_SPORT } from '@/utils/config/sportKeys';
 
 export function MatchupTicker() {
   const [sport, setSport] = useState(DEFAULT_SPORT);

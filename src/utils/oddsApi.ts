@@ -1,18 +1,24 @@
 
 import axios from 'axios';
-import { SPORT_KEYS, DEFAULT_SPORT } from './config/sportKeys';
+import { SPORT_KEYS } from './config/sportKeys';
 import { dummyFromOdds, GameWithMarket } from './generateDummyPrediction';
 import { getTeamAbbreviation } from './helpers/teamAbbreviations';
 import { formatGameTime } from './helpers/dateFormatting';
 import { OddsApiGame, TickerGame } from './types/sports';
 
-// Accessing the environment variable using Vite's import.meta.env instead of process.env
+// Using Vite's environment variable format
 const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY || '';
 const BASE_URL = 'https://api.the-odds-api.com/v4/sports';
 
 export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
   const isBaseball = sportKey.includes('baseball');
   const markets    = isBaseball ? 'h2h,totals' : 'spreads,totals';
+
+  // For development/testing when API key isn't available, return dummy data
+  if (!ODDS_API_KEY) {
+    console.warn('[Ticker] No API key found, returning mock data');
+    return mockGamesData(sportKey);
+  }
 
   const { data } = await axios.get(`${BASE_URL}/${sportKey}/odds`, {
     params: {
@@ -26,6 +32,132 @@ export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
   });
 
   return data;
+}
+
+/* ---------- Mock data for development/testing ---------- */
+function mockGamesData(sportKey: string): OddsApiGame[] {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 86400000);
+  const tomorrow = new Date(now.getTime() + 86400000);
+  
+  const getMockTeams = () => {
+    if (sportKey.includes('baseball')) {
+      return {
+        home: 'Los Angeles Dodgers',
+        away: 'San Francisco Giants'
+      };
+    } else if (sportKey.includes('basketball')) {
+      return {
+        home: 'Los Angeles Lakers',
+        away: 'Golden State Warriors' 
+      };
+    } else {
+      return {
+        home: 'Dallas Cowboys',
+        away: 'Philadelphia Eagles'
+      };
+    }
+  };
+
+  const { home, away } = getMockTeams();
+  
+  return [
+    // Today's game
+    {
+      id: 'mock-game-today',
+      sport_key: sportKey,
+      sport_title: sportKey.split('_').join(' ').toUpperCase(),
+      commence_time: now.toISOString(),
+      home_team: home,
+      away_team: away,
+      bookmakers: [{
+        key: 'mock-bookmaker',
+        title: 'Mock Bookmaker',
+        last_update: now.toISOString(),
+        markets: [
+          {
+            key: sportKey.includes('baseball') ? 'h2h' : 'spreads',
+            last_update: now.toISOString(),
+            outcomes: sportKey.includes('baseball') 
+              ? [
+                  { name: home, price: -150, point: undefined },
+                  { name: away, price: +130, point: undefined }
+                ]
+              : [
+                  { name: home, price: -110, point: -4.5 },
+                  { name: away, price: -110, point: 4.5 }
+                ]
+          },
+          {
+            key: 'totals',
+            last_update: now.toISOString(),
+            outcomes: [
+              { name: 'Over', price: -110, point: sportKey.includes('baseball') ? 8.5 : 49.5 },
+              { name: 'Under', price: -110, point: sportKey.includes('baseball') ? 8.5 : 49.5 }
+            ]
+          }
+        ]
+      }]
+    },
+    // Yesterday's game
+    {
+      id: 'mock-game-yesterday',
+      sport_key: sportKey,
+      sport_title: sportKey.split('_').join(' ').toUpperCase(),
+      commence_time: yesterday.toISOString(),
+      home_team: home,
+      away_team: away,
+      bookmakers: [{
+        key: 'mock-bookmaker',
+        title: 'Mock Bookmaker',
+        last_update: yesterday.toISOString(),
+        markets: [
+          {
+            key: sportKey.includes('baseball') ? 'h2h' : 'spreads',
+            last_update: yesterday.toISOString(),
+            outcomes: sportKey.includes('baseball') 
+              ? [
+                  { name: home, price: -160, point: undefined },
+                  { name: away, price: +140, point: undefined }
+                ] 
+              : [
+                  { name: home, price: -110, point: -3.5 },
+                  { name: away, price: -110, point: 3.5 }
+                ]
+          }
+        ]
+      }]
+    },
+    // Tomorrow's game
+    {
+      id: 'mock-game-tomorrow',
+      sport_key: sportKey,
+      sport_title: sportKey.split('_').join(' ').toUpperCase(),
+      commence_time: tomorrow.toISOString(),
+      home_team: home,
+      away_team: away,
+      bookmakers: [{
+        key: 'mock-bookmaker',
+        title: 'Mock Bookmaker',
+        last_update: tomorrow.toISOString(),
+        markets: [
+          {
+            key: sportKey.includes('baseball') ? 'h2h' : 'spreads',
+            last_update: tomorrow.toISOString(),
+            outcomes: sportKey.includes('baseball') 
+              ? [
+                  { name: home, price: -140, point: undefined },
+                  { name: away, price: +120, point: undefined }
+                ]
+              : [
+                  { name: home, price: -110, point: -2.5 },
+                  { name: away, price: -110, point: 2.5 }
+                ]
+          }
+        ]
+      }]
+    }
+  ];
 }
 
 /* ----------  convertToTickerGames  ---------- */
@@ -104,5 +236,13 @@ export function convertToTickerGames(
   });
 }
 
-export { SPORT_KEYS, DEFAULT_SPORT };
+export { SPORT_KEYS };
 export type { TickerGame } from './types/sports';
+export interface TickerData {
+  sport: string;
+  days: {
+    label: string;
+    date: string;
+    games: TickerGame[];
+  }[];
+}

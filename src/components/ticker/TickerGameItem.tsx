@@ -1,3 +1,4 @@
+
 // ------------ TickerGameItem.tsx ------------
 import { Badge } from '@/components/ui/badge';
 import { TickerGame } from '@/utils/types/sports';
@@ -19,10 +20,10 @@ export const TickerGameItem = ({ game }: Props) => {
       Math.abs(game.moneyline) < Math.abs(game.moneyline_opponent);
     const favTeam = favIsHome ? game.home : game.away;
     const favPrice = favIsHome ? game.moneyline : game.moneyline_opponent;
+    const sign = favPrice > 0 ? '+' : '';
     oddsDisplay = (
       <div className="text-xs">
-        {favTeam} {favPrice > 0 ? '+' : ''}
-        {favPrice}
+        {favTeam} {sign}{favPrice}
       </div>
     );
   } else if (!isBaseball) {
