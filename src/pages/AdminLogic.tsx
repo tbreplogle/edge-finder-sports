@@ -38,6 +38,8 @@ const AdminLogic = () => {
     const checkAuth = async () => {
       try {
         setIsLoading(true);
+        console.log("AdminLogic - Starting authentication check");
+        
         // First check locally stored user data
         const userStr = localStorage.getItem("user");
         let localAdminStatus = false;
@@ -47,12 +49,19 @@ const AdminLogic = () => {
             const userData = JSON.parse(userStr);
             localAdminStatus = !!userData.is_admin;
             console.log("AdminLogic - Local admin status:", localAdminStatus);
+            
+            // Set admin status from localStorage immediately to prevent flicker
+            if (localAdminStatus) {
+              setIsAdmin(true);
+              setIsLoading(false);
+            }
           } catch (e) {
             console.error("Error parsing user data:", e);
           }
         }
         
-        // Then verify with Supabase session
+        // Then verify with Supabase session - but don't wait for this to show the admin UI
+        // if localStorage already indicates admin status
         const { data } = await supabase.auth.getSession();
         
         if (data.session) {
@@ -69,19 +78,22 @@ const AdminLogic = () => {
             });
             navigate("/");
           }
-        } else {
-          // No session, redirect to login
+        } else if (!localAdminStatus) {
+          // No session and no local admin status, redirect to login
+          console.log("AdminLogic - No session found, redirecting to login");
           toast.error("Authentication Required", {
             description: "Please log in to continue."
           });
-          navigate("/auth/login");
+          navigate("/auth/login", { state: { returnUrl: "/admin/logic" } });
         }
       } catch (error) {
         console.error("Error verifying admin status:", error);
-        toast.error("Authentication Error", {
-          description: "Please try logging in again."
-        });
-        navigate("/auth/login");
+        if (!isAdmin) {
+          toast.error("Authentication Error", {
+            description: "Please try logging in again."
+          });
+          navigate("/auth/login", { state: { returnUrl: "/admin/logic" } });
+        }
       } finally {
         setIsLoading(false);
       }

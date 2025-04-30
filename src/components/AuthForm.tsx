@@ -10,19 +10,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 interface AuthFormProps {
   type: "login" | "register";
+  returnUrl?: string;
 }
 
 // Admin user credentials
 const ADMIN_EMAIL = "tbreplogle@gmail.com";
 const ADMIN_PASSWORD = "1234";
 
-export function AuthForm({ type }: AuthFormProps) {
+export function AuthForm({ type, returnUrl = "/dashboard" }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
+  
+  console.log("AuthForm rendering with returnUrl:", returnUrl);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +58,9 @@ export function AuthForm({ type }: AuthFormProps) {
         // Simulate authentication delay
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Navigate to dashboard
-        navigate("/dashboard");
+        // Navigate to the return URL or dashboard
+        console.log("Admin login successful, navigating to:", returnUrl);
+        navigate(returnUrl);
         return;
       }
       
@@ -167,7 +171,7 @@ export function AuthForm({ type }: AuthFormProps) {
           <Button 
             variant="link" 
             className="p-0 h-auto" 
-            onClick={() => navigate(type === "login" ? "/auth/register" : "/auth/login")}
+            onClick={() => navigate(type === "login" ? "/auth/register" : "/auth/login", { state: { returnUrl } })}
           >
             {type === "login" ? "Sign up" : "Sign in"}
           </Button>
@@ -177,7 +181,7 @@ export function AuthForm({ type }: AuthFormProps) {
           <Button 
             variant="link" 
             className="p-0 h-auto w-full text-sm" 
-            onClick={() => navigate("/auth/forgot-password")}
+            onClick={() => navigate("/auth/forgot-password", { state: { returnUrl } })}
           >
             Forgot password?
           </Button>
@@ -213,7 +217,7 @@ export function AuthForm({ type }: AuthFormProps) {
                 localStorage.removeItem("rememberLogin");
               }
               
-              navigate("/dashboard");
+              navigate(returnUrl);
             }, 1000);
           }}
           disabled={isLoading}

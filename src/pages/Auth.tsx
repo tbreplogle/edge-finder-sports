@@ -1,14 +1,19 @@
+
 import { AuthForm } from "@/components/AuthForm";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 
 const Auth = () => {
   const { action } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  
+  // Extract return URL from location state if available
+  const returnUrl = location.state?.returnUrl || "/dashboard";
   
   // Types: login, register, forgot-password, logout
   const validActions = ["login", "register", "forgot-password", "logout"];
@@ -102,7 +107,7 @@ const Auth = () => {
               </div>
             </div>
           ) : (
-            <AuthForm type={action === "login" ? "login" : "register"} />
+            <AuthForm type={action === "login" ? "login" : "register"} returnUrl={returnUrl} />
           )}
         </div>
       </main>

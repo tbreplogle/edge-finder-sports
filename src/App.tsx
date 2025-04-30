@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -34,7 +33,7 @@ const App = () => (
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
           <Route path="/admin/logic" element={<AdminLogic />} />
           {/* Redirect any unknown routes to home page */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
