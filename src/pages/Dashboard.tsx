@@ -7,10 +7,15 @@ import { useState, useMemo, useEffect } from "react";
 import { GameCard, GameProps } from "@/components/GameCard";
 import { PremiumBanner } from "@/components/PremiumBanner";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "lucide-react";
+import { Calendar, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -19,6 +24,7 @@ const Dashboard = () => {
   const [games, setGames] = useState<GameProps[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [userRole, setUserRole] = useState<string | null>("guest");
   
   // Check authentication state
   useEffect(() => {
@@ -26,13 +32,16 @@ const Dashboard = () => {
       const { data } = await supabase.auth.getSession();
       setIsAuthenticated(!!data.session);
       
-      if (!data.session) {
-        toast({
-          title: "Authentication Required",
-          description: "Please login to view the dashboard",
-          variant: "default",
-        });
-        navigate("/auth/login");
+      if (data.session) {
+        const user = data.session.user;
+        // Set role based on user metadata
+        setUserRole(user.user_metadata?.role || "free");
+        // Handle admin status
+        if (user.user_metadata?.is_admin === true) {
+          setUserRole("admin");
+        }
+      } else {
+        setUserRole("guest");
       }
     };
     
@@ -42,8 +51,17 @@ const Dashboard = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setIsAuthenticated(!!session);
-        if (!session && event === "SIGNED_OUT") {
-          navigate("/");
+        
+        if (session) {
+          const user = session.user;
+          // Set role based on user metadata
+          setUserRole(user.user_metadata?.role || "free");
+          // Handle admin status
+          if (user.user_metadata?.is_admin === true) {
+            setUserRole("admin");
+          }
+        } else {
+          setUserRole("guest");
         }
       }
     );
@@ -51,13 +69,11 @@ const Dashboard = () => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate, toast]);
+  }, []);
   
   // Fetch games from the edge function
   useEffect(() => {
     const fetchGames = async () => {
-      if (!isAuthenticated) return;
-      
       setLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -75,6 +91,11 @@ const Dashboard = () => {
         }
         
         setGames(response.data.data || []);
+        
+        // If API returns a role, use it (useful for confirming what the backend sees)
+        if (response.data.userRole) {
+          setUserRole(response.data.userRole);
+        }
       } catch (error) {
         console.error('Error fetching games:', error);
         toast({
@@ -87,19 +108,16 @@ const Dashboard = () => {
       }
     };
     
-    if (isAuthenticated) {
-      fetchGames();
-    }
-  }, [sport, isAuthenticated, toast]);
+    // Fetch games regardless of authentication status
+    fetchGames();
+  }, [sport, toast]);
   
   const filteredGames = useMemo(() => {
     return games.filter(game => game.sport === sport);
   }, [games, sport]);
   
-  // If not authenticated, don't render the dashboard
-  if (!isAuthenticated) {
-    return null;
-  }
+  // Check if we have a preview game (first game with full data for guests)
+  const hasPreviewGame = userRole === 'guest' && filteredGames.some(game => game.predictedMargin !== null);
   
   return (
     <div className="flex flex-col min-h-screen">
@@ -120,6 +138,42 @@ const Dashboard = () => {
           </Button>
         </div>
         
+        {userRole === 'guest' && (
+          <Alert className="mb-6 bg-muted">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Preview Mode</AlertTitle>
+            <AlertDescription>
+              You're viewing in guest preview mode. One game per sport is shown with full details. 
+              <Button 
+                variant="link" 
+                className="px-1 h-auto" 
+                onClick={() => navigate('/auth/login')}
+              >
+                Sign in
+              </Button> 
+              or 
+              <Button 
+                variant="link" 
+                className="px-1 h-auto" 
+                onClick={() => navigate('/auth/register')}
+              >
+                create an account
+              </Button> 
+              to see all predictions.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {hasPreviewGame && (
+          <Alert className="mb-6 border-edge-secondary bg-edge-secondary/10">
+            <Info className="h-4 w-4 text-edge-secondary" />
+            <AlertTitle>Preview Game</AlertTitle>
+            <AlertDescription>
+              The first game below shows full premium details as a preview. Create an account to access all predictions.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <SportTabs activeTab={sport} onTabChange={setSport}>
           <TabsContent value="nfl" className="space-y-4">
             {loading ? (
@@ -129,7 +183,11 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredGames.map(game => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard 
+                    key={game.id} 
+                    {...game} 
+                    isPreview={game.isPreviewGame}
+                  />
                 ))}
               </div>
             )}
@@ -148,7 +206,11 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredGames.map(game => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard 
+                    key={game.id} 
+                    {...game}
+                    isPreview={game.isPreviewGame}
+                  />
                 ))}
               </div>
             )}
@@ -167,7 +229,11 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredGames.map(game => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard 
+                    key={game.id} 
+                    {...game}
+                    isPreview={game.isPreviewGame}
+                  />
                 ))}
               </div>
             )}
@@ -186,7 +252,11 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredGames.map(game => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard 
+                    key={game.id} 
+                    {...game}
+                    isPreview={game.isPreviewGame}
+                  />
                 ))}
               </div>
             )}
@@ -198,7 +268,9 @@ const Dashboard = () => {
           </TabsContent>
         </SportTabs>
         
-        <PremiumBanner />
+        {userRole !== 'premium' && userRole !== 'admin' && (
+          <PremiumBanner />
+        )}
         
         <div className="mt-8 p-4 border rounded-lg bg-card">
           <h3 className="font-medium mb-2">Legend</h3>

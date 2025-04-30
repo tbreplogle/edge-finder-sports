@@ -2,7 +2,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, Clock, LockIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Clock, LockIcon, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
   Dialog,
@@ -20,11 +20,13 @@ export interface GameProps {
   awayTeam: string;
   startTime: string;
   marketSpread: number;
-  predictedMargin: number;
-  edge: number;
-  confidence?: number;
+  predictedMargin: number | null;
+  edge: number | null;
+  confidence?: number | null;
   isPremium?: boolean;
-  rawFactors?: Record<string, any>;
+  rawFactors?: Record<string, any> | null;
+  isPreviewGame?: boolean;
+  isPreview?: boolean;
 }
 
 export function GameCard({
@@ -38,7 +40,9 @@ export function GameCard({
   edge,
   confidence,
   isPremium = false,
-  rawFactors
+  rawFactors,
+  isPreviewGame = false,
+  isPreview = false
 }: GameProps) {
   const [open, setOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -67,12 +71,15 @@ export function GameCard({
     }
   }, []);
   
-  const isPositiveEdge = edge > 0;
+  const isPositiveEdge = edge !== null && edge > 0;
   
   // Admin users see all data unblurred regardless of premium status
   // Paid users see all data except extremely high value edges that are premium
   // Free users see basic edges but premium edges are blurred
-  const shouldMask = !isAdmin && isPremium && Math.abs(edge) > 2 && !isPaid;
+  // Preview games are always shown with full data
+  const shouldMask = predictedMargin === null || 
+                     (edge === null) || 
+                     (!isAdmin && isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame);
   
   // Format the market spread for display
   const formattedMarketSpread = marketSpread > 0 
@@ -82,14 +89,26 @@ export function GameCard({
       : "Pick'em";
   
   return (
-    <Card className={cn("edge-card", `edge-sport-${sport}`)}>
+    <Card className={cn(
+      "edge-card", 
+      `edge-sport-${sport}`,
+      isPreviewGame && "ring-2 ring-edge-secondary ring-opacity-50"
+    )}>
       <CardContent className="p-4">
         <div className="flex flex-col gap-2">
           <div className="flex justify-between items-start">
             <div>
-              <Badge variant="outline" className="mb-2">
-                {sport.toUpperCase()}
-              </Badge>
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="outline">
+                  {sport.toUpperCase()}
+                </Badge>
+                {isPreviewGame && (
+                  <Badge variant="secondary" className="flex gap-1 items-center">
+                    <Star className="w-3 h-3" />
+                    <span>Preview</span>
+                  </Badge>
+                )}
+              </div>
               <h3 className="font-bold text-lg">{awayTeam} @ {homeTeam}</h3>
               <div className="flex items-center text-sm text-muted-foreground mt-1">
                 <Clock className="w-3 h-3 mr-1" />
@@ -97,7 +116,7 @@ export function GameCard({
               </div>
             </div>
             
-            {!isAdmin && isPremium && Math.abs(edge) > 2 && !isPaid && (
+            {!isAdmin && isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame && (
               <Badge variant="secondary" className="flex gap-1 items-center">
                 <LockIcon className="w-3 h-3" />
                 <span>Premium</span>
@@ -115,15 +134,19 @@ export function GameCard({
               <div className={cn("font-medium premium-content-wrapper", shouldMask ? "relative" : "")}>
                 {/* Content is always visible, but may be masked */}
                 <span>
-                  {predictedMargin > 0 
-                    ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
-                    : predictedMargin < 0 
-                      ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
-                      : "Even"}
+                  {predictedMargin !== null ? (
+                    predictedMargin > 0 
+                      ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
+                      : predictedMargin < 0 
+                        ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
+                        : "Even"
+                  ) : (
+                    "Not available"
+                  )}
                 </span>
                 
                 {/* Overlay mask for premium content */}
-                {shouldMask && (
+                {shouldMask && !isPreviewGame && predictedMargin === null && (
                   <div className="premium-mask">
                     <LockIcon className="w-4 h-4 mr-1" />
                   </div>
@@ -139,20 +162,26 @@ export function GameCard({
               shouldMask ? "relative" : ""
             )}>
               {/* Content is always visible, but may be masked */}
-              {isPositiveEdge ? (
+              {edge !== null ? (
                 <>
-                  <ArrowUp className="w-4 h-4 text-edge-secondary" />
-                  <span className="text-edge-secondary">
-                    {edge.toFixed(1)} pts
-                  </span>
+                  {isPositiveEdge ? (
+                    <>
+                      <ArrowUp className="w-4 h-4 text-edge-secondary" />
+                      <span className="text-edge-secondary">
+                        {edge.toFixed(1)} pts
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDown className="w-4 h-4 text-edge-accent" />
+                      <span className="text-edge-accent">
+                        {edge.toFixed(1)} pts
+                      </span>
+                    </>
+                  )}
                 </>
               ) : (
-                <>
-                  <ArrowDown className="w-4 h-4 text-edge-accent" />
-                  <span className="text-edge-accent">
-                    {edge.toFixed(1)} pts
-                  </span>
-                </>
+                <span>Not available</span>
               )}
               
               {confidence && (
@@ -162,7 +191,7 @@ export function GameCard({
               )}
               
               {/* Overlay mask for premium content */}
-              {shouldMask && (
+              {shouldMask && !isPreviewGame && edge === null && (
                 <div className="premium-mask">
                   <div className="flex items-center">
                     <LockIcon className="w-4 h-4 mr-1" />
@@ -179,10 +208,13 @@ export function GameCard({
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className={cn("mt-3 w-full", !isAdmin && !isPaid && isPremium && "opacity-70")}
-                  disabled={!isAdmin && !isPaid && isPremium}
+                  className={cn(
+                    "mt-3 w-full", 
+                    !isAdmin && !isPaid && isPremium && !isPreviewGame && "opacity-70"
+                  )}
+                  disabled={!isAdmin && !isPaid && isPremium && !isPreviewGame}
                 >
-                  {!isAdmin && !isPaid && isPremium ? "Upgrade to view details" : "View details"}
+                  {!isAdmin && !isPaid && isPremium && !isPreviewGame ? "Upgrade to view details" : "View details"}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">

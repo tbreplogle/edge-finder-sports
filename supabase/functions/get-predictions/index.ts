@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizePredictions } from "../utils/sanitize.ts";
@@ -22,7 +23,8 @@ serve(async (req) => {
 
     // Get authorization header
     const authHeader = req.headers.get('Authorization');
-    let userRole = null;
+    let userRole = 'guest'; // Default role is guest (anonymous)
+    let userId = null;
     
     // If user is authenticated, fetch their role
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -30,8 +32,9 @@ serve(async (req) => {
       const { data: { user }, error } = await supabase.auth.getUser(token);
       
       if (!error && user) {
+        userId = user.id;
         // Get user role from metadata or profile
-        userRole = user.user_metadata?.role || null;
+        userRole = user.user_metadata?.role || 'free';
         
         // If user is an admin, set admin role
         if (user.user_metadata?.is_admin === true) {
@@ -39,6 +42,8 @@ serve(async (req) => {
         }
       }
     }
+
+    console.log(`User role: ${userRole}, User ID: ${userId || 'anonymous'}`);
 
     // In a real implementation, you would fetch this data from a database
     // For now, we'll return the mock data that's currently in the Dashboard
