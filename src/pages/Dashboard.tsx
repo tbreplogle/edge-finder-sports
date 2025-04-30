@@ -1,4 +1,3 @@
-
 import { AppLayout } from "@/components/AppLayout";
 import { SportTabs } from "@/components/SportTabs";
 import { TabsContent } from "@/components/ui/tabs";
@@ -17,7 +16,6 @@ import {
 } from "@/components/ui/alert";
 import { format } from "date-fns";
 import { LatestTeamNews } from "@/components/LatestTeamNews";
-import { MatchupTicker } from "@/components/MatchupTicker";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -146,7 +144,6 @@ const Dashboard = () => {
   
   return (
     <AppLayout isAuthenticated={isAuthenticated}>
-      <MatchupTicker />
       <div className="container py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
