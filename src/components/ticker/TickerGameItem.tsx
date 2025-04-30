@@ -1,6 +1,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { TickerGame } from '@/utils/types/sports';
+import { getTeamAbbreviation } from '@/utils/helpers/teamAbbreviations';
 
 interface Props {
   game: TickerGame;
@@ -9,6 +10,10 @@ interface Props {
 export const TickerGameItem = ({ game }: Props) => {
   const isFinal = game.final;
   const isBaseball = game.sport_key?.includes('baseball');
+  
+  // Use team abbreviations
+  const homeTeam = getTeamAbbreviation(game.home);
+  const awayTeam = getTeamAbbreviation(game.away);
 
   /* ---------------- ODDS DISPLAY ---------------- */
   let oddsDisplay: JSX.Element | null = null;
@@ -26,7 +31,7 @@ export const TickerGameItem = ({ game }: Props) => {
       (homeOdds < 0 && awayOdds < 0 && homeOdds < awayOdds) || // Both negative, home more negative
       (homeOdds > 0 && awayOdds > 0 && homeOdds < awayOdds); // Both positive, home less positive
     
-    const favTeam = favIsHome ? game.home : game.away;
+    const favTeam = favIsHome ? homeTeam : awayTeam;
     const favPrice = favIsHome ? homeOdds : awayOdds;
     
     // Format with + sign for positive odds
@@ -40,7 +45,7 @@ export const TickerGameItem = ({ game }: Props) => {
     );
   } else if (!isBaseball && game.spread !== 0) {
     // For point spreads, the favorite is indicated by negative spread
-    const favoredTeam = game.spread < 0 ? game.home : game.away;
+    const favoredTeam = game.spread < 0 ? homeTeam : awayTeam;
     const spreadValue = Math.abs(game.spread);
     
     oddsDisplay = (
@@ -59,8 +64,8 @@ export const TickerGameItem = ({ game }: Props) => {
           {/* Final game display */}
           <div className="flex items-center">
             <div className="flex flex-col mr-1.5">
-              <span className="font-medium text-sm">{game.away}</span>
-              <span className="font-medium text-sm">{game.home}</span>
+              <span className="font-medium text-sm">{awayTeam}</span>
+              <span className="font-medium text-sm">{homeTeam}</span>
             </div>
             <div className="flex flex-col">
               <span className="font-medium text-sm">{game.score_away}</span>
@@ -77,7 +82,7 @@ export const TickerGameItem = ({ game }: Props) => {
           <div className="flex items-center">
             <div className="flex flex-col">
               <div className="flex items-center justify-between w-20">
-                <span className="font-medium text-sm">{game.away}</span>
+                <span className="font-medium text-sm">{awayTeam}</span>
                 {!isBaseball && game.spread > 0 && (
                   <span className="text-xs text-muted-foreground">+{Math.abs(game.spread)}</span>
                 )}
@@ -86,7 +91,7 @@ export const TickerGameItem = ({ game }: Props) => {
                 )}
               </div>
               <div className="flex items-center justify-between w-20">
-                <span className="font-medium text-sm">{game.home}</span>
+                <span className="font-medium text-sm">{homeTeam}</span>
                 {!isBaseball && game.spread < 0 && (
                   <span className="text-xs text-muted-foreground">+{Math.abs(game.spread)}</span>
                 )}

@@ -3,7 +3,6 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { TickerDay } from "@/utils/types/sports";
 import { TickerGameItem } from "./TickerGameItem";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TickerDayGroupProps {
@@ -11,8 +10,6 @@ interface TickerDayGroupProps {
 }
 
 export const TickerDayGroup = ({ day }: TickerDayGroupProps) => {
-  const isMobile = useIsMobile();
-  
   return (
     <div className="flex flex-col">
       <div className="flex items-center mb-1">
@@ -20,13 +17,9 @@ export const TickerDayGroup = ({ day }: TickerDayGroupProps) => {
           {day.label}
         </Badge>
         <ScrollArea className="w-full">
-          <div className="flex gap-0 py-1">
-            {!isMobile && day.games.length > 0 ? (
+          <div className="flex gap-0">
+            {day.games.length > 0 ? (
               day.games.map((game) => (
-                <TickerGameItem key={game.id} game={game} />
-              ))
-            ) : isMobile && day.games.length > 0 ? (
-              day.games.slice(0, 2).map((game) => (
                 <TickerGameItem key={game.id} game={game} />
               ))
             ) : (

@@ -1,3 +1,4 @@
+
 import { AppLayout } from "@/components/AppLayout";
 import { LiveScores } from "@/components/LiveScores";
 import { MatchupTicker } from "@/components/MatchupTicker";
@@ -114,17 +115,17 @@ const Index = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <FeaturedGame 
-              sport="nfl" 
+              sportKey="nfl" 
               isPaid={isPremium}
               isAdmin={userRole === "admin"} 
             />
             <FeaturedGame 
-              sport="ncaaf" 
+              sportKey="ncaaf" 
               isPaid={isPremium}
               isAdmin={userRole === "admin"} 
             />
             <FeaturedGame 
-              sport="ncaab" 
+              sportKey="ncaab" 
               isPaid={isPremium}
               isAdmin={userRole === "admin"} 
             />
