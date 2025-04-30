@@ -45,6 +45,7 @@ export function MatchupTicker() {
         const timeZone = 'America/Chicago';
         
         // Get today
+        const now = new Date();
         const today = new Date();
         const todayStr = getDateInTimeZone(today, timeZone);
         
@@ -61,7 +62,13 @@ export function MatchupTicker() {
           Tomorrow: []
         };
 
-        games.forEach(g => {
+        // Filter out games that have already started
+        const upcomingGames = games.filter(g => {
+          const gameTime = new Date(g.commence_time);
+          return gameTime > now;
+        });
+
+        upcomingGames.forEach(g => {
           const gameDate = new Date(g.commence_time);
           
           if (isDateOnDayInTimeZone(gameDate, today, timeZone)) {
@@ -126,7 +133,7 @@ export function MatchupTicker() {
           {noGames ? (
             <div className="flex items-center justify-center p-4 bg-edge-primary
                           border border-edge-neutral/30 text-white">
-              <p className="text-sm">No games scheduled for {sport.toUpperCase()}</p>
+              <p className="text-sm">No upcoming games scheduled for {sport.toUpperCase()}</p>
             </div>
           ) : (
             data && <TickerContent data={data} />

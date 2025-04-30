@@ -3,7 +3,6 @@ import React from "react";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { TickerDayGroup } from "./TickerDayGroup";
 import { TickerData } from "@/utils/types/sports";
-import { Separator } from "@/components/ui/separator";
 
 interface TickerContentProps {
   data: TickerData;
@@ -27,8 +26,8 @@ export const TickerContent = ({ data }: TickerContentProps) => {
           ))}
         </CarouselContent>
         <div className="hidden sm:block">
-          <CarouselPrevious className="absolute -left-10 top-1/2 -translate-y-1/2" />
-          <CarouselNext className="absolute -right-10 top-1/2 -translate-y-1/2" />
+          <CarouselPrevious className="absolute -left-4 sm:-left-10 lg:-left-16 top-1/2 -translate-y-1/2 z-10" />
+          <CarouselNext className="absolute -right-4 sm:-right-10 lg:-right-16 top-1/2 -translate-y-1/2 z-10" />
         </div>
       </Carousel>
     </div>

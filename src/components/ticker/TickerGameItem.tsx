@@ -1,7 +1,6 @@
 
 import { Badge } from '@/components/ui/badge';
 import { TickerGame } from '@/utils/types/sports';
-import { Separator } from "@/components/ui/separator";
 
 interface Props {
   game: TickerGame;
@@ -46,7 +45,7 @@ export const TickerGameItem = ({ game }: Props) => {
     
     oddsDisplay = (
       <div className="text-xs">
-        <span className="text-muted-foreground mr-1">Spread:</span>
+        <span className="text-muted-foreground mr-1">Fav:</span>
         <span className="font-medium">{favoredTeam} -{spreadValue}</span>
       </div>
     );
@@ -100,14 +99,17 @@ export const TickerGameItem = ({ game }: Props) => {
           
           {/* Right side info */}
           <div className="flex items-center">
-            {game.total && (
-              <div className="text-xs mr-2">
+            {oddsDisplay}
+            
+            {game.total && !oddsDisplay && (
+              <div className="text-xs">
                 <span className="text-muted-foreground mr-1">O/U:</span>
                 <span className="font-medium">{game.total}</span>
               </div>
             )}
+            
             {game.tip && (
-              <span className="text-xs font-semibold">{game.tip}</span>
+              <span className="text-xs font-semibold ml-2">{game.tip}</span>
             )}
           </div>
         </div>
