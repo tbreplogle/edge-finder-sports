@@ -65,8 +65,11 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                 Pricing
               </Link>
               {isAdmin && (
-                <Link to="/admin/logic" className="px-3 py-2 text-sm font-medium text-edge-secondary hover:text-edge-secondary/80">
-                  Logic Lab
+                <Link 
+                  to="/admin/logic" 
+                  className="px-3 py-2 text-sm font-medium bg-edge-secondary/10 text-edge-secondary rounded-md hover:bg-edge-secondary/20"
+                >
+                  Admin: Logic Lab
                 </Link>
               )}
             </nav>
@@ -98,8 +101,11 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                   <DropdownMenuSeparator />
                   {isAdmin && (
                     <DropdownMenuGroup>
-                      <DropdownMenuLabel>Admin</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => navigate("/admin/logic")}>
+                      <DropdownMenuLabel className="text-edge-secondary font-bold">Admin</DropdownMenuLabel>
+                      <DropdownMenuItem 
+                        onClick={() => navigate("/admin/logic")}
+                        className="bg-edge-secondary/10 text-edge-secondary hover:bg-edge-secondary/20"
+                      >
                         Logic Lab
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />

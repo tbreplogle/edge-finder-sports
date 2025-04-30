@@ -1,11 +1,10 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
+import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ExternalLink, CreditCard, Calendar, LogOut, Loader2 } from "lucide-react";
+import { ExternalLink, CreditCard, Calendar, LogOut, Loader2, Code } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 interface UserData {
@@ -127,9 +126,7 @@ const Account = () => {
   
   return (
     <div className="flex flex-col min-h-screen">
-      <Header isAuthenticated={true} />
-      
-      <main className="flex-1 container py-8">
+      <AppLayout showHeader={true} isAuthenticated={true}>
         <h1 className="text-2xl md:text-3xl font-bold mb-8">Account Management</h1>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -149,6 +146,13 @@ const Account = () => {
                     <p className="text-sm">
                       You have full access to all features as an administrator.
                     </p>
+                    <Button 
+                      onClick={() => navigate("/admin/logic")}
+                      className="mt-4 bg-edge-secondary hover:bg-edge-secondary/90"
+                    >
+                      <Code className="mr-2 h-4 w-4" />
+                      Access Logic Lab
+                    </Button>
                   </div>
                 ) : subscription ? (
                   <>
@@ -309,9 +313,7 @@ const Account = () => {
             </Card>
           </div>
         </div>
-      </main>
-      
-      <Footer />
+      </AppLayout>
     </div>
   );
 };
