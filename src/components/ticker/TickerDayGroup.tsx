@@ -14,13 +14,15 @@ export const TickerDayGroup = ({ day }: TickerDayGroupProps) => {
   
   return (
     <div className="flex flex-col">
-      <div className="flex gap-2 items-center mb-1">
+      <div className="flex flex-wrap gap-2 items-center mb-1">
         <Badge variant="secondary" className="text-xs">{day.label}</Badge>
-        <div className="flex gap-2">
-          {!isMobile && day.games.slice(0, 3).map((game) => (
+        <div className="flex flex-wrap gap-2">
+          {/* Show all games instead of limiting to 3 */}
+          {!isMobile && day.games.map((game) => (
             <TickerGameItem key={game.id} game={game} />
           ))}
-          {isMobile && day.games.slice(0, 1).map((game) => (
+          {/* On mobile, still limit to 2 games to prevent overflow */}
+          {isMobile && day.games.slice(0, 2).map((game) => (
             <TickerGameItem key={game.id} game={game} />
           ))}
         </div>

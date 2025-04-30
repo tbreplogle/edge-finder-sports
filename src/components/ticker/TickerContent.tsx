@@ -19,7 +19,7 @@ export const TickerContent = ({ data }: TickerContentProps) => {
     >
       <CarouselContent className="-ml-2">
         {data.days.map((day) => (
-          <CarouselItem key={day.date} className="pl-2 flex-shrink-0 basis-auto">
+          <CarouselItem key={day.date} className="pl-2 flex-shrink-0 basis-full md:basis-full">
             <TickerDayGroup day={day} />
           </CarouselItem>
         ))}

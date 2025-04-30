@@ -9,7 +9,7 @@ import {
 } from '@/utils/oddsApi';
 import { DEFAULT_SPORT } from '@/utils/config/sportKeys';
 import { TickerData } from '@/utils/types/sports';
-import { formatInTimeZone } from 'date-fns-tz';
+import { getDateInTimeZone, isDateOnDayInTimeZone } from '@/utils/helpers/dateFormatting';
 
 export function MatchupTicker() {
   const [sport, setSport] = useState<keyof typeof SPORT_KEYS>(DEFAULT_SPORT);
@@ -43,17 +43,16 @@ export function MatchupTicker() {
         /* ---- bucket Yesterday / Today / Tomorrow using Chicago time zone ---- */
         const timeZone = 'America/Chicago';
         
-        // Get today's date in Chicago time zone (YYYY-MM-DD format)
-        const todayChicago = formatInTimeZone(new Date(), timeZone, 'yyyy-MM-dd');
+        // Get today
+        const today = new Date();
+        const todayStr = getDateInTimeZone(today, timeZone);
         
-        // Calculate yesterday and tomorrow in Chicago time zone
+        // Calculate yesterday and tomorrow
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayChicago = formatInTimeZone(yesterday, timeZone, 'yyyy-MM-dd');
         
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowChicago = formatInTimeZone(tomorrow, timeZone, 'yyyy-MM-dd');
 
         const buckets: Record<string, typeof games> = {
           Yesterday: [],
@@ -62,12 +61,15 @@ export function MatchupTicker() {
         };
 
         games.forEach(g => {
-          // Convert game commence time to Chicago time zone date string
-          const gameDate = formatInTimeZone(new Date(g.commence_time), timeZone, 'yyyy-MM-dd');
+          const gameDate = new Date(g.commence_time);
           
-          if (gameDate === todayChicago) buckets.Today.push(g);
-          else if (gameDate === yesterdayChicago) buckets.Yesterday.push(g);
-          else if (gameDate === tomorrowChicago) buckets.Tomorrow.push(g);
+          if (isDateOnDayInTimeZone(gameDate, today, timeZone)) {
+            buckets.Today.push(g);
+          } else if (isDateOnDayInTimeZone(gameDate, yesterday, timeZone)) {
+            buckets.Yesterday.push(g);
+          } else if (isDateOnDayInTimeZone(gameDate, tomorrow, timeZone)) {
+            buckets.Tomorrow.push(g);
+          }
         });
 
         const days = (['Yesterday', 'Today', 'Tomorrow'] as const)
