@@ -3,7 +3,7 @@ import { Bell, Menu, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,9 +27,6 @@ interface HeaderProps {
 export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  
-  // Removing this useEffect since isAdmin is already passed as a prop
-  // We don't need to check it again from localStorage
   
   const handleLogout = () => {
     navigate("/auth/logout");
