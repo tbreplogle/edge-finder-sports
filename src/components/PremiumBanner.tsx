@@ -7,22 +7,24 @@ import { useEffect, useState } from "react";
 export function PremiumBanner() {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
 
-  // Check if user is admin
+  // Check if user is admin or paid
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
         setIsAdmin(user.is_admin === true);
+        setIsPaid(user.role === "premium" || user.is_admin === true);
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
     }
   }, []);
   
-  // Hide banner for admin users
-  if (isAdmin) {
+  // Hide banner for admin users and paid users
+  if (isAdmin || isPaid) {
     return null;
   }
   

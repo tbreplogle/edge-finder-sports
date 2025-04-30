@@ -42,6 +42,8 @@ export function GameCard({
 }: GameProps) {
   const [open, setOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  
   const formattedDate = new Date(startTime).toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -51,13 +53,14 @@ export function GameCard({
     timeZone: 'America/Chicago'
   });
   
-  // Check if user is admin
+  // Check if user is admin or paid
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
         setIsAdmin(user.is_admin === true);
+        setIsPaid(user.role === "premium" || user.is_admin === true);
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
@@ -65,8 +68,11 @@ export function GameCard({
   }, []);
   
   const isPositiveEdge = edge > 0;
-  // If user is admin, never blur content regardless of premium status
-  const isBlurred = !isAdmin && isPremium && Math.abs(edge) > 2;
+  
+  // Admin users see all data unblurred regardless of premium status
+  // Paid users see all data except extremely high value edges that are premium
+  // Free users see basic edges but premium edges are blurred
+  const isBlurred = !isAdmin && isPremium && Math.abs(edge) > 2 && !isPaid;
   
   // Format the market spread for display
   const formattedMarketSpread = marketSpread > 0 
@@ -91,7 +97,7 @@ export function GameCard({
               </div>
             </div>
             
-            {!isAdmin && isPremium && Math.abs(edge) > 2 && (
+            {!isAdmin && isPremium && Math.abs(edge) > 2 && !isPaid && (
               <Badge variant="secondary" className="flex gap-1 items-center">
                 <LockIcon className="w-3 h-3" />
                 <span>Premium</span>
@@ -126,7 +132,7 @@ export function GameCard({
                 <>
                   <ArrowUp className="w-4 h-4 text-edge-secondary" />
                   <span className="text-edge-secondary">
-                    {isAdmin || !isPremium || Math.abs(edge) <= 2 
+                    {isAdmin || isPaid || Math.abs(edge) <= 2 
                       ? edge.toFixed(1) 
                       : "2.0+"} pts
                   </span>
@@ -135,7 +141,7 @@ export function GameCard({
                 <>
                   <ArrowDown className="w-4 h-4 text-edge-accent" />
                   <span className="text-edge-accent">
-                    {isAdmin || !isPremium || Math.abs(edge) <= 2 
+                    {isAdmin || isPaid || Math.abs(edge) <= 2 
                       ? edge.toFixed(1) 
                       : "2.0+"} pts
                   </span>
@@ -156,10 +162,10 @@ export function GameCard({
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className={cn("mt-3 w-full", !isAdmin && isPremium && "opacity-70")}
-                  disabled={!isAdmin && isPremium}
+                  className={cn("mt-3 w-full", !isAdmin && !isPaid && isPremium && "opacity-70")}
+                  disabled={!isAdmin && !isPaid && isPremium}
                 >
-                  {!isAdmin && isPremium ? "Upgrade to view details" : "View details"}
+                  {!isAdmin && !isPaid && isPremium ? "Upgrade to view details" : "View details"}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">

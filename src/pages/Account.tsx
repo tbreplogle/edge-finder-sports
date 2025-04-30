@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ExternalLink, CreditCard, Calendar, LogOut } from "lucide-react";
+import { ExternalLink, CreditCard, Calendar, LogOut, Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 interface UserData {
@@ -19,6 +19,8 @@ interface SubscriptionData {
   status: string;
   plan_key: string;
   current_period_end: string | null;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
 }
 
 const Account = () => {
@@ -26,6 +28,7 @@ const Account = () => {
   const [user, setUser] = useState<UserData | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPortalLoading, setIsPortalLoading] = useState(false);
   
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -40,17 +43,27 @@ const Account = () => {
       
       // In a real app, we would fetch subscription data from the backend
       // For now, we'll use mock data
-      if (userData.role === "admin") {
+      if (userData.is_admin) {
         setSubscription({
           status: "active",
           plan_key: "ADMIN",
           current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          stripe_customer_id: "cus_mock_admin",
+          stripe_subscription_id: "sub_mock_admin"
         });
-      } else {
+      } else if (userData.role === "premium") {
         setSubscription({
           status: "active",
           plan_key: "MONTHLY",
           current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          stripe_customer_id: "cus_mock_premium",
+          stripe_subscription_id: "sub_mock_premium"
+        });
+      } else {
+        setSubscription({
+          status: "inactive",
+          plan_key: "FREE",
+          current_period_end: null
         });
       }
     } catch (e) {
@@ -60,12 +73,28 @@ const Account = () => {
   }, [navigate]);
   
   const handleOpenCustomerPortal = async () => {
-    setIsLoading(true);
-    // In a real app, we would call the Stripe Customer Portal API endpoint
-    toast.info("This would redirect to the Stripe Customer Portal in a real app");
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
+    setIsPortalLoading(true);
+    
+    // In a real app, this would call the Stripe Customer Portal API endpoint
+    // For demo purposes, we'll simulate a delay and show a toast
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      toast.info("In a production app, this would redirect to the Stripe Customer Portal");
+      console.log("Would call /api/create-portal-session with:", {
+        returnUrl: window.location.href
+      });
+      console.log("Customer ID that would be used:", subscription?.stripe_customer_id);
+      
+      // In production, this would redirect:
+      // window.location.href = portalUrl;
+    } catch (error) {
+      toast.error("Error opening customer portal");
+      console.error(error);
+    } finally {
+      setIsPortalLoading(false);
+    }
   };
   
   const handleLogout = () => {
@@ -141,10 +170,19 @@ const Account = () => {
                     <Button 
                       onClick={handleOpenCustomerPortal}
                       className="w-full md:w-auto"
-                      disabled={isLoading}
+                      disabled={isPortalLoading || subscription.plan_key === "FREE"}
                     >
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      {isLoading ? "Loading..." : "Manage Subscription"}
+                      {isPortalLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <span>Loading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="mr-2 h-4 w-4" />
+                          <span>Manage Subscription</span>
+                        </>
+                      )}
                     </Button>
                     
                     <div className="text-sm text-muted-foreground pt-4 border-t">
