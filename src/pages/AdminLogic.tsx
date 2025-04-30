@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import Editor from "@monaco-editor/react";
@@ -8,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { SPORT_KEYS, SportKey } from "@/utils/config/sportKeys";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const DEFAULT_CODE = `/**
@@ -138,6 +137,45 @@ const AdminLogic = () => {
     }
   };
   
+  // New function to export code as a downloadable file
+  const exportCode = () => {
+    try {
+      // Create a blob with the code content
+      const blob = new Blob([
+        `// PlayEdge Sport Prediction Logic for ${sport}\n`,
+        `// Exported on ${new Date().toLocaleString()}\n\n`,
+        code,
+        `\n\n// Example usage:\n`,
+        `// const games = [{ id: "123", home_team: "Team A", away_team: "Team B", ... }];\n`,
+        `// const predictions = predict(games);\n`,
+        `// console.log(predictions);`,
+      ], { type: 'text/javascript' });
+      
+      // Create an element to trigger the download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `playedge-${sport.toLowerCase()}-prediction-logic.js`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 0);
+      
+      toast.success("Code Exported", {
+        description: `${sport} prediction code has been exported successfully.`
+      });
+    } catch (err: any) {
+      console.error("Error exporting code:", err);
+      toast.error("Export Failed", {
+        description: err.message || "Failed to export code"
+      });
+    }
+  };
+  
   const sportOptions = Object.keys(SPORT_KEYS).map(key => ({
     label: key,
     value: key
@@ -208,6 +246,15 @@ const AdminLogic = () => {
               ) : (
                 "Run & Publish"
               )}
+            </Button>
+
+            <Button
+              onClick={exportCode}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export Code
             </Button>
           </div>
           
