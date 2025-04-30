@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
 import { TickerContent } from './ticker/TickerContent';
-import { FeaturedGame } from './FeaturedGame';
 import {
   fetchOdds,
   convertToTickerGames,
@@ -117,23 +116,16 @@ export function MatchupTicker() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          {/* Featured game for the current sport */}
-          <div className="col-span-1">
-            <FeaturedGame isPreview={false} />
-          </div>
-          
-          {/* Ticker content */}
-          <div className="col-span-1 md:col-span-2">
-            {noGames ? (
-              <div className="flex items-center justify-center p-4 bg-card
-                            border border-border/30 rounded-md">
-                <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
-              </div>
-            ) : (
-              data && <TickerContent data={data} />
-            )}
-          </div>
+        {/* Ticker content */}
+        <div className="mb-4">
+          {noGames ? (
+            <div className="flex items-center justify-center p-4 bg-card
+                          border border-border/30 rounded-md">
+              <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
+            </div>
+          ) : (
+            data && <TickerContent data={data} />
+          )}
         </div>
       </div>
     </div>
