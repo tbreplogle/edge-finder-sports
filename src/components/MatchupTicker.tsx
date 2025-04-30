@@ -9,12 +9,15 @@ export function MatchupTicker() {
   const [selectedSport, setSelectedSport] = useState<string>(DEFAULT_SPORT);
   const [tickerData, setTickerData] = useState<TickerData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [noGames, setNoGames] = useState(false);
 
   useEffect(() => {
     // Fetch data from Odds API
     const fetchTickerData = async () => {
       try {
         setLoading(true);
+        setNoGames(false);
+        
         // Use selected sport key
         const sportKey = SPORT_KEYS[selectedSport as keyof typeof SPORT_KEYS];
         const gamesData = await fetchOdds(sportKey);
@@ -56,7 +59,7 @@ export function MatchupTicker() {
             days.push({
               label: 'Yesterday',
               date: yesterdayStr,
-              games: convertToTickerGames(yesterdayGames),
+              games: convertToTickerGames(yesterdayGames, sportKey),
             });
           }
           
@@ -64,7 +67,7 @@ export function MatchupTicker() {
             days.push({
               label: 'Today',
               date: todayStr,
-              games: convertToTickerGames(todayGames),
+              games: convertToTickerGames(todayGames, sportKey),
             });
           }
           
@@ -72,17 +75,21 @@ export function MatchupTicker() {
             days.push({
               label: 'Tomorrow',
               date: tomorrowStr,
-              games: convertToTickerGames(tomorrowGames),
+              games: convertToTickerGames(tomorrowGames, sportKey),
             });
           }
           
-          setTickerData({
-            sport: selectedSport.toUpperCase(),
-            days,
-          });
+          if (days.length > 0) {
+            setTickerData({
+              sport: selectedSport.toUpperCase(),
+              days,
+            });
+          } else {
+            setNoGames(true);
+          }
         } else {
-          // Fallback to sample data if API returns no games
-          setTickerData(sampleTickerData);
+          // No games returned
+          setNoGames(true);
         }
         
         setLoading(false);
@@ -109,10 +116,6 @@ export function MatchupTicker() {
     );
   }
 
-  if (!tickerData) {
-    return null;
-  }
-
   return (
     <div className="w-full bg-muted/20 border-b overflow-hidden">
       <div className="container py-2">
@@ -120,7 +123,13 @@ export function MatchupTicker() {
           <h3 className="text-sm font-medium">Match-ups</h3>
           <SportSelector selectedSport={selectedSport} onSportChange={handleSportChange} />
         </div>
-        <TickerContent data={tickerData} />
+        {noGames ? (
+          <div className="flex items-center justify-center p-2 bg-card rounded-md border border-border/30">
+            <p className="text-sm text-muted-foreground">No games scheduled</p>
+          </div>
+        ) : tickerData ? (
+          <TickerContent data={tickerData} />
+        ) : null}
       </div>
     </div>
   );

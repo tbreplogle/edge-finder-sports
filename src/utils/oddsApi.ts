@@ -40,7 +40,7 @@ export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
 }
 
 // Helper for converting Odds API response to our TickerGame format with dummy predictions
-export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'America/Chicago'): TickerGame[] {
+export function convertToTickerGames(games: OddsApiGame[], sportKey: string, timeZone: string = 'America/Chicago'): TickerGame[] {
   return games.map(game => {
     // Extract spread from first bookmaker with spreads market
     let spread = 0;
@@ -110,7 +110,8 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
       final: false,
       sport_key: game.sport_key,
       predicted_margin: withPredictions.predicted_margin,
-      predicted_total: withPredictions.predicted_total
+      predicted_total: withPredictions.predicted_total,
+      show_prediction: !sportKey.includes('americanfootball_nfl') // Hide predictions for NFL
     };
   });
 }

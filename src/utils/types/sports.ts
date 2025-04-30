@@ -15,6 +15,7 @@ export interface TickerGame {
   sport_key?: string;
   predicted_margin?: number;
   predicted_total?: number | null;
+  show_prediction?: boolean;
 }
 
 export interface TickerDay {

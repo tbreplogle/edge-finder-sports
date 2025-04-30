@@ -10,6 +10,7 @@ interface TickerGameItemProps {
 export const TickerGameItem = ({ game }: TickerGameItemProps) => {
   const isFinal = game.final;
   const isBaseball = game.sport_key?.includes('baseball');
+  const showPrediction = game.show_prediction !== false; // Default to showing prediction unless explicitly set to false
   
   // Display appropriate odds based on sport and predictions
   let oddsDisplay;
@@ -17,8 +18,8 @@ export const TickerGameItem = ({ game }: TickerGameItemProps) => {
     // For baseball, show moneyline with correct sign
     const moneylineSign = game.moneyline > 0 ? '+' : '';
     oddsDisplay = <div className="text-xs">{game.home} {moneylineSign}{game.moneyline}</div>;
-  } else if (game.predicted_margin !== undefined) {
-    // Show predicted margin if available
+  } else if (showPrediction && game.predicted_margin !== undefined) {
+    // Show predicted margin if available and allowed for this sport
     const predictedTeam = game.predicted_margin > 0 ? game.home : game.away;
     const predictedValue = Math.abs(game.predicted_margin).toFixed(1);
     const predictedSign = game.predicted_margin > 0 ? '+' : '-';
