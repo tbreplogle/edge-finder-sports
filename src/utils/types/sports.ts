@@ -10,6 +10,7 @@ export interface TickerGame {
   score_away?: number;
   spread: number;
   moneyline?: number;
+  moneyline_opponent?: number; // Added for comparing favorite logic
   total?: number;
   consensus?: number;
   sport_key?: string;

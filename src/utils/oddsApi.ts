@@ -40,21 +40,27 @@ export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
 }
 
 // Helper for converting Odds API response to our TickerGame format with dummy predictions
-export function convertToTickerGames(games: OddsApiGame[], sportKey: string, timeZone: string = 'America/Chicago'): TickerGame[] {
+export function convertToTickerGames(
+  games: OddsApiGame[], 
+  sportKey: string, 
+  timeZone: string = 'America/Chicago'
+): TickerGame[] {
+  const isBaseballSport = sportKey.includes('baseball');
+  
   return games.map(game => {
     // Extract spread from first bookmaker with spreads market
     let spread = 0;
-    let moneyline = undefined;
+    let moneylineHome = undefined;
+    let moneylineAway = undefined;
     let total = undefined;
-    const isBaseball = game.sport_key.includes('baseball');
 
-    // Find the first bookmaker with spreads
+    // Find the first bookmaker with spreads/moneyline
     for (const bookmaker of game.bookmakers) {
       const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
       const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
       const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
       
-      if (spreadsMarket && !isBaseball) {
+      if (!isBaseballSport && spreadsMarket) {
         const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
         if (homeOutcome && homeOutcome.point !== undefined) {
           spread = homeOutcome.point;
@@ -62,12 +68,10 @@ export function convertToTickerGames(games: OddsApiGame[], sportKey: string, tim
         }
       }
       
-      if (h2hMarket && isBaseball) {
-        const homeOutcome = h2hMarket.outcomes.find(o => o.name === game.home_team);
-        if (homeOutcome && homeOutcome.price) {
-          moneyline = homeOutcome.price;
-          break; // Exit loop once we've found the moneyline
-        }
+      if (isBaseballSport && h2hMarket) {
+        moneylineHome = h2hMarket.outcomes.find(o => o.name === game.home_team)?.price;
+        moneylineAway = h2hMarket.outcomes.find(o => o.name === game.away_team)?.price;
+        break;
       }
       
       if (totalsMarket && totalsMarket.outcomes.length > 0) {
@@ -85,10 +89,10 @@ export function convertToTickerGames(games: OddsApiGame[], sportKey: string, tim
       home: getTeamAbbreviation(game.home_team),
       away: getTeamAbbreviation(game.away_team),
       tip: formatGameTime(date, timeZone),
-      market_spread: isBaseball ? null : spread,
+      market_spread: isBaseballSport ? null : spread,
       market_total: total,
       spread,
-      moneyline,
+      moneyline: moneylineHome,
       total,
       final: false,
       sport_key: game.sport_key
@@ -103,15 +107,16 @@ export function convertToTickerGames(games: OddsApiGame[], sportKey: string, tim
       home: getTeamAbbreviation(game.home_team),
       away: getTeamAbbreviation(game.away_team),
       tip: formatGameTime(date, timeZone),
-      spread: isBaseball ? 0 : spread, // Set spread to 0 for baseball
-      moneyline,
+      spread: isBaseballSport ? 0 : spread, // Set spread to 0 for baseball
+      moneyline: moneylineHome,
+      moneyline_opponent: moneylineAway, // Added for favorite logic
       total,
       consensus: withPredictions.confidence_pct,
       final: false,
       sport_key: game.sport_key,
       predicted_margin: withPredictions.predicted_margin,
       predicted_total: withPredictions.predicted_total,
-      show_prediction: !sportKey.includes('americanfootball_nfl') // Hide predictions for NFL
+      show_prediction: !sportKey.includes('americanfootball_nfl') && !isBaseballSport // Hide predictions for NFL and MLB
     };
   });
 }
