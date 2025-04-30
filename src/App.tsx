@@ -30,8 +30,8 @@ const App = () => (
           <Route path="/account" element={<Account />} />
           <Route path="/history" element={<History />} />
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
-          {/* 404 route - redirects to not found page */}
-          <Route path="*" element={<NotFound />} />
+          {/* Catch-all route - redirects to home page */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
