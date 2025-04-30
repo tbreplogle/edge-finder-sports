@@ -100,17 +100,8 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                   {isAdmin && (
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>Admin</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/nfl-logic")}>
-                        NFL Logic
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaaf-logic")}>
-                        NCAAF Logic
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaab-logic")}>
-                        NCAAB Logic
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/admin/sports/mlb-logic")}>
-                        MLB Logic
+                      <DropdownMenuItem onClick={() => navigate("/admin/logic")}>
+                        Logic Lab
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </DropdownMenuGroup>
