@@ -1,12 +1,13 @@
-// ---------------- oddsApi.ts (full file) ----------------
+
 import axios from 'axios';
 import { SPORT_KEYS } from './config/sportKeys';
 import { dummyFromOdds, GameWithMarket } from './generateDummyPrediction';
 import { getTeamAbbreviation } from './helpers/teamAbbreviations';
-import { format } from 'date-fns-tz';
+import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { OddsApiGame, TickerGame } from './types/sports';
 
-const ODDS_API_KEY = process.env.ODDS_API_KEY!;
+const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY || '';
 const BASE_URL     = 'https://api.the-odds-api.com/v4/sports';
 const TZ           = 'America/Chicago';               // local tz for bucketing
 
@@ -14,6 +15,53 @@ const TZ           = 'America/Chicago';               // local tz for bucketing
 export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
   const isBaseball = sportKey.includes('baseball');
   const markets    = isBaseball ? 'h2h,totals' : 'spreads,totals';
+
+  // If no API key is provided, return mock data for development
+  if (!ODDS_API_KEY) {
+    console.warn('[Ticker] No API key found, returning mock data');
+    
+    // Return 3 mock games
+    return Array(3).fill(null).map((_, i) => ({
+      id: `mock-${i}`,
+      sport_key: sportKey,
+      sport_title: sportKey.split('_').pop() || '',
+      commence_time: new Date(Date.now() + (i * 24 * 60 * 60 * 1000)).toISOString(),
+      home_team: isBaseball ? 'Los Angeles Dodgers' : 'Kansas City Chiefs',
+      away_team: isBaseball ? 'New York Yankees' : 'San Francisco 49ers',
+      bookmakers: [{
+        key: 'mock',
+        title: 'Mock Bookmaker',
+        last_update: new Date().toISOString(),
+        markets: [
+          isBaseball ? 
+          {
+            key: 'h2h',
+            last_update: new Date().toISOString(),
+            outcomes: [
+              { name: isBaseball ? 'Los Angeles Dodgers' : 'Kansas City Chiefs', price: -150 },
+              { name: isBaseball ? 'New York Yankees' : 'San Francisco 49ers', price: 130 }
+            ]
+          } :
+          {
+            key: 'spreads',
+            last_update: new Date().toISOString(),
+            outcomes: [
+              { name: 'Kansas City Chiefs', price: -110, point: -3.5 },
+              { name: 'San Francisco 49ers', price: -110, point: 3.5 }
+            ]
+          },
+          {
+            key: 'totals',
+            last_update: new Date().toISOString(),
+            outcomes: [
+              { name: 'Over', price: -110, point: isBaseball ? 8.5 : 48.5 },
+              { name: 'Under', price: -110, point: isBaseball ? 8.5 : 48.5 }
+            ]
+          }
+        ]
+      }]
+    }));
+  }
 
   const { data } = await axios.get(`${BASE_URL}/${sportKey}/odds`, {
     params: {
@@ -65,7 +113,7 @@ export function convertToTickerGames(
     }
 
     /* --- convert start time to America/Chicago string --- */
-    const tip = format(new Date(g.commence_time), 'h:mm aaaa', { timeZone: TZ });
+    const tip = formatInTimeZone(new Date(g.commence_time), TZ, 'h:mm aaaa');
 
     const base: GameWithMarket = {
       id: g.id,

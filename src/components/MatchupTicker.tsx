@@ -5,13 +5,13 @@ import { TickerContent } from './ticker/TickerContent';
 import {
   fetchOdds,
   convertToTickerGames,
-  SPORT_KEYS,
-  TickerData
+  SPORT_KEYS
 } from '@/utils/oddsApi';
 import { DEFAULT_SPORT } from '@/utils/config/sportKeys';
+import { TickerData } from '@/utils/types/sports';
 
 export function MatchupTicker() {
-  const [sport, setSport] = useState(DEFAULT_SPORT);
+  const [sport, setSport] = useState<keyof typeof SPORT_KEYS>(DEFAULT_SPORT);
   const [data, setData] = useState<TickerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [noGames, setNoGames] = useState(false);
@@ -93,7 +93,10 @@ export function MatchupTicker() {
       <div className="container py-2">
         <div className="flex justify-between items-center mb-2">
           <h3 className="text-sm font-medium">Match-ups</h3>
-          <SportSelector selectedSport={sport} onSportChange={setSport} />
+          <SportSelector 
+            selectedSport={sport} 
+            onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
+          />
         </div>
 
         {noGames ? (

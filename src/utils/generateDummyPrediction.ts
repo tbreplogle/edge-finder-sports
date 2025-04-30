@@ -1,16 +1,21 @@
 
-import crypto from 'crypto';
-
 /**
  * Create a deterministic but "random-looking" number so the same game_id
  * always produces the same dummy margin on the same day.
  */
 function pseudoRandom(gameId: string, salt = 'v1') {
-  const hash = crypto
-    .createHash('sha256')
-    .update(gameId + salt + new Date().toDateString())
-    .digest('hex');
-  return (parseInt(hash.slice(0, 4), 16) / 0xffff) * 2 - 1;   // −1 → +1
+  let hash = 0;
+  const str = gameId + salt + new Date().toDateString();
+  
+  // Simple string hash function for browsers
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  // Normalize to value between -1 and 1
+  return (Math.abs(hash % 1000) / 1000) * 2 - 1;  // −1 → +1
 }
 
 export interface GameWithMarket {
