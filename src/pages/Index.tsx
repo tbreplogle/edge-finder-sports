@@ -1,11 +1,9 @@
-
 import { AppLayout } from '@/components/AppLayout';
 import { FeaturedGame } from '@/components/FeaturedGame';
 import { MatchupTicker } from '@/components/MatchupTicker';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-
 export default function Index() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
@@ -19,39 +17,26 @@ export default function Index() {
         const user = JSON.parse(userStr);
         setIsAdmin(user.is_admin === true);
         setIsPaid(user.role === "premium" || user.is_admin === true);
-        
+
         // Removed automatic redirect to admin page
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
     }
   }, [navigate]);
-
-  return (
-    <AppLayout isAuthenticated={!!localStorage.getItem("user")}>
+  return <AppLayout isAuthenticated={!!localStorage.getItem("user")}>
       <section className="w-full py-8 sm:py-10 md:py-12 lg:py-16 bg-edge-primary/10">
         <div className="w-full mx-auto">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 sm:mb-6">
-              Sports Predictions & Betting Edges
-            </h1>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4 sm:mb-6 lg:text-4xl">Get data-driven predictions and betting edges for NFL, NCAAF, NCAAB and MLB.</h1>
             <p className="text-lg sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8">
               Get data-driven predictions and find value in the betting markets across all major sports.
             </p>
             <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-              <Button 
-                size="lg" 
-                onClick={() => navigate("/dashboard")}
-                className="bg-edge-secondary hover:bg-edge-secondary/90 text-base sm:text-lg"
-              >
+              <Button size="lg" onClick={() => navigate("/dashboard")} className="bg-edge-secondary hover:bg-edge-secondary/90 text-base sm:text-lg">
                 View Today's Predictions
               </Button>
-              <Button 
-                size="lg" 
-                variant="outline"
-                onClick={() => navigate("/pricing")}
-                className="text-base sm:text-lg"
-              >
+              <Button size="lg" variant="outline" onClick={() => navigate("/pricing")} className="text-base sm:text-lg">
                 Pricing Plans
               </Button>
             </div>
@@ -78,16 +63,11 @@ export default function Index() {
             <p className="text-lg md:text-xl text-muted-foreground mb-4 sm:mb-6">
               Join thousands of smart bettors using our predictions to find value bets.
             </p>
-            <Button 
-              size="lg"
-              onClick={() => navigate("/auth/register")}
-              className="bg-edge-secondary hover:bg-edge-secondary/90 text-base sm:text-lg"
-            >
+            <Button size="lg" onClick={() => navigate("/auth/register")} className="bg-edge-secondary hover:bg-edge-secondary/90 text-base sm:text-lg">
               Sign Up Now
             </Button>
           </div>
         </div>
       </section>
-    </AppLayout>
-  );
+    </AppLayout>;
 }
