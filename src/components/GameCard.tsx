@@ -72,7 +72,7 @@ export function GameCard({
   // Admin users see all data unblurred regardless of premium status
   // Paid users see all data except extremely high value edges that are premium
   // Free users see basic edges but premium edges are blurred
-  const isBlurred = !isAdmin && isPremium && Math.abs(edge) > 2 && !isPaid;
+  const shouldMask = !isAdmin && isPremium && Math.abs(edge) > 2 && !isPaid;
   
   // Format the market spread for display
   const formattedMarketSpread = marketSpread > 0 
@@ -112,12 +112,22 @@ export function GameCard({
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Predicted Margin</div>
-              <div className={cn("font-medium", isBlurred && "premium-blur")}>
-                {predictedMargin > 0 
-                  ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
-                  : predictedMargin < 0 
-                    ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
-                    : "Even"}
+              <div className={cn("font-medium premium-content-wrapper", shouldMask ? "relative" : "")}>
+                {/* Content is always visible, but may be masked */}
+                <span>
+                  {predictedMargin > 0 
+                    ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
+                    : predictedMargin < 0 
+                      ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
+                      : "Even"}
+                </span>
+                
+                {/* Overlay mask for premium content */}
+                {shouldMask && (
+                  <div className="premium-mask">
+                    <LockIcon className="w-4 h-4 mr-1" />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -125,25 +135,22 @@ export function GameCard({
           <div className="mt-2">
             <div className="text-sm text-muted-foreground mb-1">Edge</div>
             <div className={cn(
-              "font-bold text-lg flex items-center gap-1.5",
-              isBlurred && "premium-blur"
+              "font-bold text-lg flex items-center gap-1.5 premium-content-wrapper",
+              shouldMask ? "relative" : ""
             )}>
+              {/* Content is always visible, but may be masked */}
               {isPositiveEdge ? (
                 <>
                   <ArrowUp className="w-4 h-4 text-edge-secondary" />
                   <span className="text-edge-secondary">
-                    {isAdmin || isPaid || Math.abs(edge) <= 2 
-                      ? edge.toFixed(1) 
-                      : "2.0+"} pts
+                    {edge.toFixed(1)} pts
                   </span>
                 </>
               ) : (
                 <>
                   <ArrowDown className="w-4 h-4 text-edge-accent" />
                   <span className="text-edge-accent">
-                    {isAdmin || isPaid || Math.abs(edge) <= 2 
-                      ? edge.toFixed(1) 
-                      : "2.0+"} pts
+                    {edge.toFixed(1)} pts
                   </span>
                 </>
               )}
@@ -152,6 +159,16 @@ export function GameCard({
                 <span className="ml-auto text-sm text-muted-foreground">
                   {confidence}% confidence
                 </span>
+              )}
+              
+              {/* Overlay mask for premium content */}
+              {shouldMask && (
+                <div className="premium-mask">
+                  <div className="flex items-center">
+                    <LockIcon className="w-4 h-4 mr-1" />
+                    <span className="text-sm">2.0+ pts</span>
+                  </div>
+                </div>
               )}
             </div>
           </div>
