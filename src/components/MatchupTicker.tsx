@@ -1,11 +1,16 @@
-// -------------- MatchupTicker.tsx --------------
+// --------------- src/components/MatchupTicker.tsx ---------------
+// FULL FILE — replace your existing MatchupTicker.tsx with this.
+// • Guarantees the “Loading matchup data…” spinner always clears
+// • Logs the fetch result so you can see what’s happening
+// • Shows “No games scheduled” if Odds-API returns an empty array
+
 import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
 import { TickerContent } from './ticker/TickerContent';
 import {
   fetchOdds,
-  SPORT_KEYS,
   convertToTickerGames,
+  SPORT_KEYS,
   DEFAULT_SPORT,
   TickerData
 } from '@/utils/oddsApi';
@@ -16,53 +21,71 @@ export function MatchupTicker() {
   const [loading, setLoading] = useState(true);
   const [noGames, setNoGames] = useState(false);
 
-  /* -------- fetch on sport change -------- */
+  /* ========== fetch when sport changes ========== */
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       setLoading(true);
       setNoGames(false);
 
       const sportKey = SPORT_KEYS[sport];
-      const games = await fetchOdds(sportKey);
+      console.log('[Ticker] fetching', sportKey);
 
-      if (games.length === 0) {
+      try {
+        const games = await fetchOdds(sportKey);
+        console.log('[Ticker] rows:', games.length);
+
+        if (cancelled) return;
+
+        if (games.length === 0) {
+          setNoGames(true);
+          setData(null);
+          return;
+        }
+
+        /* ---- bucket Yesterday / Today / Tomorrow ---- */
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const yesterdayISO = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        const tomorrowISO  = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+
+        const buckets: Record<string, typeof games> = {
+          Yesterday: [],
+          Today: [],
+          Tomorrow: []
+        };
+
+        games.forEach(g => {
+          const d = g.commence_time.slice(0, 10);
+          if (d === todayISO) buckets.Today.push(g);
+          else if (d === yesterdayISO) buckets.Yesterday.push(g);
+          else if (d === tomorrowISO) buckets.Tomorrow.push(g);
+        });
+
+        const days = (['Yesterday', 'Today', 'Tomorrow'] as const)
+          .filter(l => buckets[l].length)
+          .map(label => ({
+            label,
+            date: label,
+            games: convertToTickerGames(buckets[label], sportKey)
+          }));
+
+        setData({ sport, days });
+      } catch (err) {
+        console.error('[Ticker] fetch failed', err);
         setNoGames(true);
         setData(null);
-        setLoading(false);
-        return;
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const today = new Date();
-      const toIso = (d: Date) => d.toISOString().split('T')[0];
-      const yest = new Date(today); yest.setDate(today.getDate() - 1);
-      const tomo = new Date(today); tomo.setDate(today.getDate() + 1);
-
-      const buckets = { Yesterday: [], Today: [], Tomorrow: [] } as Record<
-        string,
-        typeof games
-      >;
-
-      games.forEach(g => {
-        const dateStr = toIso(new Date(g.commence_time));
-        if (dateStr === toIso(today)) buckets.Today.push(g);
-        else if (dateStr === toIso(yest)) buckets.Yesterday.push(g);
-        else if (dateStr === toIso(tomo)) buckets.Tomorrow.push(g);
-      });
-
-      const days = (['Yesterday', 'Today', 'Tomorrow'] as const)
-        .filter(l => buckets[l].length)
-        .map(label => ({
-          label,
-          date: label,
-          games: convertToTickerGames(buckets[label], sportKey)
-        }));
-
-      setData({ sport, days });
-      setLoading(false);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [sport]);
 
-  /* --------- render --------- */
+  /* ========== UI ========== */
   if (loading)
     return (
       <div className="w-full bg-muted/20 h-12 flex items-center justify-center">
@@ -79,7 +102,8 @@ export function MatchupTicker() {
         </div>
 
         {noGames ? (
-          <div className="flex items-center justify-center p-2 bg-card border border-border/30 rounded-md">
+          <div className="flex items-center justify-center p-2 bg-card
+                          border border-border/30 rounded-md">
             <p className="text-sm text-muted-foreground">No games scheduled</p>
           </div>
         ) : (
