@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => ({
   },
   // Define environment variables that will be replaced at build time
   define: {
-    // Make sure ODDS_API_KEY is available from env or provide a fallback for development
-    'import.meta.env.VITE_ODDS_API_KEY': JSON.stringify(process.env.ODDS_API_KEY || ''),
+    // Use the actual API key from configuration
+    'import.meta.env.VITE_ODDS_API_KEY': JSON.stringify('ca659a5203c1cfc6a0275ebd54c57262'),
   },
 }));

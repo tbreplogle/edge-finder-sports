@@ -27,12 +27,12 @@ export const TickerGameItem = ({ game }: Props) => {
         {favTeam} {sign}{favPrice}
       </div>
     );
-  } else if (!isBaseball) {
+  } else if (!isBaseball && game.spread !== 0) {
     const favTeam = game.spread > 0 ? game.away : game.home;
     const favSpread = Math.abs(game.spread);
     oddsDisplay = (
       <div className="text-xs">
-        {favTeam} {favSpread > 0 ? '+' : '-'}{favSpread}
+        {favTeam} {favSpread > 0 ? '-' : '+'}{favSpread}
       </div>
     );
   }
