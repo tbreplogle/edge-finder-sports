@@ -8,9 +8,10 @@ interface MobileNavProps {
   isOpen: boolean;
   onClose: () => void;
   isAuthenticated?: boolean;
+  isAdmin?: boolean;
 }
 
-export function MobileNav({ isOpen, onClose, isAuthenticated = false }: MobileNavProps) {
+export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = false }: MobileNavProps) {
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -73,6 +74,19 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false }: MobileNa
           >
             Pricing
           </a>
+          {isAdmin && (
+            <a 
+              href="/admin/logic"
+              className="py-2 text-edge-secondary transition-colors hover:text-edge-secondary/80"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/admin/logic");
+                onClose();
+              }}
+            >
+              Logic Lab
+            </a>
+          )}
         </nav>
         
         <div className="mt-auto pb-8">

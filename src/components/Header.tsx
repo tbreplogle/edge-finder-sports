@@ -32,6 +32,8 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
     navigate("/auth/logout");
   };
 
+  console.log("Header rendering with isAdmin:", isAdmin);
+
   return (
     <header className="w-full border-b py-3 sm:py-4">
       <div className="container flex items-center justify-between">
@@ -128,7 +130,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
         </div>
       </div>
       
-      <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} isAuthenticated={isAuthenticated} />
+      <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} isAuthenticated={isAuthenticated} isAdmin={isAdmin} />
     </header>
   );
 }

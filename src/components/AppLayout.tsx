@@ -29,7 +29,9 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
       
       if (data.session) {
         const user = data.session.user;
-        setIsAdmin(user.user_metadata?.is_admin === true);
+        const isAdminUser = user.user_metadata?.is_admin === true;
+        console.log("User admin status:", isAdminUser);
+        setIsAdmin(isAdminUser);
       } else {
         setIsAdmin(false);
       }
@@ -40,7 +42,9 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session?.user) {
-          setIsAdmin(session.user.user_metadata?.is_admin === true);
+          const isAdminUser = session.user.user_metadata?.is_admin === true;
+          console.log("Auth state changed - user admin status:", isAdminUser);
+          setIsAdmin(isAdminUser);
         } else {
           setIsAdmin(false);
         }

@@ -38,14 +38,17 @@ const AdminLogic = () => {
       const { data } = await supabase.auth.getSession();
       
       if (!data.session) {
+        console.log("No session found, redirecting to login");
         navigate("/auth/login");
         return;
       }
       
       const user = data.session.user;
-      const isAdmin = user.user_metadata?.is_admin === true;
+      const isAdminUser = user.user_metadata?.is_admin === true;
+      console.log("AdminLogic page - User admin status:", isAdminUser);
       
-      if (!isAdmin) {
+      if (!isAdminUser) {
+        console.log("User is not admin, redirecting to home");
         toast("Access Denied", {
           description: "You need admin privileges to access this page."
         });
