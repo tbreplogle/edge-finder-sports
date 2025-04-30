@@ -1,9 +1,9 @@
-// ---------------- sportKeys.ts ----------------
+
 export const SPORT_KEYS = {
-  NFL:   'americanfootball_nfl',
+  NFL  : 'americanfootball_nfl',
   NCAAF: 'americanfootball_ncaaf',
   NCAAB: 'basketball_ncaa',  // ✅ college hoops
-  MLB:   'baseball_mlb'      // ✅ baseball
+  MLB  : 'baseball_mlb'      // ✅ baseball
 };
 
 export type SportKey = keyof typeof SPORT_KEYS;

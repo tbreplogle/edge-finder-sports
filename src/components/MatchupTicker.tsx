@@ -2,8 +2,18 @@
 import { useState, useEffect } from "react";
 import { SportSelector } from "./ticker/SportSelector";
 import { TickerContent } from "./ticker/TickerContent";
-import { fetchOdds, SPORT_KEYS, convertToTickerGames, TickerData, DEFAULT_SPORT } from "@/utils/oddsApi";
+import { fetchOdds, SPORT_KEYS, convertToTickerGames, TickerGame } from "@/utils/oddsApi";
+import { DEFAULT_SPORT } from "@/utils/config/sportKeys";
 import { sampleTickerData } from "./ticker/SampleTickerData";
+
+export interface TickerData {
+  sport: string;
+  days: {
+    label: string;
+    date: string;
+    games: TickerGame[];
+  }[];
+}
 
 export function MatchupTicker() {
   const [selectedSport, setSelectedSport] = useState<string>(DEFAULT_SPORT);

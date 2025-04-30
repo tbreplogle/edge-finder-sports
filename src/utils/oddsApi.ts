@@ -1,6 +1,6 @@
-// ---------------- oddsApi.ts ----------------
+
 import axios from 'axios';
-import { SPORT_KEYS } from './config/sportKeys';
+import { SPORT_KEYS, DEFAULT_SPORT } from './config/sportKeys';
 import { dummyFromOdds, GameWithMarket } from './generateDummyPrediction';
 import { getTeamAbbreviation } from './helpers/teamAbbreviations';
 import { formatGameTime } from './helpers/dateFormatting';
