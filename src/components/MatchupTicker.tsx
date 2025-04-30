@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
 import { TickerContent } from './ticker/TickerContent';
+import { Separator } from '@/components/ui/separator';
 import {
   fetchOdds,
   convertToTickerGames,
@@ -98,18 +99,18 @@ export function MatchupTicker() {
   /* ========== UI ========== */
   if (loading)
     return (
-      <div className="w-full bg-muted/30 h-14 flex items-center justify-center border-b">
+      <div className="w-full bg-muted/30 h-16 flex items-center justify-center border-b">
         <p className="text-xs text-muted-foreground">Loading matchup data…</p>
       </div>
     );
 
   return (
-    <div className="w-full bg-muted/30 border-b overflow-hidden">
-      <div className="container py-3">
-        <div className="flex justify-between items-center mb-2">
+    <div className="w-full bg-muted/30 border-b overflow-hidden py-1.5">
+      <div className="container">
+        <div className="flex justify-between items-center mb-4">
           <div className="flex items-center">
-            <h3 className="text-sm font-medium mr-2">Match-ups</h3>
-            <div className="hidden md:block h-4 w-px bg-border mx-2"></div>
+            <h3 className="text-sm font-semibold text-foreground mr-3">Game Matchups</h3>
+            <Separator orientation="vertical" className="h-4 mx-3 hidden md:block" />
             <span className="hidden md:block text-xs text-muted-foreground">Browse upcoming games and odds</span>
           </div>
           <SportSelector 
@@ -119,8 +120,8 @@ export function MatchupTicker() {
         </div>
 
         {noGames ? (
-          <div className="flex items-center justify-center p-3 bg-card
-                          border border-border/30 rounded-md">
+          <div className="flex items-center justify-center p-4 bg-card
+                          border border-border/30 rounded-md my-2">
             <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
           </div>
         ) : (

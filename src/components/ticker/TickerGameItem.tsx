@@ -1,6 +1,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { TickerGame } from '@/utils/types/sports';
+import { Separator } from "@/components/ui/separator";
 
 interface Props {
   game: TickerGame;
@@ -24,7 +25,8 @@ export const TickerGameItem = ({ game }: Props) => {
     
     oddsDisplay = (
       <div className="text-xs">
-        {favTeam} {sign}{favPrice}
+        <span className="text-muted-foreground mr-1">Fav:</span>
+        <span>{favTeam} {sign}{favPrice}</span>
       </div>
     );
   } else if (!isBaseball && game.spread !== 0) {
@@ -32,35 +34,44 @@ export const TickerGameItem = ({ game }: Props) => {
     const favSpread = Math.abs(game.spread);
     oddsDisplay = (
       <div className="text-xs">
-        {favTeam} {favSpread > 0 ? '-' : '+'}{favSpread}
+        <span className="text-muted-foreground mr-1">Spread:</span>
+        <span>{favTeam} {favSpread > 0 ? '-' : '+'}{favSpread}</span>
       </div>
     );
   }
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="flex items-center space-x-2 px-3 py-1 bg-card border border-border/30 rounded-md whitespace-nowrap">
+    <div className="flex items-center px-3 py-1 bg-card border border-border/30 rounded-md whitespace-nowrap">
       {isFinal ? (
         <>
-          <span className="font-semibold">
+          <span className="font-medium text-sm">
             {game.away} {game.score_away}
           </span>
-          <span className="text-muted-foreground mx-1">@</span>
-          <span className="font-semibold">
+          <span className="text-muted-foreground mx-1.5">@</span>
+          <span className="font-medium text-sm">
             {game.home} {game.score_home}
           </span>
-          <Badge variant="outline" className="ml-1 text-xs">
+          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">
             FINAL
           </Badge>
         </>
       ) : (
-        <>
-          <span className="font-semibold">{game.away}</span>
-          <span className="text-muted-foreground mx-1">@</span>
-          <span className="font-semibold">{game.home}</span>
-          <span className="text-xs text-muted-foreground">{game.tip}</span>
-          {oddsDisplay}
-        </>
+        <div className="flex flex-col">
+          <div className="flex items-center">
+            <span className="font-medium text-sm">{game.away}</span>
+            <span className="text-muted-foreground mx-1.5">@</span>
+            <span className="font-medium text-sm">{game.home}</span>
+            {game.tip && (
+              <span className="text-xs text-muted-foreground ml-2">{game.tip}</span>
+            )}
+          </div>
+          {oddsDisplay && (
+            <div className="mt-0.5">
+              {oddsDisplay}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
