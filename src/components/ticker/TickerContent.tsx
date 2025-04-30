@@ -29,7 +29,7 @@ export const TickerContent = ({ games }: TickerContentProps) => {
           ) : (
             <CarouselItem className="pl-2 sm:pl-3 basis-full">
               <div className="flex items-center justify-center p-3 sm:p-4 bg-edge-primary/50
-                          border border-edge-neutral/30 text-white">
+                          border border-edge-neutral/30 text-white rounded-md">
                 <p className="text-xs sm:text-sm">No games scheduled</p>
               </div>
             </CarouselItem>
@@ -37,8 +37,8 @@ export const TickerContent = ({ games }: TickerContentProps) => {
         </CarouselContent>
         {games.length > 0 && (
           <>
-            <CarouselPrevious className="absolute -left-3 md:-left-4 lg:-left-12 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
-            <CarouselNext className="absolute -right-3 md:-right-4 lg:-right-12 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselPrevious className="absolute -left-3 md:-left-4 lg:-left-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselNext className="absolute -right-3 md:-right-4 lg:-right-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
           </>
         )}
       </Carousel>
