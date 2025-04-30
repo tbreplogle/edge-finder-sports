@@ -17,7 +17,7 @@ export const TickerDayGroup = ({ day }: TickerDayGroupProps) => {
     <div className="flex flex-col">
       <div className="flex items-center mb-1">
         <Badge variant="secondary" className="text-xs mr-2">{day.label}</Badge>
-        <ScrollArea className="w-full px-1" orientation="horizontal">
+        <ScrollArea className="w-full px-1">
           <div className="flex gap-2 py-1">
             {!isMobile && day.games.map((game) => (
               <TickerGameItem key={game.id} game={game} />
