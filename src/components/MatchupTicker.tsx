@@ -142,7 +142,7 @@ export function MatchupTicker() {
 
   return (
     <div className="w-full bg-edge-bg border-b overflow-hidden py-1">
-      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+      <div className="w-full max-w-7xl 3xl:max-w-screen-3xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
         <div className="flex flex-col md:flex-row gap-2 md:gap-3 items-start md:items-center mb-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <h3 className="text-xs sm:text-sm font-semibold text-foreground">Game Matchups</h3>

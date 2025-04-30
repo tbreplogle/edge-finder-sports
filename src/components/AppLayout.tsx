@@ -21,7 +21,7 @@ export function AppLayout({ children, showHeader = true, isAuthenticated = false
       <MatchupTicker />
       
       <main className="flex-1 w-full">
-        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div className="w-full max-w-7xl 3xl:max-w-screen-3xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
           {children}
         </div>
       </main>

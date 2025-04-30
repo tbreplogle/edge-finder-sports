@@ -13,9 +13,10 @@ export default {
 	theme: {
 		container: {
 			center: true,
-			padding: '2rem',
+			padding: '1rem',
 			screens: {
-				'2xl': '1400px'
+				'2xl': '1400px',
+				'3xl': '1920px'    // Added 3xl breakpoint
 			}
 		},
 		extend: {

@@ -60,6 +60,13 @@
   }
 }
 
+@media (min-width: 1920px) {
+  .responsive-container {
+    padding: 0 3rem;
+    max-width: 1920px;
+  }
+}
+
 /* Additional responsive utilities */
 .card {
   padding: 1em;
@@ -105,6 +112,12 @@
 @media (min-width: 1536px) {
   .responsive-section {
     padding: 5rem 2.5rem;
+  }
+}
+
+@media (min-width: 1920px) {
+  .responsive-section {
+    padding: 6rem 3rem;
   }
 }
 
