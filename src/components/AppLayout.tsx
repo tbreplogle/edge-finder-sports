@@ -3,6 +3,7 @@ import React from "react";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { MatchupTicker } from "@/components/MatchupTicker";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -11,8 +12,10 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, showHeader = true, isAuthenticated = false }: AppLayoutProps) {
+  const isMobile = useIsMobile();
+  
   return (
-    <div className="flex flex-col min-h-screen w-full max-w-[1600px] mx-auto px-2 sm:px-3 lg:px-4">
+    <div className="flex flex-col min-h-screen w-full">
       {showHeader && <Header isAuthenticated={isAuthenticated} />}
       
       <MatchupTicker />
