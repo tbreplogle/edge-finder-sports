@@ -15,18 +15,18 @@ export const TickerContent = ({ data }: TickerContentProps) => {
         align: "start",
         loop: true,
       }}
-      className="w-full"
+      className="w-full relative"
     >
       <CarouselContent className="-ml-2">
         {data.days.map((day) => (
-          <CarouselItem key={day.date} className="pl-2 flex-shrink-0 basis-full md:basis-full">
+          <CarouselItem key={day.date} className="pl-2 md:basis-auto">
             <TickerDayGroup day={day} />
           </CarouselItem>
         ))}
       </CarouselContent>
       <div className="hidden sm:block">
-        <CarouselPrevious className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2" />
-        <CarouselNext className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2" />
+        <CarouselPrevious className="absolute -left-4 top-1/2 -translate-y-1/2" />
+        <CarouselNext className="absolute -right-4 top-1/2 -translate-y-1/2" />
       </div>
     </Carousel>
   );
