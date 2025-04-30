@@ -1,0 +1,30 @@
+
+.alert-notification-item {
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem;
+  transition: background-color 0.2s ease;
+}
+
+.alert-notification-item:last-child {
+  border-bottom: none;
+}
+
+.alert-notification-item.unread {
+  background-color: rgba(var(--muted) / 0.3);
+}
+
+.alert-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+}
+
+.alert-badge.edge {
+  background-color: rgba(var(--secondary) / 0.2);
+  color: hsl(var(--secondary));
+}
+
+.alert-badge.system {
+  background-color: rgba(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+}

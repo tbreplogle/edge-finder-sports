@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
 import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -27,6 +28,18 @@ import {
   NavigationMenuTrigger,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
 
 interface HeaderProps {
   isAuthenticated?: boolean;
@@ -35,10 +48,80 @@ interface HeaderProps {
 
 export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>("guest");
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [hasNewAlerts, setHasNewAlerts] = useState(false);
+  
+  // Get user role
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (isAuthenticated) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          // Set role based on user metadata
+          setUserRole(data.session.user.user_metadata?.role || "free");
+          // Check admin status
+          if (data.session.user.user_metadata?.is_admin === true) {
+            setUserRole("admin");
+          }
+        }
+      } else {
+        setUserRole("guest");
+      }
+    };
+    
+    checkUserRole();
+  }, [isAuthenticated]);
+  
+  // Check for alerts (mock data for now)
+  useEffect(() => {
+    if (isAuthenticated && (userRole === "premium" || userRole === "admin")) {
+      // Simulated alerts - in a real app these would come from the database
+      const dummyAlerts = [
+        {
+          id: 1, 
+          type: "edge", 
+          message: "New edge alert: KC Chiefs vs SF 49ers has a 7.5% edge", 
+          createdAt: new Date().toISOString(),
+          isRead: false
+        },
+        {
+          id: 2,
+          type: "system",
+          message: "New predictions available for NFL games",
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          isRead: false
+        },
+        {
+          id: 3,
+          type: "edge",
+          message: "Edge opportunity increased: Lakers vs Warriors now at 5.2%",
+          createdAt: new Date(Date.now() - 7200000).toISOString(),
+          isRead: true
+        }
+      ];
+      
+      setAlerts(dummyAlerts);
+      // Check if there are any unread alerts
+      setHasNewAlerts(dummyAlerts.some(alert => !alert.isRead));
+    }
+  }, [isAuthenticated, userRole]);
   
   const handleLogout = () => {
     navigate("/auth/logout");
+  };
+  
+  const markAlertsAsRead = () => {
+    setAlerts(alerts.map(alert => ({ ...alert, isRead: true })));
+    setHasNewAlerts(false);
+    
+    // In a real app, you would also update the database
+    toast({
+      title: "Alerts marked as read",
+      description: "All notifications have been marked as read",
+    });
   };
 
   // Always display the Admin tab, access is controlled at the page level
@@ -92,9 +175,58 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
           
           {isAuthenticated ? (
             <>
-              <Button variant="ghost" size="icon">
-                <Bell className="h-5 w-5" />
-              </Button>
+              {(userRole === "premium" || userRole === "admin") && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="relative">
+                      <Bell className="h-5 w-5" />
+                      {hasNewAlerts && (
+                        <span className="absolute top-1 right-1 w-2 h-2 bg-edge-accent rounded-full"></span>
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="sm:max-w-[425px]">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex justify-between items-center">
+                        Notifications
+                        <Button variant="ghost" size="sm" onClick={markAlertsAsRead}>
+                          Mark all as read
+                        </Button>
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {alerts.length > 0 ? (
+                          <div className="max-h-[300px] overflow-auto">
+                            {alerts.map((alert) => (
+                              <div 
+                                key={alert.id} 
+                                className={`p-3 border-b last:border-0 ${!alert.isRead ? 'bg-muted/30' : ''}`}
+                              >
+                                <div className="flex justify-between">
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    alert.type === 'edge' ? 'bg-edge-secondary/20 text-edge-secondary' : 
+                                    'bg-edge-primary/20 text-foreground'
+                                  }`}>
+                                    {alert.type === 'edge' ? 'Edge Alert' : 'System'}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(alert.createdAt).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-sm">{alert.message}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="py-8 text-center">No notifications to display</p>
+                        )}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Close</AlertDialogCancel>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -151,3 +283,4 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
     </header>
   );
 }
+
