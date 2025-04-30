@@ -77,7 +77,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
   
   // Check for alerts (mock data for now)
   useEffect(() => {
-    if (isAuthenticated && (userRole === "premium" || userRole === "admin")) {
+    if (isAuthenticated) {
       // Simulated alerts - in a real app these would come from the database
       const dummyAlerts = [
         {
@@ -107,7 +107,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
       // Check if there are any unread alerts
       setHasNewAlerts(dummyAlerts.some(alert => !alert.isRead));
     }
-  }, [isAuthenticated, userRole]);
+  }, [isAuthenticated]);
   
   const handleLogout = () => {
     navigate("/auth/logout");
@@ -126,6 +126,9 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
 
   // Always display the Admin tab, access is controlled at the page level
   const showAdminTab = true;
+
+  // Check if the user should see alerts (if they are authenticated)
+  const shouldShowAlerts = isAuthenticated;
 
   return (
     <header className="w-full border-b py-3 sm:py-4">
@@ -175,7 +178,7 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
           
           {isAuthenticated ? (
             <>
-              {(userRole === "premium" || userRole === "admin") && (
+              {shouldShowAlerts && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" className="relative">
@@ -199,13 +202,10 @@ export function Header({ isAuthenticated = false, isAdmin = false }: HeaderProps
                             {alerts.map((alert) => (
                               <div 
                                 key={alert.id} 
-                                className={`p-3 border-b last:border-0 ${!alert.isRead ? 'bg-muted/30' : ''}`}
+                                className={`alert-notification-item ${!alert.isRead ? 'unread' : ''}`}
                               >
                                 <div className="flex justify-between">
-                                  <span className={`text-xs px-2 py-1 rounded-full ${
-                                    alert.type === 'edge' ? 'bg-edge-secondary/20 text-edge-secondary' : 
-                                    'bg-edge-primary/20 text-foreground'
-                                  }`}>
+                                  <span className={`alert-badge ${alert.type}`}>
                                     {alert.type === 'edge' ? 'Edge Alert' : 'System'}
                                   </span>
                                   <span className="text-xs text-muted-foreground">
