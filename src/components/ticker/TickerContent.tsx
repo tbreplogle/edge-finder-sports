@@ -15,9 +15,9 @@ export const TickerContent = ({ games }: TickerContentProps) => {
         opts={{
           align: "start",
           loop: true,
-          slidesToScroll: 1, // Ensure we scroll 1 item at a time
+          slidesToScroll: 1,
         }}
-        className="w-full px-16" // Increased padding to prevent overlap with navigation buttons
+        className="w-full px-8 sm:px-12 md:px-16" // Responsive padding
       >
         <CarouselContent className="-ml-2 sm:-ml-3">
           {games.length > 0 ? (
@@ -37,8 +37,8 @@ export const TickerContent = ({ games }: TickerContentProps) => {
         </CarouselContent>
         {games.length > 0 && (
           <>
-            <CarouselPrevious className="absolute -left-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
-            <CarouselNext className="absolute -right-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselPrevious className="absolute -left-2 sm:-left-4 md:-left-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
+            <CarouselNext className="absolute -right-2 sm:-right-4 md:-right-6 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8" />
           </>
         )}
       </Carousel>
