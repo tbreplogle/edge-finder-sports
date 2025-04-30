@@ -5,7 +5,6 @@ import axios from 'axios';
 export const SPORT_KEYS = {
   nfl: "americanfootball_nfl",
   ncaaf: "americanfootball_ncaaf",
-  nba: "basketball_nba",
   ncaab: "basketball_ncaab",
   mlb: "baseball_mlb"
 };
@@ -48,12 +47,14 @@ const BASE_URL = 'https://api.the-odds-api.com/v4/sports';
 
 export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
   try {
+    const markets = sportKey.includes('baseball') ? 'h2h,spreads,totals' : 'spreads,totals';
+    
     const { data } = await axios.get(
       `${BASE_URL}/${sportKey}/odds`,
       {
         params: {
           regions: 'us',
-          markets: 'spreads,totals',
+          markets: markets,
           dateFormat: 'iso',
           oddsFormat: 'american',
           apiKey: ODDS_API_KEY,
@@ -73,13 +74,16 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
   return games.map(game => {
     // Extract spread from first bookmaker with spreads market
     let spread = 0;
+    let moneyline = undefined;
     let total = undefined;
     let consensus = undefined;
+    let isBaseball = game.sport_key.includes('baseball');
 
     // Find the first bookmaker with spreads
     for (const bookmaker of game.bookmakers) {
       const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
       const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
+      const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
       
       if (spreadsMarket) {
         const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
@@ -88,6 +92,13 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
           // Generate random consensus between 50-80% for demo purposes
           consensus = Math.floor(Math.random() * 31) + 50;
           break;
+        }
+      }
+      
+      if (isBaseball && h2hMarket) {
+        const homeOutcome = h2hMarket.outcomes.find(o => o.name === game.home_team);
+        if (homeOutcome && homeOutcome.price) {
+          moneyline = homeOutcome.price;
         }
       }
       
@@ -104,9 +115,11 @@ export function convertToTickerGames(games: OddsApiGame[], timeZone: string = 'A
       away: getTeamAbbreviation(game.away_team),
       tip: formatGameTime(date, timeZone),
       spread,
+      moneyline,
       total,
       consensus,
-      final: false // The API doesn't provide final status, so we'll assume it's not final
+      final: false, // The API doesn't provide final status, so we'll assume it's not final
+      sport_key: game.sport_key
     };
   });
 }
@@ -162,8 +175,10 @@ export interface TickerGame {
   score_home?: number;
   score_away?: number;
   spread: number;
+  moneyline?: number;
   total?: number;
   consensus?: number;
+  sport_key?: string;
 }
 
 export interface TickerDay {

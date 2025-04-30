@@ -10,8 +10,21 @@ import { BasketballIcon, FootballIcon, BaseballIcon } from "./SportIcons";
 // Component for rendering a single game in the ticker
 const TickerGameItem = ({ game }: { game: TickerGame }) => {
   const isFinal = game.final;
-  const spreadTeam = game.spread > 0 ? game.home : game.away;
-  const spreadValue = Math.abs(game.spread);
+  const isBaseball = game.sport_key?.includes('baseball');
+  
+  // Display appropriate odds based on sport
+  let oddsDisplay;
+  if (isBaseball && game.moneyline !== undefined) {
+    // For baseball, show moneyline with correct sign
+    const moneylineSign = game.moneyline > 0 ? '+' : '';
+    oddsDisplay = <div className="text-xs">{game.home} {moneylineSign}{game.moneyline}</div>;
+  } else {
+    // For other sports, show spread with correct sign
+    const spreadTeam = game.spread > 0 ? game.home : game.away;
+    const spreadValue = Math.abs(game.spread);
+    const spreadSign = game.spread > 0 ? '+' : '-';
+    oddsDisplay = <div className="text-xs">{spreadTeam} {spreadSign}{spreadValue}</div>;
+  }
   
   return (
     <div className="flex items-center space-x-2 px-3 py-1 bg-card rounded-md border border-border/30 whitespace-nowrap">
@@ -38,9 +51,7 @@ const TickerGameItem = ({ game }: { game: TickerGame }) => {
             <span>{game.home}</span>
           </div>
           <div className="text-xs text-muted-foreground">{game.tip}</div>
-          <div className="text-xs">
-            {spreadTeam} -{spreadValue}
-          </div>
+          {oddsDisplay}
         </>
       )}
     </div>
@@ -74,18 +85,17 @@ const getSportIcon = (sport: string) => {
     case 'nfl':
     case 'ncaaf':
       return <FootballIcon className="h-4 w-4 mr-2" />;
-    case 'nba':
     case 'ncaab':
       return <BasketballIcon className="h-4 w-4 mr-2" />;
     case 'mlb':
       return <BaseballIcon className="h-4 w-4 mr-2" />;
     default:
-      return <BasketballIcon className="h-4 w-4 mr-2" />;
+      return <FootballIcon className="h-4 w-4 mr-2" />;
   }
 };
 
 export function MatchupTicker() {
-  const [selectedSport, setSelectedSport] = useState<string>("nba");
+  const [selectedSport, setSelectedSport] = useState<string>("nfl");
   const [tickerData, setTickerData] = useState<TickerData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -219,12 +229,6 @@ export function MatchupTicker() {
                   <span>NCAAF</span>
                 </div>
               </SelectItem>
-              <SelectItem value="nba" className="flex items-center">
-                <div className="flex items-center">
-                  <BasketballIcon className="h-4 w-4 mr-2" />
-                  <span>NBA</span>
-                </div>
-              </SelectItem>
               <SelectItem value="ncaab" className="flex items-center">
                 <div className="flex items-center">
                   <BasketballIcon className="h-4 w-4 mr-2" />
@@ -267,31 +271,31 @@ export function MatchupTicker() {
 
 // Sample ticker data (fallback if API fails)
 const sampleTickerData: TickerData = {
-  sport: "NBA",
+  sport: "NFL",
   days: [
     {
       label: "Yesterday",
       date: "2025-05-01",
       games: [
         {
-          id: "nba-1",
-          home: "MIL",
-          away: "IND",
+          id: "nfl-1",
+          home: "KC",
+          away: "BAL",
           final: true,
-          score_home: 118,
-          score_away: 119,
-          spread: 8,
-          total: 222
+          score_home: 24,
+          score_away: 21,
+          spread: -3,
+          total: 44
         },
         {
-          id: "nba-2",
-          home: "DEN",
-          away: "LAL",
+          id: "nfl-2",
+          home: "SF",
+          away: "DAL",
           final: true,
-          score_home: 124,
-          score_away: 103,
-          spread: -5,
-          total: 227
+          score_home: 28,
+          score_away: 17,
+          spread: -4.5,
+          total: 46
         }
       ]
     },
@@ -300,22 +304,22 @@ const sampleTickerData: TickerData = {
       date: "2025-05-02",
       games: [
         {
-          id: "nba-3",
-          home: "GS",
-          away: "HOU",
+          id: "nfl-3",
+          home: "BUF",
+          away: "MIA",
           tip: "7:30 PM CT",
-          spread: 4,
+          spread: -6,
           consensus: 59,
-          total: 204
+          total: 45
         },
         {
-          id: "nba-4",
-          home: "BOS",
-          away: "NYK",
+          id: "nfl-4",
+          home: "PHI",
+          away: "NYG",
           tip: "8:00 PM CT",
           spread: -3.5,
           consensus: 67,
-          total: 211
+          total: 42
         }
       ]
     },
@@ -324,22 +328,22 @@ const sampleTickerData: TickerData = {
       date: "2025-05-03",
       games: [
         {
-          id: "nba-5",
-          home: "PHX",
-          away: "DAL",
+          id: "nfl-5",
+          home: "GB",
+          away: "MIN",
           tip: "6:30 PM CT",
           spread: -1.5,
           consensus: 52,
-          total: 215
+          total: 48
         },
         {
-          id: "nba-6",
-          home: "PHI",
-          away: "MIA",
+          id: "nfl-6",
+          home: "LAR",
+          away: "ARI",
           tip: "7:00 PM CT",
-          spread: 2,
+          spread: -2,
           consensus: 61,
-          total: 208
+          total: 47
         }
       ]
     }
