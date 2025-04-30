@@ -12,7 +12,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, showHeader = true, isAuthenticated = false }: AppLayoutProps) {
   return (
-    <div className="flex flex-col min-h-screen w-full max-w-[1920px] mx-auto px-2 sm:px-4 md:px-6">
+    <div className="flex flex-col min-h-screen w-full max-w-[1600px] mx-auto px-2 sm:px-3 lg:px-4">
       {showHeader && <Header isAuthenticated={isAuthenticated} />}
       
       <MatchupTicker />
