@@ -2,9 +2,29 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, CheckCircle2, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 export function PremiumBanner() {
   const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setIsAdmin(user.is_admin === true);
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    }
+  }, []);
+  
+  // Hide banner for admin users
+  if (isAdmin) {
+    return null;
+  }
   
   return (
     <div className="bg-gradient-to-r from-edge-primary to-edge-neutral rounded-lg p-5 md:p-8 shadow-lg my-8">

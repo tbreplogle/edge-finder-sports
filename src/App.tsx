@@ -9,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
+import Account from "./pages/Account";
+import SportLogic from "./pages/SportLogic";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +25,9 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/auth/:action" element={<Auth />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/account" element={<Account />} />
+          <Route path="/history" element={<Dashboard />} /> {/* Temporary fix for /history */}
+          <Route path="/admin/sports/:sport" element={<SportLogic />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

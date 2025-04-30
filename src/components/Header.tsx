@@ -1,9 +1,9 @@
 
-import { Bell, Menu, User } from "lucide-react";
+import { Bell, Menu, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,12 +11,31 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
 
 export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setIsAdmin(user.is_admin === true);
+        } catch (e) {
+          console.error("Error parsing user data:", e);
+        }
+      }
+    }
+  }, [isAuthenticated]);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -56,6 +75,36 @@ export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean 
             >
               Pricing
             </a>
+            {isAdmin && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="text-foreground/70 transition-colors hover:text-foreground">
+                    Admin
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Admin Tools</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>Sport Logic</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/nfl-logic")}>
+                        NFL
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaaf-logic")}>
+                        NCAAF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaab-logic")}>
+                        NCAAB
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/mlb-logic")}>
+                        MLB
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </nav>
         </div>
         
@@ -77,14 +126,33 @@ export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean 
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/profile")}>
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/subscription")}>
-                    Subscription
+                  <DropdownMenuItem onClick={() => navigate("/account")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Account Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/auth/logout")}>
+                  {isAdmin && (
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Admin</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/nfl-logic")}>
+                        NFL Logic
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaaf-logic")}>
+                        NCAAF Logic
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/ncaab-logic")}>
+                        NCAAB Logic
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/sports/mlb-logic")}>
+                        MLB Logic
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </DropdownMenuGroup>
+                  )}
+                  <DropdownMenuItem onClick={() => {
+                    localStorage.removeItem("user");
+                    navigate("/auth/logout");
+                  }}>
                     Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

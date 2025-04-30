@@ -31,11 +31,12 @@ export function AuthForm({ type }: AuthFormProps) {
     try {
       // Check for admin login
       if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        // Store login state in localStorage
+        // Store login state in localStorage with admin role
         localStorage.setItem("user", JSON.stringify({
           email: ADMIN_EMAIL,
           role: "admin",
-          name: "Admin User"
+          name: "Admin User",
+          is_admin: true
         }));
         
         // Show success toast
@@ -55,7 +56,8 @@ export function AuthForm({ type }: AuthFormProps) {
         localStorage.setItem("user", JSON.stringify({
           email: email,
           role: "user",
-          name: "User"
+          name: "User",
+          is_admin: false
         }));
         
         // Simulate authentication delay

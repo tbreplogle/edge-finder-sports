@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export interface GameProps {
   id: string;
@@ -41,6 +41,7 @@ export function GameCard({
   rawFactors
 }: GameProps) {
   const [open, setOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const formattedDate = new Date(startTime).toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -50,8 +51,22 @@ export function GameCard({
     timeZone: 'America/Chicago'
   });
   
+  // Check if user is admin
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setIsAdmin(user.is_admin === true);
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    }
+  }, []);
+  
   const isPositiveEdge = edge > 0;
-  const isBlurred = isPremium && Math.abs(edge) > 2;
+  // If user is admin, never blur content regardless of premium status
+  const isBlurred = !isAdmin && isPremium && Math.abs(edge) > 2;
   
   // Format the market spread for display
   const formattedMarketSpread = marketSpread > 0 
@@ -76,7 +91,7 @@ export function GameCard({
               </div>
             </div>
             
-            {isPremium && Math.abs(edge) > 2 && (
+            {!isAdmin && isPremium && Math.abs(edge) > 2 && (
               <Badge variant="secondary" className="flex gap-1 items-center">
                 <LockIcon className="w-3 h-3" />
                 <span>Premium</span>
@@ -110,12 +125,20 @@ export function GameCard({
               {isPositiveEdge ? (
                 <>
                   <ArrowUp className="w-4 h-4 text-edge-secondary" />
-                  <span className="text-edge-secondary">{isPremium && Math.abs(edge) > 2 ? "2.0+" : edge.toFixed(1)} pts</span>
+                  <span className="text-edge-secondary">
+                    {isAdmin || !isPremium || Math.abs(edge) <= 2 
+                      ? edge.toFixed(1) 
+                      : "2.0+"} pts
+                  </span>
                 </>
               ) : (
                 <>
                   <ArrowDown className="w-4 h-4 text-edge-accent" />
-                  <span className="text-edge-accent">{isPremium && Math.abs(edge) > 2 ? "2.0+" : edge.toFixed(1)} pts</span>
+                  <span className="text-edge-accent">
+                    {isAdmin || !isPremium || Math.abs(edge) <= 2 
+                      ? edge.toFixed(1) 
+                      : "2.0+"} pts
+                  </span>
                 </>
               )}
               
@@ -133,10 +156,10 @@ export function GameCard({
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className={cn("mt-3 w-full", isPremium && "opacity-70")}
-                  disabled={isPremium}
+                  className={cn("mt-3 w-full", !isAdmin && isPremium && "opacity-70")}
+                  disabled={!isAdmin && isPremium}
                 >
-                  {isPremium ? "Upgrade to view details" : "View details"}
+                  {!isAdmin && isPremium ? "Upgrade to view details" : "View details"}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
