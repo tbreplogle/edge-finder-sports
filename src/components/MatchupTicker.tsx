@@ -1,9 +1,11 @@
 
 import { useState, useEffect } from "react";
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { fetchOdds, SPORT_KEYS, convertToTickerGames, TickerGame, TickerDay, TickerData } from "@/utils/oddsApi";
+import { BasketballIcon, FootballIcon, BaseballIcon } from "./SportIcons";
 
 // Component for rendering a single game in the ticker
 const TickerGameItem = ({ game }: { game: TickerGame }) => {
@@ -66,7 +68,24 @@ const TickerDayGroup = ({ day }: { day: TickerDay }) => {
   );
 };
 
+// Sport icon selector function
+const getSportIcon = (sport: string) => {
+  switch (sport.toLowerCase()) {
+    case 'nfl':
+    case 'ncaaf':
+      return <FootballIcon className="h-4 w-4 mr-2" />;
+    case 'nba':
+    case 'ncaab':
+      return <BasketballIcon className="h-4 w-4 mr-2" />;
+    case 'mlb':
+      return <BaseballIcon className="h-4 w-4 mr-2" />;
+    default:
+      return <BasketballIcon className="h-4 w-4 mr-2" />;
+  }
+};
+
 export function MatchupTicker() {
+  const [selectedSport, setSelectedSport] = useState<string>("nba");
   const [tickerData, setTickerData] = useState<TickerData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,8 +93,9 @@ export function MatchupTicker() {
     // Fetch data from Odds API
     const fetchTickerData = async () => {
       try {
-        // Use NBA data by default
-        const sportKey = SPORT_KEYS.nba;
+        setLoading(true);
+        // Use selected sport key
+        const sportKey = SPORT_KEYS[selectedSport as keyof typeof SPORT_KEYS];
         const gamesData = await fetchOdds(sportKey);
         
         if (gamesData.length > 0) {
@@ -136,7 +156,7 @@ export function MatchupTicker() {
           }
           
           setTickerData({
-            sport: 'NBA',
+            sport: selectedSport.toUpperCase(),
             days,
           });
         } else {
@@ -154,7 +174,11 @@ export function MatchupTicker() {
     };
 
     fetchTickerData();
-  }, []);
+  }, [selectedSport]);
+
+  const handleSportChange = (value: string) => {
+    setSelectedSport(value);
+  };
 
   if (loading) {
     return (
@@ -171,6 +195,52 @@ export function MatchupTicker() {
   return (
     <div className="w-full bg-muted/20 border-b overflow-hidden">
       <div className="container py-2">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-sm font-medium">Match-ups</h3>
+          <Select value={selectedSport} onValueChange={handleSportChange}>
+            <SelectTrigger className="w-[130px] h-8">
+              <SelectValue>
+                <div className="flex items-center">
+                  {getSportIcon(selectedSport)}
+                  <span>{selectedSport.toUpperCase()}</span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nfl" className="flex items-center">
+                <div className="flex items-center">
+                  <FootballIcon className="h-4 w-4 mr-2" />
+                  <span>NFL</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="ncaaf" className="flex items-center">
+                <div className="flex items-center">
+                  <FootballIcon className="h-4 w-4 mr-2" />
+                  <span>NCAAF</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="nba" className="flex items-center">
+                <div className="flex items-center">
+                  <BasketballIcon className="h-4 w-4 mr-2" />
+                  <span>NBA</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="ncaab" className="flex items-center">
+                <div className="flex items-center">
+                  <BasketballIcon className="h-4 w-4 mr-2" />
+                  <span>NCAAB</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="mlb" className="flex items-center">
+                <div className="flex items-center">
+                  <BaseballIcon className="h-4 w-4 mr-2" />
+                  <span>MLB</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
         <Carousel 
           opts={{
             align: "start",
@@ -185,6 +255,10 @@ export function MatchupTicker() {
               </CarouselItem>
             ))}
           </CarouselContent>
+          <div className="hidden sm:block">
+            <CarouselPrevious className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2" />
+            <CarouselNext className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2" />
+          </div>
         </Carousel>
       </div>
     </div>
