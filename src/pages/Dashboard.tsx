@@ -1,4 +1,3 @@
-
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SportTabs } from "@/components/SportTabs";
@@ -7,7 +6,7 @@ import { useState, useMemo, useEffect } from "react";
 import { GameCard, GameProps } from "@/components/GameCard";
 import { PremiumBanner } from "@/components/PremiumBanner";
 import { Button } from "@/components/ui/button";
-import { Calendar, Info, RefreshCw } from "lucide-react";
+import { Calendar, Info, RefreshCw, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -28,6 +27,7 @@ const Dashboard = () => {
   const [userRole, setUserRole] = useState<string | null>("guest");
   const [generatedDate, setGeneratedDate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [refreshTime, setRefreshTime] = useState<string | null>("08:00 AM CT");
   
   // Check authentication state
   useEffect(() => {
@@ -99,6 +99,11 @@ const Dashboard = () => {
       
       setGames(response.data.data || []);
       setGeneratedDate(response.data.generatedDate || null);
+      
+      // Store refresh time if available
+      if (response.data.refreshTime) {
+        setRefreshTime(response.data.refreshTime);
+      }
       
       // If API returns a role, use it (useful for confirming what the backend sees)
       if (response.data.userRole) {
@@ -334,7 +339,10 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="text-xs text-muted-foreground">
-              <p>Data refreshed every day at 8:00 AM CT.</p>
+              <div className="flex items-center gap-1 mb-1">
+                <Clock className="h-3 w-3" />
+                <p>Data refreshed daily at {refreshTime}.</p>
+              </div>
               <p>All times displayed in CT (America/Chicago).</p>
               <p>Last updated: {generatedDate || todayFormatted}</p>
             </div>

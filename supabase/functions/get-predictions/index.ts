@@ -8,6 +8,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SPORTS = [
+  { key: 'nfl', script: 'predict_nfl.R', csv: '/tmp/nfl.csv' },
+  { key: 'ncaaf', script: 'predict_ncaaf.R', csv: '/tmp/ncaaf.csv' },
+  { key: 'ncaab', script: 'predict_ncaab.R', csv: '/tmp/ncaab.csv' },
+  { key: 'mlb', script: 'predict_mlb.R', csv: '/tmp/mlb.csv' }
+];
+
 serve(async (req) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
@@ -60,7 +67,8 @@ serve(async (req) => {
     
     console.log(`Generating predictions for ${sport} on ${chicagoDate}`);
 
-    // Generate sport-specific games or return empty array
+    // In a real implementation, these would be fetched from a database
+    // where they were stored by a daily prediction generation job that runs at 8:00 AM CT
     let mockGames = [];
     
     // Check if we should have games today based on the sport season
@@ -68,8 +76,6 @@ serve(async (req) => {
     const inSeason = checkIfInSeason(sport, today);
     
     if (inSeason) {
-      // In a real implementation, these would be fetched from a database
-      // where they were stored by a daily prediction generation job
       mockGames = generateMockGames(sport, today);
     }
 
@@ -79,7 +85,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       data: sanitizedGames,
       userRole: userRole,
-      generatedDate: chicagoDate
+      generatedDate: chicagoDate,
+      refreshTime: "08:00 AM CT"
     }), {
       headers: { 
         ...corsHeaders,
