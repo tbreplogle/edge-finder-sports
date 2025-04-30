@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
 import { TickerContent } from './ticker/TickerContent';
+import { Info } from 'lucide-react';
 import {
   fetchOdds,
   convertToTickerGames,
@@ -113,6 +114,10 @@ export function MatchupTicker() {
               selectedSport={sport} 
               onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
             />
+          </div>
+          <div className="flex items-center text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mr-1.5" />
+            <span>Latest odds and upcoming games for {sport.toUpperCase()}</span>
           </div>
         </div>
 
