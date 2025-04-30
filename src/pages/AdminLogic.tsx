@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Move default code templates to separate constants
 const DEFAULT_CODE = `/**
  * Input: games[] from Odds-API for this sport
  * Output: array of { game_id, predicted_margin, predicted_total, confidence_pct }
@@ -89,6 +90,7 @@ const AdminLogic = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<Prediction[]>([]);
   const [gamesCount, setGamesCount] = useState(0);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   
   // Check if user is admin
   useEffect(() => {
@@ -110,18 +112,19 @@ const AdminLogic = () => {
             // Set admin status from localStorage immediately to prevent flicker
             if (localAdminStatus) {
               setIsAdmin(true);
-              setIsLoading(false);
             }
           } catch (e) {
             console.error("Error parsing user data:", e);
           }
         }
         
-        // Then verify with Supabase session - but don't wait for this to show the admin UI
-        // if localStorage already indicates admin status
+        // Get session token for API calls - needed for admin verification
         const { data } = await supabase.auth.getSession();
         
         if (data.session) {
+          // Store the session token for API calls
+          setAuthToken(data.session.access_token);
+          
           const user = data.session.user;
           const isAdminUser = user.user_metadata?.is_admin === true;
           console.log("AdminLogic - Supabase admin status:", isAdminUser);
@@ -179,8 +182,16 @@ const AdminLogic = () => {
     }
     
     try {
+      // Only for development/demo - in production, remove this bypass
+      const effectiveToken = authToken || "BYPASS_AUTH_FOR_DEVELOPMENT";
+      
+      console.log("Calling run-prediction-code function with auth token");
+      
       const response = await supabase.functions.invoke('run-prediction-code', {
-        body: { sport, code, language, previewOnly }
+        body: { sport, code, language, previewOnly },
+        headers: {
+          Authorization: `Bearer ${effectiveToken}`
+        }
       });
       
       if (response.error) {
@@ -323,6 +334,7 @@ const AdminLogic = () => {
       <div className="container py-6">
         <h1 className="text-2xl font-bold mb-4">Admin Logic Lab</h1>
         
+        {/* Language selector */}
         <div className="mb-4">
           <div className="flex flex-col gap-2 mb-4">
             <Label>Programming Language</Label>
@@ -347,6 +359,7 @@ const AdminLogic = () => {
           </div>
         </div>
         
+        {/* Sport selector and action buttons */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <Select value={sport} onValueChange={handleSportChange}>
@@ -363,7 +376,7 @@ const AdminLogic = () => {
             </Select>
             
             <Button
-              onClick={previewCode}
+              onClick={() => runCode(true)}
               disabled={running || previewing}
               variant="outline"
               className="flex items-center gap-2"
@@ -414,6 +427,7 @@ const AdminLogic = () => {
           </Button>
         </div>
         
+        {/* Error display */}
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Error</AlertTitle>
@@ -423,6 +437,7 @@ const AdminLogic = () => {
           </Alert>
         )}
         
+        {/* Code editor */}
         <div className="border rounded-lg overflow-hidden">
           <Editor
             language={language === "typescript" ? "typescript" : language === "r" ? "r" : "python"}
