@@ -24,6 +24,7 @@ export const TickerContent = ({ data }: TickerContentProps) => {
         opts={{
           align: "start",
           loop: true,
+          slidesToScroll: 1, // Ensure we scroll 1 item at a time
         }}
         className="w-full"
       >
