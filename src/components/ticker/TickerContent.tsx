@@ -11,7 +11,7 @@ interface TickerContentProps {
 
 export const TickerContent = ({ data }: TickerContentProps) => {
   return (
-    <div className="relative w-full px-4 md:px-8">
+    <div className="relative w-full px-0">
       <Carousel 
         opts={{
           align: "start",
@@ -27,8 +27,8 @@ export const TickerContent = ({ data }: TickerContentProps) => {
           ))}
         </CarouselContent>
         <div className="hidden sm:block">
-          <CarouselPrevious className="absolute -left-14 top-1/2 -translate-y-1/2" />
-          <CarouselNext className="absolute -right-14 top-1/2 -translate-y-1/2" />
+          <CarouselPrevious className="absolute -left-10 top-1/2 -translate-y-1/2" />
+          <CarouselNext className="absolute -right-10 top-1/2 -translate-y-1/2" />
         </div>
       </Carousel>
     </div>

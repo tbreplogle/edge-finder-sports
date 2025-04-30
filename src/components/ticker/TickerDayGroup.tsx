@@ -15,12 +15,12 @@ export const TickerDayGroup = ({ day }: TickerDayGroupProps) => {
   
   return (
     <div className="flex flex-col">
-      <div className="flex items-center mb-2">
-        <Badge variant="secondary" className="text-xs font-medium mr-2.5 whitespace-nowrap px-2 py-0.5">
+      <div className="flex items-center mb-1">
+        <Badge variant="secondary" className="text-xs font-medium bg-edge-neutral text-white border-none mr-2.5 whitespace-nowrap px-3 py-1">
           {day.label}
         </Badge>
         <ScrollArea className="w-full">
-          <div className="flex gap-2 py-1.5 pl-0.5 pr-4">
+          <div className="flex gap-0 py-1">
             {!isMobile && day.games.length > 0 ? (
               day.games.map((game) => (
                 <TickerGameItem key={game.id} game={game} />

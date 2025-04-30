@@ -99,15 +99,15 @@ export function MatchupTicker() {
   /* ========== UI ========== */
   if (loading)
     return (
-      <div className="w-full bg-muted/30 h-16 flex items-center justify-center border-b">
+      <div className="w-full bg-edge-bg h-16 flex items-center justify-center border-b">
         <p className="text-xs text-muted-foreground">Loading matchup data…</p>
       </div>
     );
 
   return (
-    <div className="w-full bg-muted/30 border-b overflow-hidden py-1.5">
+    <div className="w-full bg-edge-bg border-b overflow-hidden py-1">
       <div className="container">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-4">
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-2">
           <div className="flex items-center">
             <h3 className="text-sm font-semibold text-foreground mr-3">Game Matchups</h3>
             <SportSelector 
@@ -122,11 +122,11 @@ export function MatchupTicker() {
         </div>
 
         {/* Ticker content */}
-        <div className="mb-4">
+        <div className="mb-2">
           {noGames ? (
-            <div className="flex items-center justify-center p-4 bg-card
-                          border border-border/30 rounded-md">
-              <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
+            <div className="flex items-center justify-center p-4 bg-edge-primary
+                          border border-edge-neutral/30 text-white">
+              <p className="text-sm">No games scheduled for {sport.toUpperCase()}</p>
             </div>
           ) : (
             data && <TickerContent data={data} />

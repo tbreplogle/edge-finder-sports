@@ -1,3 +1,4 @@
+
 import { AppLayout } from "@/components/AppLayout";
 import { SportTabs } from "@/components/SportTabs";
 import { TabsContent } from "@/components/ui/tabs";
@@ -15,7 +16,6 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { format } from "date-fns";
-import { LatestTeamNews } from "@/components/LatestTeamNews";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -169,11 +169,6 @@ const Dashboard = () => {
               <span>{generatedDate || todayFormatted}</span>
             </Button>
           </div>
-        </div>
-        
-        {/* Team news section from ESPN API */}
-        <div className="mb-8">
-          <LatestTeamNews />
         </div>
         
         {userRole === 'guest' && (

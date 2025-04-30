@@ -54,35 +54,62 @@ export const TickerGameItem = ({ game }: Props) => {
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="flex items-center px-3 py-2 bg-card border border-border/30 rounded-md whitespace-nowrap">
+    <div className="flex items-center justify-between px-3 py-1.5 bg-edge-primary text-white rounded-none whitespace-nowrap border-l border-r border-edge-neutral/30">
       {isFinal ? (
         <>
-          <span className="font-medium text-sm">
-            {game.away} {game.score_away}
-          </span>
-          <span className="text-muted-foreground mx-1.5">@</span>
-          <span className="font-medium text-sm">
-            {game.home} {game.score_home}
-          </span>
-          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">
+          {/* Final game display */}
+          <div className="flex items-center">
+            <div className="flex flex-col mr-1.5">
+              <span className="font-medium text-sm">{game.away}</span>
+              <span className="font-medium text-sm">{game.home}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-sm">{game.score_away}</span>
+              <span className="font-medium text-sm">{game.score_home}</span>
+            </div>
+          </div>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-secondary border-secondary">
             FINAL
           </Badge>
         </>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex items-center justify-between w-full">
+          {/* Live/Upcoming game display */}
           <div className="flex items-center">
-            <span className="font-medium text-sm">{game.away}</span>
-            <span className="text-muted-foreground mx-1.5">@</span>
-            <span className="font-medium text-sm">{game.home}</span>
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between w-20">
+                <span className="font-medium text-sm">{game.away}</span>
+                {!isBaseball && game.spread > 0 && (
+                  <span className="text-xs text-muted-foreground">+{Math.abs(game.spread)}</span>
+                )}
+                {!isBaseball && game.spread < 0 && (
+                  <span className="text-xs text-secondary">-{Math.abs(game.spread)}</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between w-20">
+                <span className="font-medium text-sm">{game.home}</span>
+                {!isBaseball && game.spread < 0 && (
+                  <span className="text-xs text-muted-foreground">+{Math.abs(game.spread)}</span>
+                )}
+                {!isBaseball && game.spread > 0 && (
+                  <span className="text-xs text-secondary">-{Math.abs(game.spread)}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Right side info */}
+          <div className="flex items-center">
+            {game.total && (
+              <div className="text-xs mr-2">
+                <span className="text-muted-foreground mr-1">O/U:</span>
+                <span className="font-medium">{game.total}</span>
+              </div>
+            )}
             {game.tip && (
-              <span className="text-xs text-muted-foreground ml-2">{game.tip}</span>
+              <span className="text-xs font-semibold">{game.tip}</span>
             )}
           </div>
-          {oddsDisplay && (
-            <div className="mt-1">
-              {oddsDisplay}
-            </div>
-          )}
         </div>
       )}
     </div>
