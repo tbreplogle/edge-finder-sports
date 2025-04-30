@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,15 +8,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AuthFormProps {
   type: "login" | "register";
   returnUrl?: string;
 }
 
-// Admin user credentials
+// Admin user credentials - now just using one specific email
 const ADMIN_EMAIL = "tbreplogle@gmail.com";
-const ADMIN_PASSWORD = "1234";
 
 export function AuthForm({ type, returnUrl = "/dashboard" }: AuthFormProps) {
   const [email, setEmail] = useState("");
@@ -33,8 +34,19 @@ export function AuthForm({ type, returnUrl = "/dashboard" }: AuthFormProps) {
     setIsLoading(true);
     
     try {
-      // Check for admin login
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      // Check for admin login - only the specific admin email is allowed
+      if (email === ADMIN_EMAIL) {
+        // Authenticate with Supabase first
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        // If authentication fails, show error
+        if (authError) {
+          throw new Error("Invalid admin credentials");
+        }
+        
         // Store login state in localStorage with admin role
         const userData = {
           email: ADMIN_EMAIL,
@@ -47,7 +59,7 @@ export function AuthForm({ type, returnUrl = "/dashboard" }: AuthFormProps) {
           localStorage.setItem("user", JSON.stringify(userData));
           localStorage.setItem("rememberLogin", "true");
         } else {
-          // If not "remember me", use sessionStorage instead which clears when browser is closed
+          // If not "remember me", use localStorage but don't set remember flag
           localStorage.setItem("user", JSON.stringify(userData));
           localStorage.removeItem("rememberLogin");
         }
@@ -64,9 +76,31 @@ export function AuthForm({ type, returnUrl = "/dashboard" }: AuthFormProps) {
         return;
       }
       
+      // Regular user authentication with Supabase
+      if (type === "login") {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        if (loginError) {
+          throw new Error(loginError.message);
+        }
+      } else {
+        // Register new user
+        const { error: signupError } = await supabase.auth.signUp({
+          email,
+          password
+        });
+        
+        if (signupError) {
+          throw new Error(signupError.message);
+        }
+      }
+      
       // For demo purposes, allow any login with min requirements
       if (email.includes("@") && password.length >= 4) {
-        // Store basic user info
+        // Store basic user info - regular user, not admin
         const userData = {
           email: email,
           role: "user",
@@ -86,13 +120,16 @@ export function AuthForm({ type, returnUrl = "/dashboard" }: AuthFormProps) {
         // Simulate authentication delay
         await new Promise(resolve => setTimeout(resolve, 1000));
         
+        // Show success toast
+        toast.success(type === "login" ? "Login successful!" : "Account created successfully!");
+        
         // Navigate to dashboard
         navigate("/dashboard");
       } else {
         throw new Error("Invalid credentials");
       }
     } catch (err) {
-      setError("Authentication failed. Please try again.");
+      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
