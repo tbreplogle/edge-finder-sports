@@ -1,5 +1,4 @@
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
+import { AppLayout } from "@/components/AppLayout";
 import { SportTabs } from "@/components/SportTabs";
 import { TabsContent } from "@/components/ui/tabs";
 import { useState, useMemo, useEffect } from "react";
@@ -143,10 +142,8 @@ const Dashboard = () => {
   const todayFormatted = format(new Date(), "MMM d, yyyy");
   
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header isAuthenticated={isAuthenticated} />
-      
-      <main className="flex-1 container py-8">
+    <AppLayout isAuthenticated={isAuthenticated}>
+      <div className="container py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Live Predictions Dashboard</h1>
@@ -348,10 +345,8 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-      </main>
-      
-      <Footer />
-    </div>
+      </div>
+    </AppLayout>
   );
 };
 

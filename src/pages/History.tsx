@@ -1,7 +1,5 @@
-
 import { useState, useEffect } from "react";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
+import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Calendar, Download, Filter, Search } from "lucide-react";
@@ -103,10 +101,8 @@ const History = () => {
   }
   
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header isAuthenticated={true} />
-      
-      <main className="flex-1 container py-8">
+    <AppLayout isAuthenticated={true}>
+      <div className="container py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Historical Predictions</h1>
@@ -222,10 +218,8 @@ const History = () => {
             </TableBody>
           </Table>
         </div>
-      </main>
-      
-      <Footer />
-    </div>
+      </div>
+    </AppLayout>
   );
 };
 

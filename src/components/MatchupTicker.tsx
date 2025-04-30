@@ -3,33 +3,195 @@ import { useState, useEffect } from "react";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { fetchOdds, SPORT_KEYS, convertToTickerGames, TickerGame, TickerDay, TickerData } from "@/utils/oddsApi";
 
-// Types for the ticker data structure
-interface TickerGame {
-  id?: string;
-  home: string;
-  away: string;
-  tip?: string;
-  final?: boolean;
-  score_home?: number;
-  score_away?: number;
-  spread: number;
-  total?: number;
-  consensus?: number;
+// Component for rendering a single game in the ticker
+const TickerGameItem = ({ game }: { game: TickerGame }) => {
+  const isFinal = game.final;
+  const spreadTeam = game.spread > 0 ? game.home : game.away;
+  const spreadValue = Math.abs(game.spread);
+  
+  return (
+    <div className="flex items-center space-x-2 px-3 py-1 bg-card rounded-md border border-border/30 whitespace-nowrap">
+      {isFinal ? (
+        <>
+          <div className="font-semibold">
+            <span>{game.away}</span>
+            <span className="mx-1 text-muted-foreground">{game.score_away}</span>
+          </div>
+          <span className="text-muted-foreground">@</span>
+          <div className="font-semibold">
+            <span>{game.home}</span>
+            <span className="mx-1 text-muted-foreground">{game.score_home}</span>
+          </div>
+          <Badge variant="outline" className="ml-1 text-xs">FINAL</Badge>
+        </>
+      ) : (
+        <>
+          <div className="font-semibold">
+            <span>{game.away}</span>
+          </div>
+          <span className="text-muted-foreground">@</span>
+          <div className="font-semibold">
+            <span>{game.home}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">{game.tip}</div>
+          <div className="text-xs">
+            {spreadTeam} -{spreadValue}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// Component for rendering a group of games for a day
+const TickerDayGroup = ({ day }: { day: TickerDay }) => {
+  const isMobile = useIsMobile();
+  
+  return (
+    <div className="flex flex-col">
+      <div className="flex gap-2 items-center mb-1">
+        <Badge variant="secondary" className="text-xs">{day.label}</Badge>
+        <div className="flex gap-2">
+          {!isMobile && day.games.slice(0, 3).map((game) => (
+            <TickerGameItem key={game.id} game={game} />
+          ))}
+          {isMobile && day.games.slice(0, 1).map((game) => (
+            <TickerGameItem key={game.id} game={game} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export function MatchupTicker() {
+  const [tickerData, setTickerData] = useState<TickerData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch data from Odds API
+    const fetchTickerData = async () => {
+      try {
+        // Use NBA data by default
+        const sportKey = SPORT_KEYS.nba;
+        const gamesData = await fetchOdds(sportKey);
+        
+        if (gamesData.length > 0) {
+          // Group games by date
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          // Format dates for comparison
+          const todayStr = today.toISOString().split('T')[0];
+          const tomorrowStr = tomorrow.toISOString().split('T')[0];
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+          
+          // Group games by day
+          const todayGames = [];
+          const tomorrowGames = [];
+          const yesterdayGames = [];
+          
+          for (const game of gamesData) {
+            const gameDate = new Date(game.commence_time).toISOString().split('T')[0];
+            
+            if (gameDate === todayStr) {
+              todayGames.push(game);
+            } else if (gameDate === tomorrowStr) {
+              tomorrowGames.push(game);
+            } else if (gameDate === yesterdayStr) {
+              yesterdayGames.push(game);
+            }
+          }
+          
+          // Create ticker data structure
+          const days: TickerDay[] = [];
+          
+          if (yesterdayGames.length > 0) {
+            days.push({
+              label: 'Yesterday',
+              date: yesterdayStr,
+              games: convertToTickerGames(yesterdayGames),
+            });
+          }
+          
+          if (todayGames.length > 0) {
+            days.push({
+              label: 'Today',
+              date: todayStr,
+              games: convertToTickerGames(todayGames),
+            });
+          }
+          
+          if (tomorrowGames.length > 0) {
+            days.push({
+              label: 'Tomorrow',
+              date: tomorrowStr,
+              games: convertToTickerGames(tomorrowGames),
+            });
+          }
+          
+          setTickerData({
+            sport: 'NBA',
+            days,
+          });
+        } else {
+          // Fallback to sample data if API returns no games
+          setTickerData(sampleTickerData);
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch ticker data', error);
+        // Fallback to sample data on error
+        setTickerData(sampleTickerData);
+        setLoading(false);
+      }
+    };
+
+    fetchTickerData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="w-full bg-muted/20 h-12 flex items-center justify-center">
+        <p className="text-xs text-muted-foreground">Loading matchup data...</p>
+      </div>
+    );
+  }
+
+  if (!tickerData) {
+    return null;
+  }
+
+  return (
+    <div className="w-full bg-muted/20 border-b overflow-hidden">
+      <div className="container py-2">
+        <Carousel 
+          opts={{
+            align: "start",
+            loop: true,
+          }}
+          className="w-full"
+        >
+          <CarouselContent className="-ml-2">
+            {tickerData.days.map((day, index) => (
+              <CarouselItem key={day.date} className="pl-2 flex-shrink-0 basis-auto">
+                <TickerDayGroup day={day} />
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
+      </div>
+    </div>
+  );
 }
 
-interface TickerDay {
-  label: string;
-  date: string;
-  games: TickerGame[];
-}
-
-interface TickerData {
-  sport: string;
-  days: TickerDay[];
-}
-
-// Sample ticker data (will be replaced by API call)
+// Sample ticker data (fallback if API fails)
 const sampleTickerData: TickerData = {
   sport: "NBA",
   days: [
@@ -109,125 +271,3 @@ const sampleTickerData: TickerData = {
     }
   ]
 };
-
-// Component for rendering a single game in the ticker
-const TickerGameItem = ({ game }: { game: TickerGame }) => {
-  const isFinal = game.final;
-  const spreadTeam = game.spread > 0 ? game.home : game.away;
-  const spreadValue = Math.abs(game.spread);
-  
-  return (
-    <div className="flex items-center space-x-2 px-3 py-1 bg-card rounded-md border border-border/30 whitespace-nowrap">
-      {isFinal ? (
-        <>
-          <div className="font-semibold">
-            <span>{game.away}</span>
-            <span className="mx-1 text-muted-foreground">{game.score_away}</span>
-          </div>
-          <span className="text-muted-foreground">@</span>
-          <div className="font-semibold">
-            <span>{game.home}</span>
-            <span className="mx-1 text-muted-foreground">{game.score_home}</span>
-          </div>
-          <Badge variant="outline" className="ml-1 text-xs">FINAL</Badge>
-        </>
-      ) : (
-        <>
-          <div className="font-semibold">
-            <span>{game.away}</span>
-          </div>
-          <span className="text-muted-foreground">@</span>
-          <div className="font-semibold">
-            <span>{game.home}</span>
-          </div>
-          <div className="text-xs text-muted-foreground">{game.tip}</div>
-          <div className="text-xs">
-            {spreadTeam} -{spreadValue}
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-// Component for rendering a group of games for a day
-const TickerDayGroup = ({ day }: { day: TickerDay }) => {
-  const isMobile = useIsMobile();
-  
-  return (
-    <div className="flex flex-col">
-      <div className="flex gap-2 items-center mb-1">
-        <Badge variant="secondary" className="text-xs">{day.label}</Badge>
-        <div className="flex gap-2">
-          {!isMobile && day.games.slice(0, 3).map((game) => (
-            <TickerGameItem key={game.id} game={game} />
-          ))}
-          {isMobile && day.games.slice(0, 1).map((game) => (
-            <TickerGameItem key={game.id} game={game} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export function MatchupTicker() {
-  const [tickerData, setTickerData] = useState<TickerData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Simulate API call
-    const fetchTickerData = async () => {
-      try {
-        // In a real implementation, this would be an API call
-        // const response = await fetch('/api/ticker?sport=NBA');
-        // const data = await response.json();
-        
-        // For now, use sample data
-        setTimeout(() => {
-          setTickerData(sampleTickerData);
-          setLoading(false);
-        }, 500);
-      } catch (error) {
-        console.error('Failed to fetch ticker data', error);
-        setLoading(false);
-      }
-    };
-
-    fetchTickerData();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="w-full bg-muted/20 h-12 flex items-center justify-center">
-        <p className="text-xs text-muted-foreground">Loading matchup data...</p>
-      </div>
-    );
-  }
-
-  if (!tickerData) {
-    return null;
-  }
-
-  return (
-    <div className="w-full bg-muted/20 border-b overflow-hidden">
-      <div className="container py-2">
-        <Carousel 
-          opts={{
-            align: "start",
-            loop: true,
-          }}
-          className="w-full"
-        >
-          <CarouselContent className="-ml-2">
-            {tickerData.days.map((day, index) => (
-              <CarouselItem key={day.date} className="pl-2 flex-shrink-0 basis-auto">
-                <TickerDayGroup day={day} />
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-        </Carousel>
-      </div>
-    </div>
-  );
-}
