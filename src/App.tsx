@@ -31,7 +31,7 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
           {/* 404 route - redirects to home page */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

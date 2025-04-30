@@ -11,6 +11,8 @@ import {
   TrendingUp 
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { FeaturedGame } from "@/components/FeaturedGame";
+import { LatestNews } from "@/components/LatestNews";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -47,6 +49,17 @@ const Index = () => {
               </Button>
             </div>
           </div>
+        </section>
+        
+        {/* Featured Game Section */}
+        <section className="py-12 container">
+          <h2 className="text-2xl font-bold tracking-tight mb-6">Today's Featured Matchup</h2>
+          <FeaturedGame isPreview={true} />
+        </section>
+        
+        {/* Latest News Section */}
+        <section className="py-12 container">
+          <LatestNews />
         </section>
         
         {/* Features Grid */}
