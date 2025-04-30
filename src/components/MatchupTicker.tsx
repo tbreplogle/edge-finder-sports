@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
 import { TickerContent } from './ticker/TickerContent';
 import { Separator } from '@/components/ui/separator';
+import { FeaturedGame } from './FeaturedGame';
 import {
   fetchOdds,
   convertToTickerGames,
@@ -107,26 +108,34 @@ export function MatchupTicker() {
   return (
     <div className="w-full bg-muted/30 border-b overflow-hidden py-1.5">
       <div className="container">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-4">
           <div className="flex items-center">
             <h3 className="text-sm font-semibold text-foreground mr-3">Game Matchups</h3>
-            <Separator orientation="vertical" className="h-4 mx-3 hidden md:block" />
-            <span className="hidden md:block text-xs text-muted-foreground">Browse upcoming games and odds</span>
+            <SportSelector 
+              selectedSport={sport} 
+              onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
+            />
           </div>
-          <SportSelector 
-            selectedSport={sport} 
-            onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
-          />
         </div>
 
-        {noGames ? (
-          <div className="flex items-center justify-center p-4 bg-card
-                          border border-border/30 rounded-md my-2">
-            <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          {/* Featured game for the current sport */}
+          <div className="col-span-1">
+            <FeaturedGame isPreview={false} />
           </div>
-        ) : (
-          data && <TickerContent data={data} />
-        )}
+          
+          {/* Ticker content */}
+          <div className="col-span-1 md:col-span-2">
+            {noGames ? (
+              <div className="flex items-center justify-center p-4 bg-card
+                            border border-border/30 rounded-md">
+                <p className="text-sm text-muted-foreground">No games scheduled for {sport.toUpperCase()}</p>
+              </div>
+            ) : (
+              data && <TickerContent data={data} />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

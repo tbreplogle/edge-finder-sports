@@ -26,7 +26,7 @@ export const TickerGameItem = ({ game }: Props) => {
     oddsDisplay = (
       <div className="text-xs">
         <span className="text-muted-foreground mr-1">Fav:</span>
-        <span>{favTeam} {sign}{favPrice}</span>
+        <span className="font-medium">{favTeam} {sign}{favPrice}</span>
       </div>
     );
   } else if (!isBaseball && game.spread !== 0) {
@@ -35,14 +35,14 @@ export const TickerGameItem = ({ game }: Props) => {
     oddsDisplay = (
       <div className="text-xs">
         <span className="text-muted-foreground mr-1">Spread:</span>
-        <span>{favTeam} {favSpread > 0 ? '-' : '+'}{favSpread}</span>
+        <span className="font-medium">{favTeam} {favSpread > 0 ? '-' : '+'}{favSpread}</span>
       </div>
     );
   }
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="flex items-center px-3 py-1 bg-card border border-border/30 rounded-md whitespace-nowrap">
+    <div className="flex items-center px-3 py-2 bg-card border border-border/30 rounded-md whitespace-nowrap">
       {isFinal ? (
         <>
           <span className="font-medium text-sm">
@@ -67,7 +67,7 @@ export const TickerGameItem = ({ game }: Props) => {
             )}
           </div>
           {oddsDisplay && (
-            <div className="mt-0.5">
+            <div className="mt-1">
               {oddsDisplay}
             </div>
           )}
@@ -75,4 +75,4 @@ export const TickerGameItem = ({ game }: Props) => {
       )}
     </div>
   );
-};
+}

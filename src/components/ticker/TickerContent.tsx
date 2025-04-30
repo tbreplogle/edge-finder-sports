@@ -3,7 +3,7 @@ import React from "react";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { TickerDayGroup } from "./TickerDayGroup";
 import { TickerData } from "@/utils/types/sports";
-import { Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { Info } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface TickerContentProps {

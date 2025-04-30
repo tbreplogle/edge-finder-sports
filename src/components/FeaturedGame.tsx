@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, ArrowRight, ArrowUp, ArrowDown, Trophy } from "lucide-react";
+import { Star, ArrowRight, ArrowUp, ArrowDown, Trophy, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +28,23 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
   const [game, setGame] = useState<FeaturedGame | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
   const navigate = useNavigate();
+
+  // Check if user is admin or paid
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setIsAdmin(user.is_admin === true);
+        setIsPaid(user.role === "premium" || user.is_admin === true);
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchFeaturedGame() {
@@ -73,9 +89,9 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
 
   if (loading) {
     return (
-      <Card className="w-full bg-gradient-to-r from-edge-primary/80 to-edge-secondary/20 h-80 animate-pulse">
+      <Card className="w-full bg-gradient-to-r from-edge-primary/80 to-edge-secondary/20 h-48 animate-pulse">
         <CardContent className="flex items-center justify-center h-full">
-          <p className="text-lg text-white/80">Loading featured matchup...</p>
+          <p className="text-sm text-white/80">Loading featured matchup...</p>
         </CardContent>
       </Card>
     );
@@ -83,12 +99,12 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
 
   if (error || !game) {
     return (
-      <Card className="w-full bg-gradient-to-r from-edge-primary/40 to-edge-secondary/10 h-80">
+      <Card className="w-full bg-gradient-to-r from-edge-primary/40 to-edge-secondary/10 h-48">
         <CardContent className="flex items-center justify-center h-full">
           <div className="text-center">
-            <p className="text-lg text-muted-foreground mb-4">No featured matchup available today</p>
-            <Button onClick={() => navigate("/dashboard")}>
-              Browse All Predictions
+            <p className="text-sm text-muted-foreground mb-2">No featured matchup available</p>
+            <Button size="sm" onClick={() => navigate("/dashboard")}>
+              Browse Predictions
             </Button>
           </div>
         </CardContent>
@@ -105,17 +121,20 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
     minute: '2-digit',
     timeZone: 'America/Chicago'
   });
+  
+  // All users should see the blurred premium version
+  const shouldBlur = !isPaid && !isAdmin;
 
   return (
     <Card className={cn(
-      "w-full overflow-hidden border-0", 
+      "w-full overflow-hidden border-0 relative", 
       "bg-gradient-to-r from-edge-primary/80 to-edge-secondary/20",
       `edge-sport-${game.sport}`
     )}>
       <CardContent className="p-0">
-        <div className="flex flex-col md:flex-row h-full">
-          <div className="md:w-2/3 p-6 md:p-10">
-            <div className="flex items-center gap-2 mb-2">
+        <div className="flex flex-col h-full">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="bg-black/30 text-white border-white/20">
                 {game.sport.toUpperCase()}
               </Badge>
@@ -125,16 +144,22 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
               </Badge>
             </div>
             
-            <h2 className="text-2xl md:text-4xl font-bold text-white mb-2">
+            <h3 className={cn(
+              "text-lg font-bold text-white mb-1",
+              shouldBlur && "blur-sm"
+            )}>
               {game.awayTeam} @ {game.homeTeam}
-            </h2>
+            </h3>
             
-            <p className="text-white/80 mb-6">{formattedDate}</p>
+            <p className="text-white/80 text-xs mb-3">{formattedDate}</p>
             
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-3">
               <div>
-                <p className="text-white/70 text-sm mb-1">Market Spread</p>
-                <p className="text-white font-semibold text-lg">
+                <p className="text-white/70 text-xs mb-0.5">Market Spread</p>
+                <p className={cn(
+                  "text-white font-semibold text-sm",
+                  shouldBlur && "blur-sm"
+                )}>
                   {game.marketSpread > 0 
                     ? `${game.homeTeam} -${Math.abs(game.marketSpread)}` 
                     : game.marketSpread < 0 
@@ -144,8 +169,11 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
               </div>
               
               <div>
-                <p className="text-white/70 text-sm mb-1">Predicted Margin</p>
-                <p className="text-white font-semibold text-lg">
+                <p className="text-white/70 text-xs mb-0.5">Predicted Margin</p>
+                <p className={cn(
+                  "text-white font-semibold text-sm",
+                  shouldBlur && "blur-sm"
+                )}>
                   {game.predictedMargin > 0 
                     ? `${game.homeTeam} by ${game.predictedMargin.toFixed(1)}` 
                     : game.predictedMargin < 0 
@@ -155,27 +183,30 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
               </div>
             </div>
             
-            <div className="mb-6">
-              <p className="text-white/70 text-sm mb-1">Edge</p>
-              <div className="flex items-center gap-2">
+            <div className="mb-3">
+              <p className="text-white/70 text-xs mb-0.5">Edge</p>
+              <div className={cn(
+                "flex items-center gap-2",
+                shouldBlur && "blur-sm"
+              )}>
                 {isPositiveEdge ? (
                   <>
-                    <ArrowUp className="w-5 h-5 text-white" />
-                    <span className="text-white font-bold text-2xl">
+                    <ArrowUp className="w-4 h-4 text-white" />
+                    <span className="text-white font-bold text-sm">
                       {game.edge.toFixed(1)} pts
                     </span>
                   </>
                 ) : (
                   <>
-                    <ArrowDown className="w-5 h-5 text-white" />
-                    <span className="text-white font-bold text-2xl">
+                    <ArrowDown className="w-4 h-4 text-white" />
+                    <span className="text-white font-bold text-sm">
                       {game.edge.toFixed(1)} pts
                     </span>
                   </>
                 )}
                 
                 {game.confidence && (
-                  <span className="ml-auto text-white/70">
+                  <span className="ml-auto text-white/70 text-xs">
                     {game.confidence}% confidence
                   </span>
                 )}
@@ -184,29 +215,33 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
             
             <Button 
               variant="default" 
-              className="bg-white text-edge-primary hover:bg-white/90"
-              onClick={() => navigate("/dashboard")}
+              size="sm"
+              className="bg-white text-edge-primary hover:bg-white/90 w-full"
+              onClick={() => navigate(isPaid ? "/dashboard" : "/pricing")}
             >
-              View Full Analysis
-              <ArrowRight className="ml-2 h-4 w-4" />
+              {isPaid ? "View Full Analysis" : "Upgrade to View"}
+              <ArrowRight className="ml-2 h-3 w-3" />
             </Button>
-          </div>
-          
-          <div className="md:w-1/3 bg-black/20 flex items-center justify-center p-6">
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/10 mb-4">
-                <Star className="w-10 h-10 text-white" />
-              </div>
-              <p className="text-white/90 font-medium">
-                Top Edge
-              </p>
-              <p className="text-xl font-bold text-white">
-                {Math.abs(game.edge).toFixed(1)} points
-              </p>
-            </div>
           </div>
         </div>
       </CardContent>
+      
+      {/* Premium overlay */}
+      {shouldBlur && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center 
+                       bg-black/30 z-10">
+          <Lock className="h-6 w-6 text-white mb-1.5" />
+          <span className="text-white font-medium text-sm">Premium Content</span>
+          <Button 
+            variant="default" 
+            size="sm"
+            className="mt-3"
+            onClick={() => navigate("/pricing")}
+          >
+            Upgrade Now
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
