@@ -1,127 +1,103 @@
-
+// ---------------- oddsApi.ts ----------------
 import axios from 'axios';
+import { SPORT_KEYS } from './config/sportKeys';
 import { dummyFromOdds, GameWithMarket } from './generateDummyPrediction';
-import { SPORT_KEYS, SportKey } from './config/sportKeys';
 import { getTeamAbbreviation } from './helpers/teamAbbreviations';
 import { formatGameTime } from './helpers/dateFormatting';
 import { OddsApiGame, TickerGame } from './types/sports';
 
-// Re-export keys for backward compatibility
-export { SPORT_KEYS, DEFAULT_SPORT } from './config/sportKeys';
-export type { SportKey } from './config/sportKeys';
-
-// The Odds API client
-const ODDS_API_KEY = 'ca659a5203c1cfc6a0275ebd54c57262';
+const ODDS_API_KEY = process.env.ODDS_API_KEY!;
 const BASE_URL = 'https://api.the-odds-api.com/v4/sports';
 
 export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
-  try {
-    // For baseball, we want h2h (moneyline) instead of spreads
-    const markets = sportKey.includes('baseball') ? 'h2h,totals' : 'spreads,totals';
-    
-    const { data } = await axios.get(
-      `${BASE_URL}/${sportKey}/odds`,
-      {
-        params: {
-          regions: 'us',
-          markets: markets,
-          dateFormat: 'iso',
-          oddsFormat: 'american',
-          apiKey: ODDS_API_KEY,
-        },
-        timeout: 10000
-      }
-    );
-    return data;
-  } catch (error) {
-    console.error(`Error fetching odds for ${sportKey}:`, error);
-    return [];
-  }
+  const isBaseball = sportKey.includes('baseball');
+  const markets    = isBaseball ? 'h2h,totals' : 'spreads,totals';
+
+  const { data } = await axios.get(`${BASE_URL}/${sportKey}/odds`, {
+    params: {
+      regions: 'us',
+      markets,
+      dateFormat: 'iso',
+      oddsFormat: 'american',
+      apiKey: ODDS_API_KEY
+    },
+    timeout: 10_000
+  });
+
+  return data;
 }
 
-// Helper for converting Odds API response to our TickerGame format with dummy predictions
+/* ----------  convertToTickerGames  ---------- */
 export function convertToTickerGames(
-  games: OddsApiGame[], 
-  sportKey: string, 
-  timeZone: string = 'America/Chicago'
+  games: OddsApiGame[],
+  sportKey: string,
+  tz = 'America/Chicago'
 ): TickerGame[] {
   const isBaseballSport = sportKey.includes('baseball');
-  
-  return games.map(game => {
-    // Extract spread from first bookmaker with spreads market
-    let spread = 0;
-    let moneylineHome = undefined;
-    let moneylineAway = undefined;
-    let total = undefined;
 
-    // Find the first bookmaker with spreads/moneyline
-    for (const bookmaker of game.bookmakers) {
-      const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
-      const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
-      const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
-      
-      if (!isBaseballSport && spreadsMarket) {
-        const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
-        if (homeOutcome && homeOutcome.point !== undefined) {
-          spread = homeOutcome.point;
-          break;
-        }
+  return games.map((game): TickerGame => {
+    let spread = 0;
+    let moneylineHome: number | undefined;
+    let moneylineAway: number | undefined;
+    let total: number | undefined;
+
+    for (const bm of game.bookmakers) {
+      const spreads = bm.markets.find(m => m.key === 'spreads');
+      const totals  = bm.markets.find(m => m.key === 'totals');
+      const h2h     = bm.markets.find(m => m.key === 'h2h');
+
+      if (!isBaseballSport && spreads) {
+        const out = spreads.outcomes.find(o => o.name === game.home_team);
+        if (out?.point !== undefined) spread = out.point;
       }
-      
-      if (isBaseballSport && h2hMarket) {
-        moneylineHome = h2hMarket.outcomes.find(o => o.name === game.home_team)?.price;
-        moneylineAway = h2hMarket.outcomes.find(o => o.name === game.away_team)?.price;
-        break;
+
+      if (isBaseballSport && h2h) {
+        moneylineHome = h2h.outcomes.find(o => o.name === game.home_team)?.price;
+        moneylineAway = h2h.outcomes.find(o => o.name === game.away_team)?.price;
       }
-      
-      if (totalsMarket && totalsMarket.outcomes.length > 0) {
-        total = Math.abs(totalsMarket.outcomes[0].point || 0);
+
+      if (totals?.outcomes?.length) {
+        total = Math.abs(totals.outcomes[0].point ?? 0);
       }
     }
 
-    const date = new Date(game.commence_time);
-    
-    // Create base game object
-    const baseGame: GameWithMarket = {
+    const tip = formatGameTime(new Date(game.commence_time), tz);
+
+    const base: GameWithMarket = {
       id: game.id,
       home_team: game.home_team,
       away_team: game.away_team,
       home: getTeamAbbreviation(game.home_team),
       away: getTeamAbbreviation(game.away_team),
-      tip: formatGameTime(date, timeZone),
+      tip,
       market_spread: isBaseballSport ? null : spread,
       market_total: total,
       spread,
       moneyline: moneylineHome,
+      moneyline_opponent: moneylineAway,
       total,
       final: false,
       sport_key: game.sport_key
     };
 
-    // Generate dummy predictions
-    const withPredictions = dummyFromOdds(baseGame);
-    
-    // Map predictions to our TickerGame format
+    const withPred = dummyFromOdds(base); // remove later
+
     return {
-      id: game.id,
-      home: getTeamAbbreviation(game.home_team),
-      away: getTeamAbbreviation(game.away_team),
-      tip: formatGameTime(date, timeZone),
-      spread: isBaseballSport ? 0 : spread, // Set spread to 0 for baseball
+      id: base.id,
+      home: base.home,
+      away: base.away,
+      tip: base.tip,
+      spread: isBaseballSport ? 0 : spread,
       moneyline: moneylineHome,
-      moneyline_opponent: moneylineAway, // Added for favorite logic
+      moneyline_opponent: moneylineAway,
       total,
-      consensus: withPredictions.confidence_pct,
+      consensus: withPred.confidence_pct,
       final: false,
       sport_key: game.sport_key,
-      predicted_margin: withPredictions.predicted_margin,
-      predicted_total: withPredictions.predicted_total,
-      show_prediction: !sportKey.includes('americanfootball_nfl') && !isBaseballSport // Hide predictions for NFL and MLB
+      show_prediction: false            // never show preds in ticker
     };
   });
 }
 
-// Re-export TickerGame type for backward compatibility
+export { SPORT_KEYS, DEFAULT_SPORT };
 export type { TickerGame } from './types/sports';
-export type { TickerDay } from './types/sports';
-export type { TickerData } from './types/sports';
