@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export function FeaturedGame({ isPreview = false }: FeaturedGameProps) {
         // If in preview mode, use seed data
         if (isPreview) {
           // Import seed data
-          const { seedGames } = await import("../supabase/functions/utils/seed");
+          const { seedGames } = await import("@/utils/seedData");
           // Use the first game with the highest edge value
           const featuredGame = [...seedGames].sort((a, b) => Math.abs((b.edge || 0)) - Math.abs((a.edge || 0)))[0];
           setGame(featuredGame as FeaturedGame);

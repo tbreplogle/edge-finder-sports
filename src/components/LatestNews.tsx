@@ -2,7 +2,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, News } from "lucide-react";
+import { ArrowRight, Star } from "lucide-react";
 
 interface NewsItem {
   id: string;
@@ -63,7 +63,7 @@ export function LatestNews() {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-edge-primary/10">
-                  <News className="h-10 w-10 text-edge-primary/50" />
+                  <Star className="h-10 w-10 text-edge-primary/50" />
                 </div>
               )}
               <Badge className="absolute top-2 right-2">{item.category}</Badge>
