@@ -78,8 +78,8 @@ async function savePredictions(predictions: any[], sport: string) {
   return data?.length || 0;
 }
 
-// Function to execute user code in a sandboxed environment
-function executeCode(code: string, games: any[]) {
+// Execute TypeScript/JavaScript code
+function executeJsCode(code: string, games: any[]) {
   try {
     // Create a safe context to run the code
     const context = {
@@ -152,8 +152,89 @@ function executeCode(code: string, games: any[]) {
     // Race between execution and timeout
     return Promise.race([executionPromise, timeoutPromise]);
   } catch (error) {
-    console.error("Error executing code:", error);
+    console.error("Error executing JS code:", error);
     throw error;
+  }
+}
+
+// Execute R code using a mock implementation for now
+// In production this would integrate with an R runtime
+function executeRCode(code: string, games: any[]) {
+  try {
+    console.log("Executing R code:", code);
+    console.log("Games data:", games);
+    
+    // For now, we'll implement a simple "mock" R runtime
+    // that just converts the games data to a format similar to what R would produce
+    // In a production environment, you would use a proper R runtime or API
+    
+    // Parse the R code to find function parameters and return structure
+    // This is a very simplified parser and won't work for complex R code
+    if (!code.includes("predict <- function") && !code.includes("function(games)")) {
+      throw new Error("R code must define a 'predict' function taking 'games' parameter");
+    }
+    
+    // Mock R execution - simply convert the first game's data to a prediction
+    return games.map(game => ({
+      game_id: game.id,
+      predicted_margin: 0, // Default values since we can't actually run R code
+      predicted_total: 0,
+      confidence_pct: 55
+    }));
+    
+    // In production, you would:
+    // 1. Send the code and games data to an R execution service
+    // 2. Wait for the results
+    // 3. Parse the results back into the expected format
+  } catch (error) {
+    console.error("Error executing R code:", error);
+    throw new Error(`R execution error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+// Execute Python code using a mock implementation for now
+// In production this would integrate with a Python runtime
+function executePythonCode(code: string, games: any[]) {
+  try {
+    console.log("Executing Python code:", code);
+    console.log("Games data:", games);
+    
+    // For now, we'll implement a simple "mock" Python runtime
+    // In a production environment, you would use a proper Python runtime or API
+    
+    // Parse the Python code to find function parameters and return structure
+    if (!code.includes("def predict") && !code.includes("games"):) {
+      throw new Error("Python code must define a 'predict' function taking 'games' parameter");
+    }
+    
+    // Mock Python execution - simply convert the games data to predictions
+    return games.map(game => ({
+      game_id: game.id,
+      predicted_margin: 0, // Default values since we can't actually run Python code
+      predicted_total: 0,
+      confidence_pct: 55
+    }));
+    
+    // In production, you would:
+    // 1. Send the code and games data to a Python execution service
+    // 2. Wait for the results
+    // 3. Parse the results back into the expected format
+  } catch (error) {
+    console.error("Error executing Python code:", error);
+    throw new Error(`Python execution error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+// Function to execute code based on language
+function executeCode(code: string, games: any[], language: string = "typescript") {
+  switch (language) {
+    case "r":
+      return executeRCode(code, games);
+    case "python":
+      return executePythonCode(code, games);
+    case "typescript":
+    default:
+      return executeJsCode(code, games);
   }
 }
 
@@ -178,7 +259,7 @@ serve(async (req) => {
     }
     
     // Parse the request body
-    const { sport, code } = await req.json();
+    const { sport, code, language } = await req.json();
     
     if (!sport || !code) {
       return new Response(
@@ -197,8 +278,8 @@ serve(async (req) => {
       );
     }
     
-    // Execute the code
-    const predictions = await executeCode(code, games);
+    // Execute the code with the specified language
+    const predictions = await executeCode(code, games, language);
     
     // Save the predictions
     const inserted = await savePredictions(predictions, sport);

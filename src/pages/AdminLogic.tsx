@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import Editor from "@monaco-editor/react";
@@ -7,8 +8,10 @@ import { useNavigate } from "react-router-dom";
 import { SPORT_KEYS, SportKey } from "@/utils/config/sportKeys";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, Download } from "lucide-react";
+import { RefreshCw, Download, Code } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 const DEFAULT_CODE = `/**
  * Input: games[] from Odds-API for this sport
@@ -23,6 +26,42 @@ export default function predict(games) {
   }));
 }`;
 
+const DEFAULT_R_CODE = `#' @param games List of game objects from Odds-API for this sport
+#' @return List of predictions with game_id, predicted_margin, predicted_total, confidence_pct
+predict <- function(games) {
+  # Create empty list to store predictions
+  predictions <- list()
+  
+  # Loop through each game and create a prediction
+  for (i in 1:length(games)) {
+    game <- games[[i]]
+    prediction <- list(
+      game_id = game$id,
+      predicted_margin = 0,
+      predicted_total = 0,
+      confidence_pct = 55
+    )
+    predictions[[i]] <- prediction
+  }
+  
+  return(predictions)
+}`;
+
+const DEFAULT_PYTHON_CODE = `# Input: games[] from Odds-API for this sport
+# Output: array of { game_id, predicted_margin, predicted_total, confidence_pct }
+def predict(games):
+    predictions = []
+    for game in games:
+        predictions.append({
+            "game_id": game["id"],
+            "predicted_margin": 0,
+            "predicted_total": 0,
+            "confidence_pct": 55
+        })
+    return predictions`;
+
+type LanguageType = "typescript" | "r" | "python";
+
 const AdminLogic = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -31,6 +70,7 @@ const AdminLogic = () => {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [language, setLanguage] = useState<LanguageType>("typescript");
   
   // Check if user is admin
   useEffect(() => {
@@ -101,13 +141,24 @@ const AdminLogic = () => {
     checkAuth();
   }, [navigate]);
   
+  // Set default code based on selected language
+  useEffect(() => {
+    if (language === "r") {
+      setCode(DEFAULT_R_CODE);
+    } else if (language === "python") {
+      setCode(DEFAULT_PYTHON_CODE);
+    } else {
+      setCode(DEFAULT_CODE);
+    }
+  }, [language]);
+  
   const runCode = async () => {
     setError(null);
     setRunning(true);
     
     try {
       const response = await supabase.functions.invoke('run-prediction-code', {
-        body: { sport, code }
+        body: { sport, code, language }
       });
       
       if (response.error) {
@@ -137,25 +188,40 @@ const AdminLogic = () => {
     }
   };
   
-  // New function to export code as a downloadable file
+  // Export code as a downloadable file
   const exportCode = () => {
     try {
+      // Get file extension based on language
+      const fileExtension = language === "typescript" ? "js" : 
+                            language === "r" ? "R" : 
+                            language === "python" ? "py" : "txt";
+      
+      // Create appropriate file headers based on language
+      const headerComment = language === "typescript" ? 
+        `// PlayEdge Sport Prediction Logic for ${sport}\n// Exported on ${new Date().toLocaleString()}\n\n` :
+        language === "r" ? 
+        `# PlayEdge Sport Prediction Logic for ${sport}\n# Exported on ${new Date().toLocaleString()}\n\n` :
+        `# PlayEdge Sport Prediction Logic for ${sport}\n# Exported on ${new Date().toLocaleString()}\n\n`;
+        
+      // Create example usage based on language  
+      const exampleUsage = language === "typescript" ? 
+        `\n\n// Example usage:\n// const games = [{ id: "123", home_team: "Team A", away_team: "Team B", ... }];\n// const predictions = predict(games);\n// console.log(predictions);` :
+        language === "r" ? 
+        `\n\n# Example usage:\n# games <- list(list(id="123", home_team="Team A", away_team="Team B"))\n# predictions <- predict(games)\n# print(predictions)` :
+        `\n\n# Example usage:\n# games = [{"id": "123", "home_team": "Team A", "away_team": "Team B"}]\n# predictions = predict(games)\n# print(predictions)`;
+      
       // Create a blob with the code content
       const blob = new Blob([
-        `// PlayEdge Sport Prediction Logic for ${sport}\n`,
-        `// Exported on ${new Date().toLocaleString()}\n\n`,
+        headerComment,
         code,
-        `\n\n// Example usage:\n`,
-        `// const games = [{ id: "123", home_team: "Team A", away_team: "Team B", ... }];\n`,
-        `// const predictions = predict(games);\n`,
-        `// console.log(predictions);`,
-      ], { type: 'text/javascript' });
+        exampleUsage,
+      ], { type: 'text/plain' });
       
       // Create an element to trigger the download
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `playedge-${sport.toLowerCase()}-prediction-logic.js`;
+      a.download = `playedge-${sport.toLowerCase()}-prediction.${fileExtension}`;
       document.body.appendChild(a);
       a.click();
       
@@ -183,6 +249,10 @@ const AdminLogic = () => {
   
   const handleSportChange = (value: string) => {
     setSport(value as SportKey);
+  };
+  
+  const handleLanguageChange = (value: LanguageType) => {
+    setLanguage(value);
   };
   
   if (isLoading) {
@@ -217,6 +287,30 @@ const AdminLogic = () => {
     <AppLayout>
       <div className="container py-6">
         <h1 className="text-2xl font-bold mb-4">Admin Logic Lab</h1>
+        
+        <div className="mb-4">
+          <div className="flex flex-col gap-2 mb-4">
+            <Label>Programming Language</Label>
+            <RadioGroup 
+              className="flex gap-4" 
+              value={language} 
+              onValueChange={(value) => handleLanguageChange(value as LanguageType)}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="typescript" id="lang-typescript" />
+                <Label htmlFor="lang-typescript">JavaScript/TypeScript</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="r" id="lang-r" />
+                <Label htmlFor="lang-r">R</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="python" id="lang-python" />
+                <Label htmlFor="lang-python">Python</Label>
+              </div>
+            </RadioGroup>
+          </div>
+        </div>
         
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
@@ -277,7 +371,7 @@ const AdminLogic = () => {
         
         <div className="border rounded-lg overflow-hidden">
           <Editor
-            language="typescript"
+            language={language === "typescript" ? "typescript" : language === "r" ? "r" : "python"}
             value={code}
             onChange={(value) => setCode(value || "")}
             height="75vh"
