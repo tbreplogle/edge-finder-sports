@@ -135,17 +135,17 @@ export function MatchupTicker() {
   /* ========== UI ========== */
   if (loading)
     return (
-      <div className="w-full bg-edge-bg h-16 flex items-center justify-center border-b">
+      <div className="w-full bg-edge-bg h-12 sm:h-16 flex items-center justify-center border-b">
         <p className="text-xs text-muted-foreground">Loading matchup data…</p>
       </div>
     );
 
   return (
     <div className="w-full bg-edge-bg border-b overflow-hidden py-1">
-      <div className="container">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-2">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-foreground">Game Matchups</h3>
+      <div className="container px-2 sm:px-4">
+        <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center mb-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <h3 className="text-xs sm:text-sm font-semibold text-foreground">Game Matchups</h3>
             <SportSelector 
               selectedSport={sport} 
               onSportChange={(value) => setSport(value as keyof typeof SPORT_KEYS)} 
@@ -160,8 +160,8 @@ export function MatchupTicker() {
             />
           )}
           
-          <div className="flex items-center text-xs text-muted-foreground ml-auto">
-            <Info className="h-3.5 w-3.5 mr-1.5" />
+          <div className="hidden sm:flex items-center text-xs text-muted-foreground ml-auto">
+            <Info className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1 sm:mr-1.5" />
             <span>Latest odds and upcoming games for {sport.toUpperCase()}</span>
           </div>
         </div>
@@ -169,9 +169,9 @@ export function MatchupTicker() {
         {/* Ticker content */}
         <div className="mb-2">
           {noGames ? (
-            <div className="flex items-center justify-center p-4 bg-edge-primary
+            <div className="flex items-center justify-center p-3 sm:p-4 bg-edge-primary
                           border border-edge-neutral/30 text-white">
-              <p className="text-sm">No upcoming games scheduled for {sport.toUpperCase()}</p>
+              <p className="text-xs sm:text-sm">No upcoming games scheduled for {sport.toUpperCase()}</p>
             </div>
           ) : (
             <TickerContent games={currentGames} />

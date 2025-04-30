@@ -14,13 +14,13 @@ export const DateSelector = ({ selectedDate, availableDates, onDateChange }: Dat
       type="single" 
       value={selectedDate} 
       onValueChange={(value) => value && onDateChange(value)}
-      className="bg-edge-neutral/20 rounded-md p-0.5"
+      className="bg-edge-neutral/20 rounded-md p-0.5 flex-wrap"
     >
       {availableDates.map((date) => (
         <ToggleGroupItem 
           key={date}
           value={date} 
-          className="text-xs font-medium px-3 py-1 data-[state=on]:bg-edge-primary data-[state=on]:text-white"
+          className="text-xs font-medium px-2 sm:px-3 py-1 data-[state=on]:bg-edge-primary data-[state=on]:text-white"
         >
           {date}
         </ToggleGroupItem>
