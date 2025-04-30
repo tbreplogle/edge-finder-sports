@@ -6,7 +6,8 @@ import { getTeamAbbreviation } from './helpers/teamAbbreviations';
 import { formatGameTime } from './helpers/dateFormatting';
 import { OddsApiGame, TickerGame } from './types/sports';
 
-const ODDS_API_KEY = process.env.ODDS_API_KEY!;
+// Accessing the environment variable using Vite's import.meta.env instead of process.env
+const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY || '';
 const BASE_URL = 'https://api.the-odds-api.com/v4/sports';
 
 export async function fetchOdds(sportKey: string): Promise<OddsApiGame[]> {
@@ -48,12 +49,16 @@ export function convertToTickerGames(
 
       if (!isBaseballSport && spreads) {
         const out = spreads.outcomes.find(o => o.name === game.home_team);
-        if (out?.point !== undefined) spread = out.point;
+        if (out?.point !== undefined) {
+          spread = out.point;
+          break;
+        }
       }
 
       if (isBaseballSport && h2h) {
         moneylineHome = h2h.outcomes.find(o => o.name === game.home_team)?.price;
         moneylineAway = h2h.outcomes.find(o => o.name === game.away_team)?.price;
+        break;
       }
 
       if (totals?.outcomes?.length) {
