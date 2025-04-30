@@ -5,11 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { AlertTriangle } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 interface AuthFormProps {
   type: "login" | "register";
 }
+
+// Admin user credentials
+const ADMIN_EMAIL = "tbreplogle@gmail.com";
+const ADMIN_PASSWORD = "1234";
 
 export function AuthForm({ type }: AuthFormProps) {
   const [email, setEmail] = useState("");
@@ -24,11 +29,43 @@ export function AuthForm({ type }: AuthFormProps) {
     setIsLoading(true);
     
     try {
-      // Simulate authentication delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Check for admin login
+      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        // Store login state in localStorage
+        localStorage.setItem("user", JSON.stringify({
+          email: ADMIN_EMAIL,
+          role: "admin",
+          name: "Admin User"
+        }));
+        
+        // Show success toast
+        toast.success("Welcome back, Admin!");
+        
+        // Simulate authentication delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Navigate to dashboard
+        navigate("/dashboard");
+        return;
+      }
       
-      // For demo purposes, just navigate to dashboard
-      navigate("/dashboard");
+      // For demo purposes, allow any login with min requirements
+      if (email.includes("@") && password.length >= 4) {
+        // Store basic user info
+        localStorage.setItem("user", JSON.stringify({
+          email: email,
+          role: "user",
+          name: "User"
+        }));
+        
+        // Simulate authentication delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Navigate to dashboard
+        navigate("/dashboard");
+      } else {
+        throw new Error("Invalid credentials");
+      }
     } catch (err) {
       setError("Authentication failed. Please try again.");
     } finally {
@@ -41,7 +78,7 @@ export function AuthForm({ type }: AuthFormProps) {
       <div className="space-y-6">
         {error && (
           <Alert variant="destructive">
-            <ExclamationTriangleIcon className="h-4 w-4" />
+            <AlertTriangle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -124,6 +161,11 @@ export function AuthForm({ type }: AuthFormProps) {
           onClick={() => {
             setIsLoading(true);
             setTimeout(() => {
+              localStorage.setItem("user", JSON.stringify({
+                email: "google-user@example.com",
+                role: "user",
+                name: "Google User"
+              }));
               navigate("/dashboard");
             }, 1000);
           }}
