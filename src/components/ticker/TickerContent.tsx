@@ -13,8 +13,8 @@ export const TickerContent = ({ data }: TickerContentProps) => {
   const sortedDays = [...data.days].sort((a, b) => {
     if (a.label === 'Today') return -1;
     if (b.label === 'Today') return 1;
-    if (a.label === 'Yesterday') return -1;
-    if (b.label === 'Yesterday') return 1;
+    if (a.label === 'Tomorrow') return 1;
+    if (b.label === 'Tomorrow') return -1;
     return 0;
   });
 
@@ -29,13 +29,13 @@ export const TickerContent = ({ data }: TickerContentProps) => {
       >
         <CarouselContent className="-ml-3">
           {sortedDays.map((day) => (
-            <CarouselItem key={day.date} className="pl-3 md:basis-full">
+            <CarouselItem key={day.date} className="pl-3 md:basis-full lg:basis-full">
               <TickerDayGroup day={day} />
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious className="absolute -left-4 lg:-left-12 top-1/2 -translate-y-1/2 z-10" />
-        <CarouselNext className="absolute -right-4 lg:-right-12 top-1/2 -translate-y-1/2 z-10" />
+        <CarouselPrevious className="absolute -left-4 lg:-left-12 top-1/2 -translate-y-1/2" />
+        <CarouselNext className="absolute -right-4 lg:-right-12 top-1/2 -translate-y-1/2" />
       </Carousel>
     </div>
   );
