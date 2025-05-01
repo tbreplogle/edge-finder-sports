@@ -39,8 +39,8 @@ export function loadPayPal(): Promise<void> {
       
       // Add PayPal script to head as recommended by PayPal
       const script = document.createElement('script');
-      // Remove venmo from enable-funding to disable it
-      script.src = `https://www.paypal.com/sdk/js?client-id=${CLIENT_ID}&components=hosted-buttons&currency=USD`;
+      // Explicitly disable Venmo to prevent errors
+      script.src = `https://www.paypal.com/sdk/js?client-id=${CLIENT_ID}&components=hosted-buttons&currency=USD&disable-funding=venmo`;
       script.async = true;
       
       script.onload = () => {
@@ -86,24 +86,33 @@ export function isPayPalLoaded(): boolean {
   return loaded && !!window.paypal && !!window.paypal.HostedButtons;
 }
 
-// Safely render PayPal button to container with styling options
-export function renderPayPalButton(containerId: string, buttonId: string): void {
-  if (!isPayPalLoaded()) {
-    console.error("PayPal not loaded, cannot render button");
-    return;
-  }
-  
-  try {
-    // Make sure the container exists before trying to render
-    const container = document.getElementById(containerId);
-    if (container) {
+// Safely render PayPal button to container with better error handling
+export function renderPayPalButton(containerId: string, buttonId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!isPayPalLoaded()) {
+      const error = new Error("PayPal not loaded, cannot render button");
+      console.error(error);
+      reject(error);
+      return;
+    }
+    
+    try {
+      // Make sure the container exists before trying to render
+      const container = document.getElementById(containerId);
+      if (!container) {
+        const error = new Error(`PayPal container #${containerId} not found`);
+        console.error(error);
+        reject(error);
+        return;
+      }
+      
       // Clear the container first
       container.innerHTML = '';
       
       // Render the button with the correct button ID and styling
       window.paypal.HostedButtons({
         hostedButtonId: buttonId,
-        onInit: function(data) {
+        onInit: function(data: any) {
           // Add custom styling for PayPal buttons after they render
           setTimeout(() => {
             const styles = document.createElement('style');
@@ -112,27 +121,64 @@ export function renderPayPalButton(containerId: string, buttonId: string): void 
               .paypal-button-container {
                 max-width: 300px !important;
                 margin: 0 auto !important;
+                width: 100% !important;
               }
               
               /* Style the PayPal button itself */
-              .paypal-button.paypal-button-number-0 {
+              .paypal-button {
                 max-width: 300px !important;
                 margin: 0 auto !important;
-              }
-              
-              /* Hide any non-PayPal buttons (like Venmo) */
-              .paypal-button:not(.paypal-button-number-0) {
-                display: none !important;
+                width: 100% !important;
               }
             `;
             document.head.appendChild(styles);
+            resolve();
           }, 100);
+        },
+        onError: function(err: any) {
+          console.error("PayPal button render error:", err);
+          reject(new Error(`PayPal button render error: ${err.message || String(err)}`));
+          
+          // Show error message in the container
+          const container = document.getElementById(containerId);
+          if (container) {
+            container.innerHTML = `
+              <div class="p-4 text-center">
+                <div class="text-red-500 mb-2">Failed to load PayPal checkout</div>
+                <div class="text-sm text-muted-foreground">Please try again later or contact support</div>
+              </div>
+            `;
+          }
         }
-      }).render(`#${containerId}`);
-    } else {
-      console.error(`PayPal container #${containerId} not found`);
+      }).render(`#${containerId}`).catch((err: any) => {
+        console.error("PayPal render error:", err);
+        reject(new Error(`PayPal render error: ${err.message || String(err)}`));
+        
+        // Show error message in the container
+        const container = document.getElementById(containerId);
+        if (container) {
+          container.innerHTML = `
+            <div class="p-4 text-center">
+              <div class="text-red-500 mb-2">Failed to load PayPal checkout</div>
+              <div class="text-sm text-muted-foreground">Please try again later or contact support</div>
+            </div>
+          `;
+        }
+      });
+    } catch (err: any) {
+      console.error("Error rendering PayPal button:", err);
+      reject(new Error(`Error rendering PayPal button: ${err.message || String(err)}`));
+      
+      // Show error message in the container
+      const container = document.getElementById(containerId);
+      if (container) {
+        container.innerHTML = `
+          <div class="p-4 text-center">
+            <div class="text-red-500 mb-2">Failed to load PayPal checkout</div>
+            <div class="text-sm text-muted-foreground">Please try again later or contact support</div>
+          </div>
+        `;
+      }
     }
-  } catch (err) {
-    console.error("Error rendering PayPal button:", err);
-  }
+  });
 }

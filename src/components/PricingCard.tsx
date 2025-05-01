@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,7 @@ interface PricingCardProps {
 }
 
 // PayPal button IDs for different plans and billing cycles
+// Using sandbox button IDs that are valid for testing
 const PAYPAL_BUTTON_IDS = {
   basic: {
     monthly: "TPLREYRLUKUL4", // Demo button ID for basic monthly
@@ -80,7 +82,18 @@ export function PricingCard({
         // Short delay to ensure DOM is stable before rendering
         setTimeout(() => {
           if (buttonId) {
-            renderPayPalButton(containerId, buttonId);
+            renderPayPalButton(containerId, buttonId)
+              .catch((err) => {
+                console.error("Failed to render PayPal button:", err);
+                setPaypalError(`Could not load PayPal checkout: ${err.message}`);
+                toast({
+                  title: "PayPal Checkout Error",
+                  description: "Could not load the PayPal checkout. Please try again later.",
+                  variant: "destructive"
+                });
+              });
+          } else {
+            setPaypalError("Invalid PayPal configuration");
           }
         }, 100);
       })
