@@ -90,9 +90,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       let pitchers: Record<string, PitcherStats> = {};
       
       if (selectedLeague === "mlb") {
-        // Fetch MLB team stats
+        // Fetch MLB team stats - properly specify both type parameters
         const { data: teamData, error: teamError } = await supabase
-          .rpc<any>('get_mlb_team_stats');
+          .rpc<any, any>('get_mlb_team_stats');
         
         if (teamError) throw teamError;
         
@@ -110,9 +110,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           teamStats = mlbTeamStats;
         }
         
-        // Fetch MLB matchups
+        // Fetch MLB matchups - properly specify both type parameters
         const { data: matchupData, error: matchupError } = await supabase
-          .rpc<any>('get_mlb_matchups');
+          .rpc<any, any>('get_mlb_matchups');
         
         if (matchupError) throw matchupError;
         
@@ -141,9 +141,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           }, {});
         }
       } else if (selectedLeague === "nfl") {
-        // Fetch NFL data
+        // Fetch NFL data - properly specify both type parameters
         const { data: nflData, error: nflError } = await supabase
-          .rpc<any>('get_nfl_data');
+          .rpc<any, any>('get_nfl_data');
         
         if (nflError) throw nflError;
         
