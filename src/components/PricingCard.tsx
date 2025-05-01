@@ -2,10 +2,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { loadPayPal } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 interface PricingFeature {
   text: string;
@@ -56,18 +57,24 @@ export function PricingCard({
   const [showPayPal, setShowPayPal] = useState(false);
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
+  const [isLoadingPayPal, setIsLoadingPayPal] = useState(false);
   const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
   const navigate = useNavigate();
+  const { toast } = useToast();
   
-  useEffect(() => {
-    if (!showPayPal || !buttonId) return;
+  const loadPayPalScript = () => {
+    // Don't try loading if already loading
+    if (isLoadingPayPal) return;
     
-    // Reset error state on each attempt
+    // Reset states
     setPaypalError(null);
+    setPaypalLoaded(false);
+    setIsLoadingPayPal(true);
     
     loadPayPal()
       .then(() => {
         setPaypalLoaded(true);
+        setIsLoadingPayPal(false);
         
         // Ensure the PayPal object and HostedButtons are available
         if (window.paypal && window.paypal.HostedButtons) {
@@ -76,23 +83,44 @@ export function PricingCard({
             const container = document.getElementById(`paypal-container-${type}-${billingCycle}`);
             if (container) container.innerHTML = '';
             
-            // Render the button with the correct button ID (Fix #4)
+            // Render the button with the correct button ID
             window.paypal.HostedButtons({ 
-              hostedButtonId: buttonId 
+              hostedButtonId: buttonId || 'test-button-id' // Fallback for testing
             }).render(`#paypal-container-${type}-${billingCycle}`);
           } catch (err: any) {
             console.error("Error rendering PayPal button:", err);
             setPaypalError(`Could not display PayPal button: ${err.message}`);
+            toast({
+              title: "PayPal Error",
+              description: "There was an issue displaying the PayPal button. Please try again.",
+              variant: "destructive"
+            });
           }
         } else {
           setPaypalError("PayPal Hosted Buttons not available");
+          toast({
+            title: "PayPal Not Available",
+            description: "The PayPal payment system is not available right now. Please try again later.",
+            variant: "destructive"
+          });
         }
       })
       .catch((err: any) => {
         console.error("Error loading PayPal:", err);
         setPaypalError(`PayPal error: ${err.message}`);
         setPaypalLoaded(false);
+        setIsLoadingPayPal(false);
+        toast({
+          title: "PayPal Connection Failed",
+          description: "Could not connect to PayPal. Please check your connection and try again.",
+          variant: "destructive"
+        });
       });
+  };
+  
+  useEffect(() => {
+    if (!showPayPal || !buttonId) return;
+    loadPayPalScript();
   }, [showPayPal, buttonId, type, billingCycle]);
   
   const handleSelectPlan = () => {
@@ -166,7 +194,7 @@ export function PricingCard({
       
       {showPayPal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 shadow-lg">
+          <div className="bg-card rounded-lg p-6 shadow-lg max-w-md w-full">
             <div className="text-center mb-4">
               <h3 className="font-medium">{title} Plan</h3>
               <p className="text-sm text-muted-foreground">
@@ -176,17 +204,27 @@ export function PricingCard({
             
             <div
               id={`paypal-container-${type}-${billingCycle}`}
-              className="min-w-[300px]"
+              className="min-w-[300px] min-h-[150px] flex items-center justify-center"
             >
-              {!paypalLoaded && !paypalError && (
-                <div className="py-4 text-center text-sm text-muted-foreground">
-                  Loading PayPal...
+              {isLoadingPayPal && !paypalError && (
+                <div className="py-4 text-center">
+                  <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">Loading PayPal...</p>
                 </div>
               )}
               
               {paypalError && (
-                <div className="py-4 text-center text-sm text-red-500">
-                  {paypalError}
+                <div className="py-4 text-center">
+                  <p className="text-sm text-red-500 mb-4">{paypalError}</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={loadPayPalScript}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    Try Again
+                  </Button>
                 </div>
               )}
             </div>
