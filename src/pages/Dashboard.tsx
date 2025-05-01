@@ -10,6 +10,7 @@ import { Calendar, Info, RefreshCw, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { generateSampleMlbData } from "@/utils/generateSampleMlbData";
 import {
   Alert,
   AlertDescription,
@@ -29,6 +30,7 @@ const Dashboard = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [refreshTime, setRefreshTime] = useState<string | null>("08:00 AM CT");
   const [nextRefreshDate, setNextRefreshDate] = useState<string | null>(null);
+  const [usingSampleData, setUsingSampleData] = useState<boolean>(false);
   
   // Calculate next Tuesday at 8:00 AM CT
   useEffect(() => {
@@ -121,11 +123,21 @@ const Dashboard = () => {
       });
       
       if (response.error) {
+        // If API fails, use sample data for MLB
+        if (sport === "mlb") {
+          console.log("Using sample MLB data due to API error:", response.error);
+          const sampleMlbData = generateSampleMlbData();
+          setGames(sampleMlbData);
+          setGeneratedDate(format(new Date(), "MMM d, yyyy"));
+          setUsingSampleData(true);
+          return;
+        }
         throw new Error(response.error);
       }
       
       setGames(response.data.data || []);
       setGeneratedDate(response.data.generatedDate || null);
+      setUsingSampleData(false);
       
       // Store refresh time if available
       if (response.data.refreshTime) {
@@ -138,11 +150,21 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching games:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load predictions. Please try again.",
-        variant: "destructive",
-      });
+      
+      // If error occurs for MLB, use sample data
+      if (sport === "mlb") {
+        console.log("Using sample MLB data due to error");
+        const sampleMlbData = generateSampleMlbData();
+        setGames(sampleMlbData);
+        setGeneratedDate(format(new Date(), "MMM d, yyyy"));
+        setUsingSampleData(true);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load predictions. Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -226,6 +248,16 @@ const Dashboard = () => {
             <AlertDescription>
               Predictions are automatically refreshed every Tuesday at 8:00 AM CT. 
               Next refresh: {nextRefreshDate}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {usingSampleData && sport === "mlb" && (
+          <Alert className="mb-6 bg-amber-50 border-amber-200">
+            <Info className="h-4 w-4 text-amber-500" />
+            <AlertTitle className="text-amber-700">Using Sample MLB Data</AlertTitle>
+            <AlertDescription className="text-amber-600">
+              Currently showing sample MLB data due to API limitations. Real predictions will be available after the next scheduled refresh.
             </AlertDescription>
           </Alert>
         )}
