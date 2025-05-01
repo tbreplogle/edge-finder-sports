@@ -1,6 +1,7 @@
 
 interface PayPalHostedButtonsOptions {
   hostedButtonId: string;
+  onInit?: (data: any) => void;
 }
 
 interface PayPalHostedButtons {
