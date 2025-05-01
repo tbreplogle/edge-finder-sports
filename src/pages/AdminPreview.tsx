@@ -3,17 +3,16 @@ import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { RefreshCw, Filter, Database, Code, Eye } from "lucide-react";
+import { Code, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PredictionLogicViewer } from "@/components/admin/PredictionLogicViewer";
 import { PredictionDataPreview } from "@/components/admin/PredictionDataPreview";
+import { PredictionFilters, FilterValues } from "@/components/admin/PredictionFilters";
+import { PredictionStats } from "@/components/admin/PredictionStats";
+import { PredictionsTable } from "@/components/admin/PredictionsTable";
 
 interface Prediction extends Tables<"predictions"> {
   // Add any additional properties not in the database schema if needed
@@ -23,10 +22,17 @@ const AdminPreview = () => {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedSport, setSelectedSport] = useState<string>("all");
-  const [dateSince, setDateSince] = useState<string>("today");
+  const [filters, setFilters] = useState<FilterValues>({
+    sport: "all",
+    dateSince: "today",
+  });
   const [activeTab, setActiveTab] = useState<string>("predictions");
   const navigate = useNavigate();
+
+  // Handle filter changes
+  const handleFilterChange = (key: keyof FilterValues, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
 
   // Check if user is admin
   useEffect(() => {
@@ -99,13 +105,13 @@ const AdminPreview = () => {
     try {
       // Determine the date filter
       let dateFilter = new Date();
-      if (dateSince === "yesterday") {
+      if (filters.dateSince === "yesterday") {
         dateFilter.setDate(dateFilter.getDate() - 1);
-      } else if (dateSince === "week") {
+      } else if (filters.dateSince === "week") {
         dateFilter.setDate(dateFilter.getDate() - 7);
-      } else if (dateSince === "month") {
+      } else if (filters.dateSince === "month") {
         dateFilter.setMonth(dateFilter.getMonth() - 1);
-      } else if (dateSince === "all") {
+      } else if (filters.dateSince === "all") {
         dateFilter = new Date(2000, 0, 1); // Far in the past
       }
       
@@ -119,8 +125,8 @@ const AdminPreview = () => {
         .order('updated_at', { ascending: false });
       
       // Add sport filter if not "all"
-      if (selectedSport !== "all") {
-        query = query.eq('sport', selectedSport.toUpperCase());
+      if (filters.sport !== "all") {
+        query = query.eq('sport', filters.sport.toUpperCase());
       }
       
       // Execute the query
@@ -142,12 +148,6 @@ const AdminPreview = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-  
-  // Function to format moneyline odds with + sign
-  const formatMoneyline = (ml?: number | null) => {
-    if (ml === undefined || ml === null) return "—";
-    return ml > 0 ? `+${ml}` : `${ml}`;
   };
   
   if (!isAdmin && !isLoading) {
@@ -207,220 +207,29 @@ const AdminPreview = () => {
             
             {/* Prediction Data Tab */}
             <TabsContent value="predictions" className="space-y-6">
-              {/* Filters and controls */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Filters</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-sm text-muted-foreground">Sport</label>
-                      <Select
-                        value={selectedSport}
-                        onValueChange={setSelectedSport}
-                      >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="Select sport" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Sports</SelectItem>
-                          <SelectItem value="nfl">NFL</SelectItem>
-                          <SelectItem value="ncaaf">NCAAF</SelectItem>
-                          <SelectItem value="ncaab">NCAAB</SelectItem>
-                          <SelectItem value="mlb">MLB</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="flex flex-col gap-1">
-                      <label className="text-sm text-muted-foreground">Date Range</label>
-                      <Select
-                        value={dateSince}
-                        onValueChange={setDateSince}
-                      >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="Date range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="today">Today</SelectItem>
-                          <SelectItem value="yesterday">Since Yesterday</SelectItem>
-                          <SelectItem value="week">Last Week</SelectItem>
-                          <SelectItem value="month">Last Month</SelectItem>
-                          <SelectItem value="all">All Time</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <Button 
-                      className="mt-auto"
-                      onClick={fetchPredictions}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Filter className="h-4 w-4 mr-2" />
-                      )}
-                      Apply Filters
-                    </Button>
-                    
-                    <Button 
-                      variant="outline"
-                      className="mt-auto"
-                      onClick={fetchPredictions}
-                      disabled={isLoading}
-                    >
-                      <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                      <span className="ml-2">Refresh</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Filters */}
+              <PredictionFilters 
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                onApplyFilters={fetchPredictions}
+                isLoading={isLoading}
+              />
               
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Total Predictions</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{predictions.length}</div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">MLB Predictions</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {predictions.filter(p => p.sport === "MLB").length}
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Avg. Edge</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {predictions.length > 0 
-                        ? (predictions.reduce((acc, p) => acc + (p.edge || 0), 0) / predictions.length).toFixed(2)
-                        : "0.00"}
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Latest Update</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-sm font-bold">
-                      {predictions.length > 0
-                        ? new Date(predictions[0]?.updated_at).toLocaleString()
-                        : "No data"}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <PredictionStats predictions={predictions} />
               
               {/* Data Table */}
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">ID</TableHead>
-                      <TableHead className="w-20">Sport</TableHead>
-                      <TableHead>Game</TableHead>
-                      <TableHead className="w-32 text-right">Predicted Margin</TableHead>
-                      <TableHead className="w-24 text-right">Home ML</TableHead>
-                      <TableHead className="w-24 text-right">Away ML</TableHead>
-                      <TableHead className="w-24 text-right">Edge</TableHead>
-                      <TableHead className="w-32">Game Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center h-24">
-                          <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                        </TableCell>
-                      </TableRow>
-                    ) : predictions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
-                          No predictions found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      predictions.map((prediction) => (
-                        <TableRow key={prediction.id}>
-                          <TableCell className="font-mono text-xs">{prediction.id}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{prediction.sport}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{prediction.away_team} @ {prediction.home_team}</div>
-                            <div className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{prediction.game_id}</div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {prediction.predicted_margin ? (
-                              prediction.predicted_margin > 0 ? (
-                                <span className="text-green-600">+{Number(prediction.predicted_margin).toFixed(1)}</span>
-                              ) : (
-                                <span className="text-red-600">{Number(prediction.predicted_margin).toFixed(1)}</span>
-                              )
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatMoneyline(prediction.home_ml)}
-                            {prediction.market_home_ml ? (
-                              <div className="text-xs text-muted-foreground">
-                                ({formatMoneyline(prediction.market_home_ml)})
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatMoneyline(prediction.away_ml)}
-                            {prediction.market_away_ml ? (
-                              <div className="text-xs text-muted-foreground">
-                                ({formatMoneyline(prediction.market_away_ml)})
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {prediction.edge !== null ? (
-                              <span className={Number(prediction.edge) > 0 ? "text-green-600" : "text-red-600"}>
-                                {Number(prediction.edge).toFixed(1)}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {new Date(prediction.game_date).toLocaleDateString()}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              <PredictionsTable predictions={predictions} isLoading={isLoading} />
             </TabsContent>
             
             {/* Prediction Logic Tab */}
             <TabsContent value="logic">
-              <PredictionLogicViewer sport={selectedSport} />
+              <PredictionLogicViewer sport={filters.sport} />
             </TabsContent>
             
             {/* Source Data Tab */}
             <TabsContent value="source">
-              <PredictionDataPreview sport={selectedSport} />
+              <PredictionDataPreview sport={filters.sport} />
             </TabsContent>
           </Tabs>
         </div>

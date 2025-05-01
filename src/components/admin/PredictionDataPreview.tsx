@@ -9,10 +9,19 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TeamStats, Matchup, PitcherStats } from "@/lib/formulas/mlbPredict";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface PredictionDataPreviewProps {
   sport: string;
 }
+
+// Mock data for different leagues
+const LEAGUE_OPTIONS = [
+  { value: "mlb", label: "MLB" },
+  { value: "nfl", label: "NFL" },
+  { value: "ncaaf", label: "NCAAF" },
+  { value: "ncaab", label: "NCAAB" }
+];
 
 // Mock function to get MLB team stats - in a real app, this would come from the API
 const getMockMlbData = async (): Promise<{
@@ -79,32 +88,59 @@ const getMockMlbData = async (): Promise<{
   return { teamStats, matchups, pitchers };
 };
 
+// Mock NFL data
+const getMockNflData = async () => {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  return {
+    teamStats: {
+      "KC": { team: "KC", pointsFor: 28.2, pointsAgainst: 17.3, ydsPerGame: 401 },
+      "SF": { team: "SF", pointsFor: 26.5, pointsAgainst: 18.1, ydsPerGame: 389 },
+      "BUF": { team: "BUF", pointsFor: 27.1, pointsAgainst: 19.2, ydsPerGame: 375 },
+      "DAL": { team: "DAL", pointsFor: 25.8, pointsAgainst: 20.3, ydsPerGame: 362 }
+    },
+    matchups: [
+      { game_id: "123001", home: "KC", away: "BUF" },
+      { game_id: "123002", home: "SF", away: "DAL" }
+    ]
+  };
+};
+
 export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   const [activeDataTab, setActiveDataTab] = useState<string>("teamStats");
-  const [data, setData] = useState<{
-    teamStats: Record<string, TeamStats>;
-    matchups: Matchup[];
-    pitchers: Record<string, PitcherStats>;
-  } | null>(null);
+  const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedLeague, setSelectedLeague] = useState<string>("mlb");
 
-  const normalizedSport = sport === "all" ? "mlb" : sport.toLowerCase();
+  // Use sport prop as initial value for selectedLeague if valid
+  useEffect(() => {
+    if (sport && sport !== 'all' && LEAGUE_OPTIONS.some(option => option.value === sport.toLowerCase())) {
+      setSelectedLeague(sport.toLowerCase());
+    }
+  }, [sport]);
   
-  // Load the data for the selected sport
+  // Load the data for the selected league
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
       
       try {
-        if (normalizedSport === "mlb") {
-          const mlbData = await getMockMlbData();
-          setData(mlbData);
-        } else {
-          setData(null);
-          setError(`Data preview not available for ${normalizedSport.toUpperCase()}`);
+        let leagueData = null;
+        
+        switch (selectedLeague) {
+          case "mlb":
+            leagueData = await getMockMlbData();
+            break;
+          case "nfl":
+            leagueData = await getMockNflData();
+            break;
+          default:
+            setError(`Data preview not available for ${selectedLeague.toUpperCase()}`);
+            break;
         }
+        
+        setData(leagueData);
       } catch (err: any) {
         console.error("Error loading prediction data:", err);
         setError(err.message || "Failed to load prediction data");
@@ -115,18 +151,26 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
     };
     
     fetchData();
-  }, [normalizedSport]);
+  }, [selectedLeague]);
 
   // Function to refresh the data
   const refreshData = async () => {
     try {
       setIsLoading(true);
       
-      if (normalizedSport === "mlb") {
-        const mlbData = await getMockMlbData();
-        setData(mlbData);
-        toast.success("Data refreshed successfully");
+      let leagueData = null;
+        
+      switch (selectedLeague) {
+        case "mlb":
+          leagueData = await getMockMlbData();
+          break;
+        case "nfl":
+          leagueData = await getMockNflData();
+          break;
       }
+      
+      setData(leagueData);
+      toast.success("Data refreshed successfully");
     } catch (err: any) {
       console.error("Error refreshing data:", err);
       toast.error("Failed to refresh data", {
@@ -164,7 +208,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${normalizedSport}-${activeDataTab}.json`;
+      a.download = `${selectedLeague}-${activeDataTab}.json`;
       document.body.appendChild(a);
       a.click();
       
@@ -179,93 +223,8 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
     }
   };
 
-  // Renders for different data types
-  const renderTeamStatsTable = () => {
-    if (!data?.teamStats) return null;
-    
-    return (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Team</TableHead>
-              <TableHead className="text-right">HR</TableHead>
-              <TableHead className="text-right">HR Allowed</TableHead>
-              <TableHead className="text-right">Batting Avg</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Object.values(data.teamStats).map((team) => (
-              <TableRow key={team.team}>
-                <TableCell className="font-medium">{team.team}</TableCell>
-                <TableCell className="text-right">{team.HR}</TableCell>
-                <TableCell className="text-right">{team.HRA}</TableCell>
-                <TableCell className="text-right">{team.BA.toFixed(3)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  };
-  
-  const renderMatchupsTable = () => {
-    if (!data?.matchups) return null;
-    
-    return (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Game ID</TableHead>
-              <TableHead>Away Team</TableHead>
-              <TableHead>Home Team</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.matchups.map((matchup) => (
-              <TableRow key={matchup.game_id}>
-                <TableCell className="font-mono text-xs">{matchup.game_id}</TableCell>
-                <TableCell>{matchup.away}</TableCell>
-                <TableCell>{matchup.home}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  };
-  
-  const renderPitchersTable = () => {
-    if (!data?.pitchers) return null;
-    
-    return (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Game ID</TableHead>
-              <TableHead>Team</TableHead>
-              <TableHead className="text-right">ERA+</TableHead>
-              <TableHead className="text-right">WHIP</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Object.values(data.pitchers).map((pitcher) => (
-              <TableRow key={`${pitcher.game_id}_${pitcher.team}`}>
-                <TableCell className="font-mono text-xs">{pitcher.game_id}</TableCell>
-                <TableCell>{pitcher.team}</TableCell>
-                <TableCell className="text-right">{pitcher.ERAplus}</TableCell>
-                <TableCell className="text-right">{pitcher.WHIP.toFixed(2)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  };
-
-  const getDataTabContent = () => {
+  // Renders for different data types based on league
+  const renderDataContent = () => {
     if (isLoading) {
       return (
         <div className="p-4 space-y-4">
@@ -287,19 +246,226 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       );
     }
     
-    switch (activeDataTab) {
-      case "teamStats":
-        return renderTeamStatsTable();
-      case "matchups":
-        return renderMatchupsTable();
-      case "pitchers":
-        return renderPitchersTable();
+    if (!data) {
+      return (
+        <Alert>
+          <AlertTitle>No Data Available</AlertTitle>
+          <AlertDescription>No data available for {selectedLeague.toUpperCase()}</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    // Render MLB data
+    if (selectedLeague === "mlb") {
+      switch (activeDataTab) {
+        case "teamStats":
+          return renderMlbTeamStatsTable();
+        case "matchups":
+          return renderMlbMatchupsTable();
+        case "pitchers":
+          return renderMlbPitchersTable();
+        default:
+          return (
+            <Alert>
+              <AlertTitle>Invalid Selection</AlertTitle>
+              <AlertDescription>Please select a valid data type</AlertDescription>
+            </Alert>
+          );
+      }
+    }
+    
+    // Render NFL data
+    if (selectedLeague === "nfl") {
+      switch (activeDataTab) {
+        case "teamStats":
+          return renderNflTeamStatsTable();
+        case "matchups":
+          return renderNflMatchupsTable();
+        default:
+          return (
+            <Alert>
+              <AlertTitle>Invalid Selection</AlertTitle>
+              <AlertDescription>Please select a valid data type</AlertDescription>
+            </Alert>
+          );
+      }
+    }
+    
+    return (
+      <Alert>
+        <AlertTitle>Unsupported League</AlertTitle>
+        <AlertDescription>Data display not implemented for {selectedLeague.toUpperCase()}</AlertDescription>
+      </Alert>
+    );
+  };
+
+  // MLB-specific renderers
+  const renderMlbTeamStatsTable = () => {
+    if (!data?.teamStats) return null;
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Team</TableHead>
+              <TableHead className="text-right">HR</TableHead>
+              <TableHead className="text-right">HR Allowed</TableHead>
+              <TableHead className="text-right">Batting Avg</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.values(data.teamStats).map((team: TeamStats) => (
+              <TableRow key={team.team}>
+                <TableCell className="font-medium">{team.team}</TableCell>
+                <TableCell className="text-right">{team.HR}</TableCell>
+                <TableCell className="text-right">{team.HRA}</TableCell>
+                <TableCell className="text-right">{team.BA.toFixed(3)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+  
+  const renderMlbMatchupsTable = () => {
+    if (!data?.matchups) return null;
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Game ID</TableHead>
+              <TableHead>Away Team</TableHead>
+              <TableHead>Home Team</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.matchups.map((matchup: Matchup) => (
+              <TableRow key={matchup.game_id}>
+                <TableCell className="font-mono text-xs">{matchup.game_id}</TableCell>
+                <TableCell>{matchup.away}</TableCell>
+                <TableCell>{matchup.home}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+  
+  const renderMlbPitchersTable = () => {
+    if (!data?.pitchers) return null;
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Game ID</TableHead>
+              <TableHead>Team</TableHead>
+              <TableHead className="text-right">ERA+</TableHead>
+              <TableHead className="text-right">WHIP</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.values(data.pitchers).map((pitcher: PitcherStats) => (
+              <TableRow key={`${pitcher.game_id}_${pitcher.team}`}>
+                <TableCell className="font-mono text-xs">{pitcher.game_id}</TableCell>
+                <TableCell>{pitcher.team}</TableCell>
+                <TableCell className="text-right">{pitcher.ERAplus}</TableCell>
+                <TableCell className="text-right">{pitcher.WHIP.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
+  // NFL-specific renderers
+  const renderNflTeamStatsTable = () => {
+    if (!data?.teamStats) return null;
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Team</TableHead>
+              <TableHead className="text-right">Pts For</TableHead>
+              <TableHead className="text-right">Pts Against</TableHead>
+              <TableHead className="text-right">Yds/Game</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.values(data.teamStats).map((team: any) => (
+              <TableRow key={team.team}>
+                <TableCell className="font-medium">{team.team}</TableCell>
+                <TableCell className="text-right">{team.pointsFor}</TableCell>
+                <TableCell className="text-right">{team.pointsAgainst}</TableCell>
+                <TableCell className="text-right">{team.ydsPerGame}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+  
+  const renderNflMatchupsTable = () => {
+    if (!data?.matchups) return null;
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Game ID</TableHead>
+              <TableHead>Away Team</TableHead>
+              <TableHead>Home Team</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.matchups.map((matchup: any) => (
+              <TableRow key={matchup.game_id}>
+                <TableCell className="font-mono text-xs">{matchup.game_id}</TableCell>
+                <TableCell>{matchup.away}</TableCell>
+                <TableCell>{matchup.home}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
+  // Get appropriate tab options based on selected league
+  const getTabOptions = () => {
+    switch (selectedLeague) {
+      case "mlb":
+        return (
+          <TabsList className="mb-4">
+            <TabsTrigger value="teamStats">Team Stats</TabsTrigger>
+            <TabsTrigger value="matchups">Matchups</TabsTrigger>
+            <TabsTrigger value="pitchers">Pitchers</TabsTrigger>
+          </TabsList>
+        );
+      case "nfl":
+      case "ncaaf":
+        return (
+          <TabsList className="mb-4">
+            <TabsTrigger value="teamStats">Team Stats</TabsTrigger>
+            <TabsTrigger value="matchups">Matchups</TabsTrigger>
+          </TabsList>
+        );
       default:
         return (
-          <Alert>
-            <AlertTitle>Invalid Selection</AlertTitle>
-            <AlertDescription>Please select a valid data type</AlertDescription>
-          </Alert>
+          <TabsList className="mb-4">
+            <TabsTrigger value="teamStats">Team Stats</TabsTrigger>
+          </TabsList>
         );
     }
   };
@@ -331,12 +497,32 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         </div>
       </div>
       
-      {normalizedSport !== "mlb" && !isLoading && (
+      {/* League selector */}
+      <div className="flex items-center space-x-4">
+        <label className="text-sm text-muted-foreground">League:</label>
+        <Select
+          value={selectedLeague}
+          onValueChange={setSelectedLeague}
+        >
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Select league" />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAGUE_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      {(!["mlb", "nfl"].includes(selectedLeague)) && !isLoading && (
         <Alert>
           <FileText className="h-4 w-4" />
           <AlertTitle>Limited Preview</AlertTitle>
           <AlertDescription>
-            Currently, only MLB data preview is fully implemented. Other sports coming soon.
+            Currently, only MLB and NFL data preview are fully implemented. Other sports coming soon.
           </AlertDescription>
         </Alert>
       )}
@@ -347,11 +533,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         onValueChange={setActiveDataTab}
         className="w-full"
       >
-        <TabsList className="mb-4">
-          <TabsTrigger value="teamStats">Team Stats</TabsTrigger>
-          <TabsTrigger value="matchups">Matchups</TabsTrigger>
-          <TabsTrigger value="pitchers">Pitchers</TabsTrigger>
-        </TabsList>
+        {getTabOptions()}
         
         <Card>
           <CardHeader className="pb-3">
@@ -365,7 +547,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {getDataTabContent()}
+            {renderDataContent()}
           </CardContent>
         </Card>
       </Tabs>
