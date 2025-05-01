@@ -38,8 +38,8 @@ export function loadPayPal(): Promise<void> {
       }
       
       // Add PayPal script to head as recommended by PayPal
-      // Remove venmo from enable-funding to disable it
       const script = document.createElement('script');
+      // Remove venmo from enable-funding to disable it
       script.src = `https://www.paypal.com/sdk/js?client-id=${CLIENT_ID}&components=hosted-buttons&currency=USD`;
       script.async = true;
       
@@ -108,6 +108,13 @@ export function renderPayPalButton(containerId: string, buttonId: string): void 
           setTimeout(() => {
             const styles = document.createElement('style');
             styles.innerHTML = `
+              /* Style the PayPal button container */
+              .paypal-button-container {
+                max-width: 300px !important;
+                margin: 0 auto !important;
+              }
+              
+              /* Style the PayPal button itself */
               .paypal-button.paypal-button-number-0 {
                 max-width: 300px !important;
                 margin: 0 auto !important;

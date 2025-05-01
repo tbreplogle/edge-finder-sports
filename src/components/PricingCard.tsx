@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +6,14 @@ import { cn } from "@/lib/utils";
 import { loadPayPal, isPayPalLoaded, renderPayPalButton } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose
+} from "@/components/ui/dialog";
 
 interface PricingFeature {
   text: string;
@@ -104,11 +111,6 @@ export function PricingCard({
     if (showPayPal && buttonId) {
       loadPayPalScript();
     }
-    
-    // Clean up function to manage cleanup when modal closes
-    return () => {
-      // No need to do anything specific here as we're using a better container management approach
-    };
   }, [showPayPal, buttonId]);
   
   const handleSelectPlan = () => {
@@ -130,7 +132,6 @@ export function PricingCard({
   };
 
   const handleClosePayPal = () => {
-    // Close the modal
     setShowPayPal(false);
   };
 
@@ -185,61 +186,52 @@ export function PricingCard({
         </Button>
       </CardFooter>
       
-      {showPayPal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-lg p-6 shadow-lg max-w-md w-full relative">
-            <button 
-              onClick={handleClosePayPal}
-              className="absolute right-4 top-4 p-1 rounded-full hover:bg-muted"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
+      <Dialog open={showPayPal} onOpenChange={setShowPayPal}>
+        <DialogContent className="bg-background text-foreground max-w-md w-full border border-border rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl font-semibold">{title} Plan</DialogTitle>
+            <DialogDescription className="text-center">
+              {price}/{billingCycle === "monthly" ? "month" : "year"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div 
+            id={containerId}
+            className="min-w-[280px] min-h-[150px] flex items-center justify-center py-4 mx-auto"
+          >
+            {isLoadingPayPal && !paypalError && (
+              <div className="py-4 text-center">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm text-muted-foreground">Loading PayPal...</p>
+              </div>
+            )}
             
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-medium">{title} Plan</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {price}/{billingCycle === "monthly" ? "month" : "year"}
-              </p>
-            </div>
-            
-            <div
-              id={containerId}
-              className="min-w-[300px] min-h-[150px] flex items-center justify-center py-4"
-            >
-              {isLoadingPayPal && !paypalError && (
-                <div className="py-4 text-center">
-                  <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
-                  <p className="text-sm text-muted-foreground">Loading PayPal...</p>
-                </div>
-              )}
-              
-              {paypalError && (
-                <div className="py-4 text-center">
-                  <p className="text-sm text-red-500 mb-4">{paypalError}</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={loadPayPalScript}
-                    className="flex items-center gap-2"
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                    Try Again
-                  </Button>
-                </div>
-              )}
-            </div>
-            
+            {paypalError && (
+              <div className="py-4 text-center">
+                <p className="text-sm text-red-500 mb-4">{paypalError}</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={loadPayPalScript}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Try Again
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <DialogClose asChild>
             <Button 
               variant="ghost" 
-              className="mt-4 w-full text-sm"
-              onClick={handleClosePayPal}
+              className="w-full"
             >
               Cancel
             </Button>
-          </div>
-        </div>
-      )}
+          </DialogClose>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
