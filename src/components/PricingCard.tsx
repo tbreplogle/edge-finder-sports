@@ -51,12 +51,14 @@ export function PricingCard({
   onSelectPlan
 }: PricingCardProps) {
   const [showPayPal, setShowPayPal] = useState(false);
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
   const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
   
   useEffect(() => {
     if (!showPayPal || !buttonId) return;
     
     loadPayPal().then(() => {
+      setPaypalLoaded(true);
       // @ts-ignore - PayPal SDK is loaded dynamically
       if (window.paypal && window.paypal.HostedButtons) {
         // @ts-ignore - PayPal types aren't available
@@ -64,6 +66,8 @@ export function PricingCard({
           hostedButtonId: buttonId
         }).render(`#paypal-container-${type}-${billingCycle}`);
       }
+    }).catch(err => {
+      console.error("Error loading PayPal:", err);
     });
   }, [showPayPal, buttonId, type, billingCycle]);
   
@@ -130,10 +134,24 @@ export function PricingCard({
       {showPayPal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-card rounded-lg p-6 shadow-lg">
+            <div className="text-center mb-4">
+              <h3 className="font-medium">{title} Plan</h3>
+              <p className="text-sm text-muted-foreground">
+                {price}/{billingCycle === "monthly" ? "month" : "year"}
+              </p>
+            </div>
+            
             <div
               id={`paypal-container-${type}-${billingCycle}`}
               className="min-w-[300px]"
-            />
+            >
+              {!paypalLoaded && (
+                <div className="py-4 text-center text-sm text-muted-foreground">
+                  Loading PayPal...
+                </div>
+              )}
+            </div>
+            
             <Button 
               variant="ghost" 
               className="mt-4 w-full text-sm"

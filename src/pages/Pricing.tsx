@@ -7,11 +7,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CheckCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { AppLayout } from "@/components/AppLayout";
 
 const Pricing = () => {
   const navigate = useNavigate();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // Check if user is logged in and get their current plan
   useEffect(() => {
@@ -19,12 +21,18 @@ const Pricing = () => {
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
+        setIsAuthenticated(true);
         // In a real app, this would fetch from an API or Supabase
         // For demo, we'll assume all logged-in users are on the basic plan by default
         setCurrentPlan("basic");
       } catch (e) {
         console.error("Error parsing user data:", e);
+        setIsAuthenticated(false);
+        setCurrentPlan(null);
       }
+    } else {
+      setIsAuthenticated(false);
+      setCurrentPlan(null);
     }
   }, []);
   
@@ -64,7 +72,7 @@ const Pricing = () => {
     // For demo purposes just log the selected plan
     console.log(`Selected plan: ${plan}`);
     // Here you would normally redirect to authentication if not logged in
-    if (!localStorage.getItem("user")) {
+    if (!isAuthenticated) {
       navigate("/auth/register");
     }
   };
@@ -74,9 +82,7 @@ const Pricing = () => {
   };
   
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      
+    <AppLayout>
       <main className="flex-1 container py-12">
         <div className="text-center max-w-3xl mx-auto mb-12">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">
@@ -108,7 +114,7 @@ const Pricing = () => {
             price="Free"
             description="For casual fans just getting started"
             features={basicFeatures}
-            isCurrentPlan={currentPlan === "basic"}
+            isCurrentPlan={isAuthenticated && currentPlan === "basic"}
             billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("basic")}
           />
@@ -120,7 +126,7 @@ const Pricing = () => {
             description="For serious bettors and analysts"
             features={premiumFeatures}
             highlighted={true}
-            isCurrentPlan={currentPlan === "premium"}
+            isCurrentPlan={isAuthenticated && currentPlan === "premium"}
             billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("premium")}
           />
@@ -131,7 +137,7 @@ const Pricing = () => {
             price={billingCycle === "monthly" ? "$99.99" : "$1,019.88"}
             description="For professional organizations"
             features={enterpriseFeatures}
-            isCurrentPlan={currentPlan === "enterprise"}
+            isCurrentPlan={isAuthenticated && currentPlan === "enterprise"}
             billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("enterprise")}
           />
@@ -201,9 +207,7 @@ const Pricing = () => {
           </div>
         </div>
       </main>
-      
-      <Footer />
-    </div>
+    </AppLayout>
   );
 };
 
