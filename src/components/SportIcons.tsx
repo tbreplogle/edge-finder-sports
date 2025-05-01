@@ -17,11 +17,12 @@ export function FootballIcon({ className }: IconProps) {
       strokeLinejoin="round" 
       className={cn("w-6 h-6", className)}
     >
-      <path d="M6 11l-5-2c0 5.5 1.8 8.7 5 10l2-5c-2-1-2-3-2-3z" />
-      <path d="M18 11l5-2c0 5.5-1.8 8.7-5 10l-2-5c2-1 2-3 2-3z" />
-      <path d="M6 11c0 2 1 4 6 4s6-2 6-4" />
-      <path d="M12 2a5 5 0 0 0-5 5v4" />
-      <path d="M12 2a5 5 0 0 1 5 5v4" />
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Z" />
+      <path d="M15 9.4v5.2" />
+      <path d="m12 12 5.2 3" />
+      <path d="M12 12 9 6.8" />
+      <path d="M12 12 6.8 9" />
+      <path d="m12 12-3 5.2" />
     </svg>
   );
 }
@@ -59,11 +60,12 @@ export function BaseballIcon({ className }: IconProps) {
       strokeLinejoin="round" 
       className={cn("w-6 h-6", className)}
     >
-      <path d="M5.95 5.95a7 7 0 1 0 9.9 9.9 7 7 0 0 0-9.9-9.9Z" />
-      <path d="m2.9 19.1 2.1-2.1" />
-      <path d="m21.1 2.9-2.1 2.1" />
-      <path d="m5 12 7 7" />
-      <path d="m19 5-7 7" />
+      <path d="M12 2a1 1 0 1 0 0 2 8 8 0 1 1 0 16 1 1 0 1 0 0 2 10 10 0 1 0 0-20Z" />
+      <path d="M12 4v16" />
+      <path d="M15 6.5a9 9 0 0 1 0 11" />
+      <path d="M9 6.5a9 9 0 0 0 0 11" />
+      <path d="M5.36 10a9 9 0 0 0 0 4" />
+      <path d="M18.64 10a9 9 0 0 1 0 4" />
     </svg>
   );
 }
