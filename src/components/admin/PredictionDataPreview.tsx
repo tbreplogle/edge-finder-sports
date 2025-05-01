@@ -78,47 +78,53 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
     setError(null);
     
     try {
-      let teamStats: Record<string, TeamStats | NflTeamStats> = {};
+      let teamStats: Record<string, TeamStats> | Record<string, NflTeamStats> = {};
       let matchups: Matchup[] | NflMatchup[] = [];
       let pitchers: Record<string, PitcherStats> = {};
       
       if (selectedLeague === "mlb") {
         // Fetch MLB team stats
-        const { data: teamData, error: teamError } = await supabase.rpc('get_mlb_team_stats');
+        const { data: teamData, error: teamError } = await supabase
+          .rpc('get_mlb_team_stats');
         
         if (teamError) throw teamError;
         
         // Handle team data safely
         if (teamData && Array.isArray(teamData)) {
-          teamStats = teamData.reduce((acc: Record<string, TeamStats>, team: any) => {
-            acc[team.team] = {
+          const mlbTeamStats: Record<string, TeamStats> = {};
+          teamData.forEach((team: any) => {
+            mlbTeamStats[team.team] = {
               team: team.team,
               HR: team.hr || 0,
               HRA: team.hra || 0, 
               BA: team.ba || 0
             };
-            return acc;
-          }, {});
+          });
+          teamStats = mlbTeamStats;
         }
         
-        // Fetch MLB matchups
-        const { data: matchupData, error: matchupError } = await supabase.rpc('get_mlb_matchups');
+        // Fetch MLB matchups - explicitly use any to handle the unknown shape 
+        // from the RPC function since it doesn't have a type definition
+        const { data: matchupData, error: matchupError } = await supabase
+          .rpc('get_mlb_matchups') as { data: any, error: any };
         
         if (matchupError) throw matchupError;
         
         // Handle matchup data safely
         if (matchupData && Array.isArray(matchupData)) {
           // Convert JSON data to Matchup[] type
-          matchups = matchupData.map((item: any) => ({
+          const mlbMatchups: Matchup[] = matchupData.map((item: any) => ({
             game_id: item.game_id,
             home: item.home,
             away: item.away,
             moneyline: item.moneyline,
             moneyline_opponent: item.moneyline_opponent
-          })) as Matchup[];
+          }));
+          
+          matchups = mlbMatchups;
           
           // Extract pitcher data from matchups (if available)
-          pitchers = (matchupData as any[]).reduce((acc: Record<string, PitcherStats>, game: any) => {
+          pitchers = matchupData.reduce((acc: Record<string, PitcherStats>, game: any) => {
             if (game.pitcher_home) {
               acc[`${game.game_id}_home`] = game.pitcher_home;
             }
@@ -129,8 +135,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           }, {});
         }
       } else if (selectedLeague === "nfl") {
-        // Fetch NFL data
-        const { data: nflData, error: nflError } = await supabase.rpc('get_nfl_data');
+        // Fetch NFL data - explicitly use any to handle the unknown shape
+        const { data: nflData, error: nflError } = await supabase
+          .rpc('get_nfl_data') as { data: any, error: any };
         
         if (nflError) throw nflError;
         
@@ -149,9 +156,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       
       // If we don't have any real data, use empty objects/arrays to avoid errors
       setData({
-        teamStats: Object.keys(teamStats).length > 0 ? teamStats : {}, 
-        matchups: matchups.length > 0 ? matchups : [],
-        pitchers: Object.keys(pitchers).length > 0 ? pitchers : {}
+        teamStats: teamStats, 
+        matchups: matchups,
+        pitchers: pitchers
       });
       
       // If we don't have any data, show a message
