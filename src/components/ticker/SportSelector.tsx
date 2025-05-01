@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FaFootballBall, FaBasketballBall, FaBaseballBall } from "react-icons/fa";
+import { SPORT_ICON_MAP } from "@/components/SportIcons";
 import { IconContext } from "react-icons";
 import { SportKey } from "@/utils/config/sportKeys";
 
@@ -11,15 +11,8 @@ interface SportSelectorProps {
 }
 
 export const SportSelector = ({ selectedSport, onSportChange }: SportSelectorProps) => {
-  const SPORT_ICON: Record<string, JSX.Element> = {
-    NFL: <FaFootballBall />,
-    NCAAF: <FaFootballBall />,
-    NCAAB: <FaBasketballBall />,
-    MLB: <FaBaseballBall />
-  };
-
   const getSportIcon = (sport: string) => {
-    return SPORT_ICON[sport.toUpperCase()] || <FaFootballBall />;
+    return SPORT_ICON_MAP[sport.toUpperCase()] || SPORT_ICON_MAP.NFL;
   };
 
   return (
@@ -36,25 +29,25 @@ export const SportSelector = ({ selectedSport, onSportChange }: SportSelectorPro
         <SelectContent>
           <SelectItem value="NFL" className="flex items-center">
             <div className="flex items-center">
-              {SPORT_ICON.NFL}
+              {SPORT_ICON_MAP.NFL}
               <span>NFL</span>
             </div>
           </SelectItem>
           <SelectItem value="NCAAF" className="flex items-center">
             <div className="flex items-center">
-              {SPORT_ICON.NCAAF}
+              {SPORT_ICON_MAP.NCAAF}
               <span>NCAAF</span>
             </div>
           </SelectItem>
           <SelectItem value="NCAAB" className="flex items-center">
             <div className="flex items-center">
-              {SPORT_ICON.NCAAB}
+              {SPORT_ICON_MAP.NCAAB}
               <span>NCAAB</span>
             </div>
           </SelectItem>
           <SelectItem value="MLB" className="flex items-center">
             <div className="flex items-center">
-              {SPORT_ICON.MLB}
+              {SPORT_ICON_MAP.MLB}
               <span>MLB</span>
             </div>
           </SelectItem>
