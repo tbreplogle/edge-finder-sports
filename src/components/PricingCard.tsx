@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { loadPayPal } from "@/utils/paypalScript";
+import { useNavigate } from "react-router-dom";
 
 interface PricingFeature {
   text: string;
@@ -21,6 +22,7 @@ interface PricingCardProps {
   isCurrentPlan?: boolean;
   billingCycle: "monthly" | "yearly";
   onSelectPlan: () => void;
+  isAuthenticated: boolean;
 }
 
 // PayPal button IDs for different plans and billing cycles
@@ -48,11 +50,13 @@ export function PricingCard({
   highlighted = false,
   isCurrentPlan = false,
   billingCycle,
-  onSelectPlan
+  onSelectPlan,
+  isAuthenticated
 }: PricingCardProps) {
   const [showPayPal, setShowPayPal] = useState(false);
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
+  const navigate = useNavigate();
   
   useEffect(() => {
     if (!showPayPal || !buttonId) return;
@@ -72,6 +76,15 @@ export function PricingCard({
   }, [showPayPal, buttonId, type, billingCycle]);
   
   const handleSelectPlan = () => {
+    // If user is not authenticated, redirect to login
+    if (!isAuthenticated) {
+      // Pass the current URL as the return URL after login
+      navigate("/auth/login", { 
+        state: { returnUrl: "/pricing" } 
+      });
+      return;
+    }
+    
     if (buttonId) {
       setShowPayPal(true);
     } else {
@@ -88,7 +101,7 @@ export function PricingCard({
       <CardHeader>
         <CardTitle className="flex items-start justify-between">
           <span>{title}</span>
-          {isCurrentPlan && (
+          {isAuthenticated && isCurrentPlan && (
             <span className="text-xs bg-edge-secondary/20 text-edge-secondary px-2 py-1 rounded-full">
               Current Plan
             </span>
@@ -124,10 +137,10 @@ export function PricingCard({
             "w-full",
             highlighted && "bg-edge-secondary hover:bg-edge-secondary/90"
           )}
-          disabled={isCurrentPlan || (type !== "basic" && !buttonId)}
+          disabled={isAuthenticated && isCurrentPlan}
           onClick={handleSelectPlan}
         >
-          {isCurrentPlan ? "Current Plan" : "Select Plan"}
+          {isAuthenticated && isCurrentPlan ? "Current Plan" : "Select Plan"}
         </Button>
       </CardFooter>
       

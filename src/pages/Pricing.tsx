@@ -1,4 +1,3 @@
-
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { PricingCard } from "@/components/PricingCard";
@@ -117,6 +116,7 @@ const Pricing = () => {
             isCurrentPlan={isAuthenticated && currentPlan === "basic"}
             billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("basic")}
+            isAuthenticated={isAuthenticated}
           />
           
           <PricingCard
@@ -129,6 +129,7 @@ const Pricing = () => {
             isCurrentPlan={isAuthenticated && currentPlan === "premium"}
             billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("premium")}
+            isAuthenticated={isAuthenticated}
           />
           
           <PricingCard
@@ -140,6 +141,7 @@ const Pricing = () => {
             isCurrentPlan={isAuthenticated && currentPlan === "enterprise"}
             billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("enterprise")}
+            isAuthenticated={isAuthenticated}
           />
         </div>
         
