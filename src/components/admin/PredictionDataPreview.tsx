@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,8 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         
         if (teamError) throw teamError;
         
-        if (teamData && Array.isArray(teamData) && teamData.length > 0) {
+        // Handle teamData correctly - ensure it's an array before using array methods
+        if (teamData && Array.isArray(teamData)) {
           teamStats = teamData.reduce((acc: Record<string, TeamStats>, team: any) => {
             acc[team.team] = {
               team: team.team,
@@ -75,7 +77,8 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         
         if (matchupError) throw matchupError;
         
-        if (matchupData && Array.isArray(matchupData) && matchupData.length > 0) {
+        // Handle matchupData correctly - ensure it's an array before using array methods
+        if (matchupData && Array.isArray(matchupData)) {
           matchups = matchupData;
           
           // Extract pitcher data from matchups
@@ -90,18 +93,22 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           }, {});
         }
       } else if (selectedLeague === "nfl") {
-        // Fetch NFL data
+        // Fetch NFL data - handle safely with type checking
         const { data: nflData, error: nflError } = await supabase.rpc('get_nfl_data');
         
         if (nflError) throw nflError;
         
         if (nflData) {
-          // Process NFL data
-          if (nflData.team_stats) {
-            teamStats = nflData.team_stats;
+          // Type guard to treat nflData safely
+          const typedNflData = nflData as any;
+          
+          // Process NFL data with null checks
+          if (typedNflData.team_stats) {
+            teamStats = typedNflData.team_stats;
           }
-          if (nflData.matchups) {
-            matchups = nflData.matchups;
+          
+          if (typedNflData.matchups) {
+            matchups = typedNflData.matchups;
           }
         }
       }
@@ -553,4 +560,262 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       </Tabs>
     </div>
   );
+  
+  // Renders for different data types based on league
+  function renderDataContent() {
+    if (isLoading) {
+      return (
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      );
+    }
+    
+    if (error) {
+      return (
+        <Alert>
+          <AlertTitle>No Data Available</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    if (!data) {
+      return (
+        <Alert>
+          <AlertTitle>No Data Available</AlertTitle>
+          <AlertDescription>No data available for {selectedLeague.toUpperCase()}</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    // Render MLB data
+    if (selectedLeague === "mlb") {
+      switch (activeDataTab) {
+        case "teamStats":
+          return renderMlbTeamStatsTable();
+        case "matchups":
+          return renderMlbMatchupsTable();
+        case "pitchers":
+          return renderMlbPitchersTable();
+        default:
+          return (
+            <Alert>
+              <AlertTitle>Invalid Selection</AlertTitle>
+              <AlertDescription>Please select a valid data type</AlertDescription>
+            </Alert>
+          );
+      }
+    }
+    
+    // Render NFL data
+    if (selectedLeague === "nfl") {
+      switch (activeDataTab) {
+        case "teamStats":
+          return renderNflTeamStatsTable();
+        case "matchups":
+          return renderNflMatchupsTable();
+        default:
+          return (
+            <Alert>
+              <AlertTitle>Invalid Selection</AlertTitle>
+              <AlertDescription>Please select a valid data type</AlertDescription>
+            </Alert>
+          );
+      }
+    }
+    
+    return (
+      <Alert>
+        <AlertTitle>Unsupported League</AlertTitle>
+        <AlertDescription>Data display not implemented for {selectedLeague.toUpperCase()}</AlertDescription>
+      </Alert>
+    );
+  };
+
+  // MLB-specific renderers
+  function renderMlbTeamStatsTable() {
+    if (!data?.teamStats || Object.keys(data.teamStats).length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Team Data Available</AlertTitle>
+          <AlertDescription>No MLB team stats available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Team</TableHead>
+              <TableHead className="text-right">HR</TableHead>
+              <TableHead className="text-right">HR Allowed</TableHead>
+              <TableHead className="text-right">Batting Avg</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.values(data.teamStats).map((team: TeamStats) => (
+              <TableRow key={team.team}>
+                <TableCell className="font-medium">{team.team}</TableCell>
+                <TableCell className="text-right">{team.HR}</TableCell>
+                <TableCell className="text-right">{team.HRA}</TableCell>
+                <TableCell className="text-right">{team.BA?.toFixed(3) || "0.000"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+  
+  function renderMlbMatchupsTable() {
+    if (!data?.matchups || data.matchups.length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Matchup Data Available</AlertTitle>
+          <AlertDescription>No MLB matchups available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Game ID</TableHead>
+              <TableHead>Away Team</TableHead>
+              <TableHead>Home Team</TableHead>
+              <TableHead className="text-right">Moneyline H/A</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.matchups.map((matchup: Matchup) => (
+              <TableRow key={matchup.game_id}>
+                <TableCell className="font-mono text-xs">{matchup.game_id}</TableCell>
+                <TableCell>{matchup.away}</TableCell>
+                <TableCell>{matchup.home}</TableCell>
+                <TableCell className="text-right">
+                  {matchup.moneyline ? matchup.moneyline : "-"} / {matchup.moneyline_opponent ? matchup.moneyline_opponent : "-"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+  
+  function renderMlbPitchersTable() {
+    if (!data?.pitchers || Object.keys(data.pitchers).length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Pitcher Data Available</AlertTitle>
+          <AlertDescription>No MLB pitcher stats available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Game ID</TableHead>
+              <TableHead>Team</TableHead>
+              <TableHead className="text-right">ERA+</TableHead>
+              <TableHead className="text-right">WHIP</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.values(data.pitchers).map((pitcher: PitcherStats) => (
+              <TableRow key={`${pitcher.game_id}_${pitcher.team}`}>
+                <TableCell className="font-mono text-xs">{pitcher.game_id}</TableCell>
+                <TableCell>{pitcher.team}</TableCell>
+                <TableCell className="text-right">{pitcher.ERAplus}</TableCell>
+                <TableCell className="text-right">{pitcher.WHIP.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
+  // NFL-specific renderers
+  function renderNflTeamStatsTable() {
+    if (!data?.teamStats || Object.keys(data.teamStats).length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Team Data Available</AlertTitle>
+          <AlertDescription>No NFL team stats available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Team</TableHead>
+              <TableHead className="text-right">Pts For</TableHead>
+              <TableHead className="text-right">Pts Against</TableHead>
+              <TableHead className="text-right">Yds/Game</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.values(data.teamStats).map((team: any) => (
+              <TableRow key={team.team}>
+                <TableCell className="font-medium">{team.team}</TableCell>
+                <TableCell className="text-right">{team.pointsFor}</TableCell>
+                <TableCell className="text-right">{team.pointsAgainst}</TableCell>
+                <TableCell className="text-right">{team.ydsPerGame}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+  
+  function renderNflMatchupsTable() {
+    if (!data?.matchups || data.matchups.length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Matchup Data Available</AlertTitle>
+          <AlertDescription>No NFL matchups available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Game ID</TableHead>
+              <TableHead>Away Team</TableHead>
+              <TableHead>Home Team</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.matchups.map((matchup: any) => (
+              <TableRow key={matchup.game_id}>
+                <TableCell className="font-mono text-xs">{matchup.game_id}</TableCell>
+                <TableCell>{matchup.away}</TableCell>
+                <TableCell>{matchup.home}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
 }
