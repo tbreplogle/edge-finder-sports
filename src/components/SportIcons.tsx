@@ -1,5 +1,5 @@
 
-import { Football, Basketball, Baseball } from "lucide-react";
+import { Rugby, Basketball, Baseball } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface IconProps {
@@ -8,7 +8,7 @@ interface IconProps {
 
 export function FootballIcon({ className }: IconProps) {
   return (
-    <Football
+    <Rugby
       className={cn("w-6 h-6", className)}
     />
   );
