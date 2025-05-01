@@ -152,21 +152,21 @@ function executeJsCode(code: string, games: any[]) {
                 const pitcher_home = game.home_pitcher;
                 const pitcher_away = game.away_pitcher;
                 
-                const rHome = rawRating(home, pitcher_home);
-                const rAway = rawRating(away, pitcher_away);
+                const Rhome = rawRating(home, pitcher_home);
+                const Raway = rawRating(away, pitcher_away);
 
-                const pHome = scalePct(rHome, true);
-                const pAway = scalePct(rAway, false);
+                const Phome = scalePct(Rhome, true);
+                const Paway = scalePct(Raway, false);
 
-                const awayProb = (pAway - pAway * pHome) / (pAway + pHome - 2 * pAway * pHome);
+                const awayProb = (Paway - Paway * Phome) / (Paway + Phome - 2 * Paway * Phome);
                 const homeProb = 1 - awayProb;
 
-                const margin = +((rHome - rAway) / 10).toFixed(1);
+                const margin = +((Rhome - Raway) / 10).toFixed(1);
                 
                 return {
                   game_id: game.id,
                   predicted_margin: margin,
-                  predicted_total: 8.0,  // Default value
+                  predicted_total: null,
                   confidence_pct: Math.round(homeProb * 100)
                 };
               });

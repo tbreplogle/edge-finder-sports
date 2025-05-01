@@ -26,11 +26,13 @@ export interface Matchup {
 }
 
 export interface PredictionRow {
+  sport: string;
   game_id: string;
   home_team: string;
   away_team: string;
   predicted_margin: number;
-  home_prob: number;
+  predicted_total: null;
+  confidence_pct: number;
 }
 
 /* exact‐formula predictor -------------------------------------------------*/
@@ -62,28 +64,23 @@ function scalePct(rating: number, isHome: boolean) {
 }
 
 // Formula to predict MLB game outcomes based on team and pitcher stats
-export function predictMatchup(matchup: Matchup, teamStats: Record<string, TeamStats>): PredictionRow {
-  const home = teamStats[matchup.home] || { HR: 0, HRA: 0, BA: 0, team: matchup.home };
-  const away = teamStats[matchup.away] || { HR: 0, HRA: 0, BA: 0, team: matchup.away };
-  
-  const rHome = rawRating(home, matchup.pitcher_home);
-  const rAway = rawRating(away, matchup.pitcher_away);
+export function predictMatchup(m: Matchup, map: Record<string, TeamStats>): PredictionRow {
+  const Rhome = rawRating(map[m.home] || { HR: 0, HRA: 0, BA: 0, team: m.home }, m.pitcher_home);
+  const Raway = rawRating(map[m.away] || { HR: 0, HRA: 0, BA: 0, team: m.away }, m.pitcher_away);
 
-  const pHome = scalePct(rHome, true);
-  const pAway = scalePct(rAway, false);
+  const Phome = scalePct(Rhome, /*isHome=*/true);
+  const Paway = scalePct(Raway, false);
 
-  /* Probabilities with your formula */
-  const awayProb = (pAway - pAway * pHome) / (pAway + pHome - 2 * pAway * pHome);
+  const awayProb = (Paway - Paway*Phome) / (Paway + Phome - 2*Paway*Phome);
   const homeProb = 1 - awayProb;
 
-  /* Margin proxy = rating diff ÷ 10 (tunable) */
-  const margin = +((rHome - rAway) / 10).toFixed(1);
-  
   return {
-    game_id: matchup.game_id,
-    home_team: matchup.home,
-    away_team: matchup.away,
-    predicted_margin: margin,
-    home_prob: homeProb
+    sport: 'MLB',
+    game_id: m.game_id,
+    home_team: m.home,
+    away_team: m.away,
+    predicted_margin: +((Rhome - Raway)/10).toFixed(1),
+    predicted_total: null,
+    confidence_pct: Math.round(homeProb*100)
   };
 }

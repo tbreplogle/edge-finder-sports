@@ -37,54 +37,24 @@ function scalePct(rating, isHome) {
   return pct * (isHome ? 1.02 : 0.98);        // HFA tweak
 }
 
-function predictMatchup(matchup, teamStats) {
-  const home = teamStats[matchup.home] || { HR: 0, HRA: 0, BA: 0, team: matchup.home };
-  const away = teamStats[matchup.away] || { HR: 0, HRA: 0, BA: 0, team: matchup.away };
-  
-  const rHome = rawRating(home, matchup.pitcher_home);
-  const rAway = rawRating(away, matchup.pitcher_away);
+function predictMatchup(m, map) {
+  const Rhome = rawRating(map[m.home] || { HR: 0, HRA: 0, BA: 0, team: m.home }, m.pitcher_home);
+  const Raway = rawRating(map[m.away] || { HR: 0, HRA: 0, BA: 0, team: m.away }, m.pitcher_away);
 
-  const pHome = scalePct(rHome, true);
-  const pAway = scalePct(rAway, false);
+  const Phome = scalePct(Rhome, /*isHome=*/true);
+  const Paway = scalePct(Raway, false);
 
-  /* Probabilities with your formula */
-  const awayProb = (pAway - pAway * pHome) / (pAway + pHome - 2 * pAway * pHome);
+  const awayProb = (Paway - Paway*Phome) / (Paway + Phome - 2*Paway*Phome);
   const homeProb = 1 - awayProb;
 
-  /* Margin proxy = rating diff ÷ 10 (tunable) */
-  const margin = +((rHome - rAway) / 10).toFixed(1);
-  
-  // Convert probability to American odds for the home team
-  let homeOdds;
-  if (homeProb > 0.5) {
-    // Favorite: odds to win $100
-    homeOdds = Math.round(-100 / (homeProb - 0.5) - 100);
-  } else {
-    // Underdog: odds on a $100 bet
-    homeOdds = Math.round((1 - homeProb) / homeProb * 100);
-  }
-  
-  // Calculate away team odds (opposite of home)
-  let awayOdds;
-  if (homeProb < 0.5) {
-    // Away team is favorite
-    awayOdds = Math.round(-100 / ((1 - homeProb) - 0.5) - 100);
-  } else {
-    // Away team is underdog
-    awayOdds = Math.round(homeProb / (1 - homeProb) * 100);
-  }
-  
   return {
-    game_id: matchup.game_id,
-    home_team: matchup.home,
-    away_team: matchup.away,
-    predicted_margin: margin,
-    home_prob: homeProb,
-    home_ml: homeOdds,
-    away_ml: awayOdds,
-    // Include the moneyline values from the API if available
-    market_home_ml: matchup.moneyline,
-    market_away_ml: matchup.moneyline_opponent
+    sport: 'MLB',
+    game_id: m.game_id,
+    home_team: m.home,
+    away_team: m.away,
+    predicted_margin: +((Rhome - Raway)/10).toFixed(1),
+    predicted_total: null,
+    confidence_pct: Math.round(homeProb*100)
   };
 }
 
@@ -101,36 +71,14 @@ async function runMlb() {
     console.log(`Processing ${games.length} MLB matchups...`);
     let processedCount = 0;
     
-    for (const m of games) {
+    for (const g of games) {
       try {
-        const row = predictMatchup(m, teamMap);
+        const row = predictMatchup(g, teamMap);
         
-        // Calculate edge for moneyline odds
-        let edge = 0;
-        if (row.market_home_ml && row.home_ml) {
-          // Calculate edge as market ML - predicted ML
-          // For betting on home team
-          edge = row.market_home_ml - row.home_ml;
-        }
-        
-        await importCsvRow({
-          sport: 'MLB',
-          game_id: row.game_id,
-          home_team: row.home_team,
-          away_team: row.away_team,
-          predicted_margin: row.predicted_margin,
-          predicted_total: null,
-          confidence_pct: Math.round(row.home_prob * 100),
-          home_ml: row.home_ml,
-          away_ml: row.away_ml,
-          market_home_ml: row.market_home_ml,
-          market_away_ml: row.market_away_ml,
-          edge: edge,
-          date: new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
-        });
+        await importCsvRow(row);
         processedCount++;
       } catch (err) {
-        console.error(`Error processing game ${m.game_id}:`, err);
+        console.error(`Error processing game ${g.game_id}:`, err);
       }
     }
     
