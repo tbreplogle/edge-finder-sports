@@ -19,3 +19,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: docker run --rm -e DATABASE_URL playedge-worker
 
+
