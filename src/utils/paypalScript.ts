@@ -14,8 +14,11 @@ export function loadPayPal(): Promise<void> {
         const existingScripts = document.querySelectorAll('script[src*="paypal.com/sdk/js"]');
         existingScripts.forEach(script => {
           try {
-            const parent = script.parentNode;
-            if (parent) parent.removeChild(script);
+            // Check if the element is still in the DOM and has a parent before removing
+            if (script.parentNode && document.body.contains(script)) {
+              const parent = script.parentNode;
+              parent.removeChild(script);
+            }
           } catch (err) {
             console.warn("Error removing existing PayPal script:", err);
           }
@@ -44,16 +47,19 @@ export function loadPayPal(): Promise<void> {
             console.error("PayPal SDK loaded but HostedButtons not available");
             reject(new Error('PayPal SDK loaded but HostedButtons component not available'));
           }
-        }, 300);
+        }, 500); // Increased timeout for slower connections
       };
       
       script.onerror = (error) => {
         console.error("PayPal script failed to load:", error);
-        // Convert the error event to a more useful message
-        const errorMessage = error instanceof Event 
-          ? 'Script loading error' 
-          : String(error);
-        reject(new Error('Failed to load PayPal SDK: ' + errorMessage));
+        // Better error handling
+        let errorMessage = 'Failed to load PayPal SDK';
+        if (error instanceof Event) {
+          errorMessage += ': Script loading error';
+        } else {
+          errorMessage += ': ' + String(error);
+        }
+        reject(new Error(errorMessage));
       };
       
       // Mark that we've attempted to inject the script
@@ -66,25 +72,44 @@ export function loadPayPal(): Promise<void> {
           reject(new Error('PayPal SDK initialization timed out'));
         }
       }, 10000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Unexpected error in loadPayPal:", err);
-      reject(new Error(`Unexpected error loading PayPal SDK: ${err}`));
+      reject(new Error(`Unexpected error loading PayPal SDK: ${err.message || String(err)}`));
     }
   });
 }
 
 // Function to safely clean up PayPal resources
 export function cleanupPayPal(): void {
-  // Reset state but don't remove the script if it's working
+  // Reset state
   if (!loaded) {
-    if (currentScript && currentScript.parentNode) {
+    if (currentScript) {
       try {
-        currentScript.parentNode.removeChild(currentScript);
+        // Check if the script is still in the DOM and has a parent before removing
+        if (currentScript.parentNode && document.body.contains(currentScript)) {
+          currentScript.parentNode.removeChild(currentScript);
+        }
         currentScript = null;
         scriptInjected = false;
       } catch (err) {
         console.warn("Error removing PayPal script during cleanup:", err);
       }
+    }
+  }
+}
+
+// Helper function to safely check if PayPal is loaded
+export function isPayPalLoaded(): boolean {
+  return loaded && !!window.paypal && !!window.paypal.HostedButtons;
+}
+
+// Helper to safely reset container
+export function resetPayPalContainer(containerId: string): void {
+  const container = document.getElementById(containerId);
+  if (container) {
+    // Safely clear the container
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
     }
   }
 }

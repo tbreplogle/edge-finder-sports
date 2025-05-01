@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckIcon, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadPayPal, cleanupPayPal } from "@/utils/paypalScript";
+import { loadPayPal, cleanupPayPal, resetPayPalContainer, isPayPalLoaded } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
@@ -75,6 +75,9 @@ export function PricingCard({
     setPaypalLoaded(false);
     setIsLoadingPayPal(true);
     
+    // Make sure we reset the container first
+    resetPayPalContainer(containerId);
+    
     loadPayPal()
       .then(() => {
         setPaypalLoaded(true);
@@ -86,11 +89,6 @@ export function PricingCard({
             // Make sure container exists before trying to manipulate it
             const container = document.getElementById(containerId);
             if (container) {
-              // Clear the container safely
-              while (container.firstChild) {
-                container.removeChild(container.firstChild);
-              }
-              
               // Render the button with the correct button ID
               window.paypal.HostedButtons({ 
                 hostedButtonId: buttonId || 'test-button-id' // Fallback for testing
@@ -101,7 +99,7 @@ export function PricingCard({
             }
           } catch (err: any) {
             console.error("Error rendering PayPal button:", err);
-            setPaypalError(`Could not display PayPal button: ${err.message}`);
+            setPaypalError(`Could not display PayPal button: ${err.message || String(err)}`);
             toast({
               title: "PayPal Error",
               description: "There was an issue displaying the PayPal button. Please try again.",
@@ -109,7 +107,7 @@ export function PricingCard({
             });
           }
         } else {
-          setPaypalError("PayPal Hosted Buttons not available");
+          setPaypalError("PayPal HostedButtons not available");
           toast({
             title: "PayPal Not Available",
             description: "The PayPal payment system is not available right now. Please try again later.",
@@ -119,7 +117,7 @@ export function PricingCard({
       })
       .catch((err: any) => {
         console.error("Error loading PayPal:", err);
-        setPaypalError(`PayPal error: ${err.message}`);
+        setPaypalError(`PayPal error: ${err.message || String(err)}`);
         setPaypalLoaded(false);
         setIsLoadingPayPal(false);
         toast({
@@ -130,21 +128,22 @@ export function PricingCard({
       });
   };
   
-  // Cleanup when component unmounts or when showPayPal changes
+  // Effect to handle PayPal initialization
   useEffect(() => {
     // Only load PayPal when showPayPal is true and we have a button ID
     if (showPayPal && buttonId) {
       loadPayPalScript();
     }
     
-    // Cleanup function
+    // Cleanup function - crucial for preventing the DOM removal error
     return () => {
+      resetPayPalContainer(containerId); // Safely clear container first
       if (!showPayPal) {
-        // When modal closes, cleanup
+        // When modal closes, cleanup PayPal resources
         cleanupPayPal();
       }
     };
-  }, [showPayPal, buttonId, type, billingCycle]);
+  }, [showPayPal, buttonId, type, billingCycle, containerId]);
   
   const handleSelectPlan = () => {
     // If user is not authenticated, redirect to login
@@ -165,10 +164,10 @@ export function PricingCard({
   };
 
   const handleClosePayPal = () => {
+    // Before closing modal, make sure to clean up the container
+    resetPayPalContainer(containerId);
     // Close the modal
     setShowPayPal(false);
-    
-    // Let the cleanup effect handle resource management
   };
 
   return (
