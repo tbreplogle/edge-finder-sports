@@ -10,72 +10,76 @@ const path = {
 };
 
 // Inline the prediction logic to avoid Node.js import issues with ESM
+function rawRating(t, p) {
+  if (!p) {
+    // Default values if pitcher stats are not available
+    return (
+      56.74 +
+      0.108  * t.HR  -
+      0.0934 * t.HRA +
+      334.9  * t.BA
+    );
+  }
+  
+  return (
+    56.74 +
+    0.108  * t.HR  -
+    0.0934 * t.HRA +
+    334.9  * t.BA  +
+    0.188  * p.ERAplus -
+    61.98  * p.WHIP
+  );
+}
+
+function scalePct(rating, isHome) {
+  const base = rating / 162;
+  const pct  = ((base * 14) + 0.5) / 15;      // ((x*(15-1)+.5)/15)
+  return pct * (isHome ? 1.02 : 0.98);        // HFA tweak
+}
+
 function predictMatchup(matchup, teamStats) {
   const home = teamStats[matchup.home] || { HR: 0, HRA: 0, BA: 0, team: matchup.home };
   const away = teamStats[matchup.away] || { HR: 0, HRA: 0, BA: 0, team: matchup.away };
   
-  // Pitcher adjustment factors
-  const homePitcherFactor = matchup.pitcher_home ? 
-    (matchup.pitcher_home.ERAplus / 100) * (2 - Math.min(1.5, matchup.pitcher_home.WHIP)) : 1;
-  
-  const awayPitcherFactor = matchup.pitcher_away ? 
-    (matchup.pitcher_away.ERAplus / 100) * (2 - Math.min(1.5, matchup.pitcher_away.WHIP)) : 1;
-  
-  // Base offensive strength 
-  const homeOffense = (home.HR * 1.5 + home.BA * 1000) * homePitcherFactor;
-  const awayOffense = (away.HR * 1.5 + away.BA * 1000) * awayPitcherFactor;
-  
-  // Base defensive weakness
-  const homeDefense = home.HRA * 1.2;
-  const awayDefense = away.HRA * 1.2;
-  
-  // Home field advantage - roughly 4% in MLB
-  const homeAdvantage = 1.04;
-  
-  // Calculate final strength indicators
-  const homeStrength = homeOffense + awayDefense;
-  const awayStrength = awayOffense + homeDefense;
-  
-  // Apply home field advantage
-  const adjustedHomeStrength = homeStrength * homeAdvantage;
-  
-  // Calculate win probability for home team
-  const totalStrength = adjustedHomeStrength + awayStrength;
-  const homeProbability = adjustedHomeStrength / totalStrength;
+  const rHome = rawRating(home, matchup.pitcher_home);
+  const rAway = rawRating(away, matchup.pitcher_away);
+
+  const pHome = scalePct(rHome, true);
+  const pAway = scalePct(rAway, false);
+
+  /* Probabilities with your formula */
+  const awayProb = (pAway - pAway * pHome) / (pAway + pHome - 2 * pAway * pHome);
+  const homeProb = 1 - awayProb;
+
+  /* Margin proxy = rating diff ÷ 10 (tunable) */
+  const margin = +((rHome - rAway) / 10).toFixed(1);
   
   // Convert probability to American odds for the home team
   let homeOdds;
-  if (homeProbability > 0.5) {
+  if (homeProb > 0.5) {
     // Favorite: odds to win $100
-    homeOdds = Math.round(-100 / (homeProbability - 0.5) - 100);
+    homeOdds = Math.round(-100 / (homeProb - 0.5) - 100);
   } else {
     // Underdog: odds on a $100 bet
-    homeOdds = Math.round((1 - homeProbability) / homeProbability * 100);
+    homeOdds = Math.round((1 - homeProb) / homeProb * 100);
   }
   
   // Calculate away team odds (opposite of home)
   let awayOdds;
-  if (homeProbability < 0.5) {
+  if (homeProb < 0.5) {
     // Away team is favorite
-    awayOdds = Math.round(-100 / ((1 - homeProbability) - 0.5) - 100);
+    awayOdds = Math.round(-100 / ((1 - homeProb) - 0.5) - 100);
   } else {
     // Away team is underdog
-    awayOdds = Math.round(homeProbability / (1 - homeProbability) * 100);
+    awayOdds = Math.round(homeProb / (1 - homeProb) * 100);
   }
-  
-  // Convert to a run margin with some randomness (MLB typical margin is ~1.5-2 runs)
-  const marginFactor = 4.5; // Tunable parameter
-  const rawMargin = (homeProbability - 0.5) * marginFactor;
-  
-  // Round to 1 decimal place
-  const predictedMargin = Math.round(rawMargin * 10) / 10;
   
   return {
     game_id: matchup.game_id,
     home_team: matchup.home,
     away_team: matchup.away,
-    predicted_margin: predictedMargin,
-    home_prob: homeProbability,
+    predicted_margin: margin,
+    home_prob: homeProb,
     home_ml: homeOdds,
     away_ml: awayOdds,
     // Include the moneyline values from the API if available

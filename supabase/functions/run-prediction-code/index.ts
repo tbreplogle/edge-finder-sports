@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../utils/cors.ts";
 import { supabaseAdmin } from "../utils/supabaseAdmin.ts";
@@ -110,9 +109,69 @@ function executeJsCode(code: string, games: any[]) {
     
     const executionPromise = new Promise<any[]>((resolve, reject) => {
       try {
-        // Add export default support
+        // Add export default support and ensure we inject the exact formula predictor for MLB
         const wrappedCode = `
           ${code}
+          
+          /* If the code is for MLB predictions and doesn't define rawRating and scalePct, 
+             we'll provide the exact formula implementation */
+          if (typeof predict === 'undefined' && games && games[0] && games[0].sport_key === 'baseball_mlb') {
+            function rawRating(t, p) {
+              if (!p) {
+                // Default values if pitcher stats are not available
+                return (
+                  56.74 +
+                  0.108  * t.HR  -
+                  0.0934 * t.HRA +
+                  334.9  * t.BA
+                );
+              }
+              
+              return (
+                56.74 +
+                0.108  * t.HR  -
+                0.0934 * t.HRA +
+                334.9  * t.BA  +
+                0.188  * p.ERAplus -
+                61.98  * p.WHIP
+              );
+            }
+            
+            function scalePct(rating, isHome) {
+              const base = rating / 162;
+              const pct  = ((base * 14) + 0.5) / 15;
+              return pct * (isHome ? 1.02 : 0.98);
+            }
+            
+            function predict(games) {
+              return games.map(game => {
+                // Process MLB prediction with the exact formula
+                const home = { HR: game.home_stats?.HR || 0, HRA: game.home_stats?.HRA || 0, BA: game.home_stats?.BA || 0 };
+                const away = { HR: game.away_stats?.HR || 0, HRA: game.away_stats?.HRA || 0, BA: game.away_stats?.BA || 0 };
+                
+                const pitcher_home = game.home_pitcher;
+                const pitcher_away = game.away_pitcher;
+                
+                const rHome = rawRating(home, pitcher_home);
+                const rAway = rawRating(away, pitcher_away);
+
+                const pHome = scalePct(rHome, true);
+                const pAway = scalePct(rAway, false);
+
+                const awayProb = (pAway - pAway * pHome) / (pAway + pHome - 2 * pAway * pHome);
+                const homeProb = 1 - awayProb;
+
+                const margin = +((rHome - rAway) / 10).toFixed(1);
+                
+                return {
+                  game_id: game.id,
+                  predicted_margin: margin,
+                  predicted_total: 8.0,  // Default value
+                  confidence_pct: Math.round(homeProb * 100)
+                };
+              });
+            }
+          }
           
           // Handle both export default and module.exports
           if (typeof predict === 'function') {
