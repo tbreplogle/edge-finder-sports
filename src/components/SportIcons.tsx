@@ -1,9 +1,5 @@
 
-import { 
-  Shirt, 
-  CircleDashed, 
-  Swords 
-} from "lucide-react";
+import { FaFootballBall, FaBasketballBall, FaBaseballBall } from "react-icons/fa";
 import { cn } from "@/lib/utils";
 
 interface IconProps {
@@ -12,7 +8,7 @@ interface IconProps {
 
 export function FootballIcon({ className }: IconProps) {
   return (
-    <Shirt
+    <FaFootballBall
       className={cn("w-6 h-6", className)}
     />
   );
@@ -20,7 +16,7 @@ export function FootballIcon({ className }: IconProps) {
 
 export function BasketballIcon({ className }: IconProps) {
   return (
-    <CircleDashed
+    <FaBasketballBall
       className={cn("w-6 h-6", className)}
     />
   );
@@ -28,7 +24,7 @@ export function BasketballIcon({ className }: IconProps) {
 
 export function BaseballIcon({ className }: IconProps) {
   return (
-    <Swords
+    <FaBaseballBall
       className={cn("w-6 h-6", className)}
     />
   );
