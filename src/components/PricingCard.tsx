@@ -80,7 +80,7 @@ export function PricingCard({
             window.paypal.HostedButtons({ 
               hostedButtonId: buttonId 
             }).render(`#paypal-container-${type}-${billingCycle}`);
-          } catch (err) {
+          } catch (err: any) {
             console.error("Error rendering PayPal button:", err);
             setPaypalError(`Could not display PayPal button: ${err.message}`);
           }
@@ -88,7 +88,7 @@ export function PricingCard({
           setPaypalError("PayPal Hosted Buttons not available");
         }
       })
-      .catch(err => {
+      .catch((err: any) => {
         console.error("Error loading PayPal:", err);
         setPaypalError(`PayPal error: ${err.message}`);
         setPaypalLoaded(false);
