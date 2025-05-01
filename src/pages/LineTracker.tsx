@@ -2,6 +2,7 @@
 import { AppLayout } from "@/components/AppLayout";
 import { PregameLineWidget } from "@/components/PregameLineWidget";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LineMovementChart } from "@/components/LineMovementChart";
 
 export default function LineTracker() {
   return (
@@ -23,6 +24,18 @@ export default function LineTracker() {
           </CardHeader>
           <CardContent>
             <PregameLineWidget />
+          </CardContent>
+        </Card>
+        
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl">Recent Movement Visualizations</CardTitle>
+            <CardDescription>
+              Visualize how lines have moved for upcoming games
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LineMovementChart />
           </CardContent>
         </Card>
         

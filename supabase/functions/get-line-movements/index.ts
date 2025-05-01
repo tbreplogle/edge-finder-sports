@@ -14,11 +14,97 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Parse request params
-    const url = new URL(req.url);
-    const gameId = url.searchParams.get('gameId');
+    // Parse request body
+    const requestData = await req.json().catch(() => ({}));
+    const { gameId, topMovers } = requestData;
     
-    if (!gameId) {
+    // Get query params (for direct URLs)
+    const url = new URL(req.url);
+    const queryGameId = url.searchParams.get('gameId');
+    
+    // Use either body or query param for gameId
+    const finalGameId = gameId || queryGameId;
+    
+    // Initialize Supabase client
+    const supabase = supabaseAdmin();
+    
+    // Handle top movers request
+    if (topMovers) {
+      const { data: topMoversData, error: topMoversError } = await supabase
+        .from('line_delta')
+        .select('game_id, delta_spread, delta_total, curr_spread, curr_total, open_spread, open_total')
+        .order('delta_spread', { ascending: false })
+        .limit(6);
+      
+      if (topMoversError) {
+        throw new Error(`Error fetching top movers: ${topMoversError.message}`);
+      }
+      
+      // Get additional game info for each top mover
+      if (topMoversData && topMoversData.length > 0) {
+        const enhancedData = await Promise.all(
+          topMoversData.map(async (mover) => {
+            const { data: gameData } = await supabase
+              .from('line_moves')
+              .select('sport, game_id')
+              .eq('game_id', mover.game_id)
+              .limit(1)
+              .single();
+              
+            // Get team names from the API
+            try {
+              const { data: teamsData } = await supabase.functions.invoke('get-predictions', {
+                body: { gameIdsOnly: true, gameIds: [mover.game_id] }
+              });
+              
+              const gameInfo = teamsData?.data?.find(g => g.id === mover.game_id);
+              
+              return {
+                ...mover,
+                sport: gameData?.sport || 'unknown',
+                home_team: gameInfo?.homeTeam || 'Home Team',
+                away_team: gameInfo?.awayTeam || 'Away Team',
+                movement_pts: Math.abs(mover.delta_spread)
+              };
+            } catch (e) {
+              console.error('Error getting team names:', e);
+              return {
+                ...mover,
+                sport: gameData?.sport || 'unknown',
+                home_team: 'Home Team',
+                away_team: 'Away Team',
+                movement_pts: Math.abs(mover.delta_spread)
+              };
+            }
+          })
+        );
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            topMovers: enhancedData
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          }
+        );
+      }
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          topMovers: []
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
+    
+    // Handle single game request
+    if (!finalGameId) {
       return new Response(
         JSON.stringify({ 
           error: 'Game ID is required' 
@@ -30,14 +116,11 @@ Deno.serve(async (req) => {
       );
     }
     
-    // Get line movements for the game
-    const supabase = supabaseAdmin();
-    
     // First, get the delta summary from materialized view
     const { data: deltaSummary, error: deltaError } = await supabase
       .from('line_delta')
       .select('*')
-      .eq('game_id', gameId)
+      .eq('game_id', finalGameId)
       .maybeSingle();
     
     if (deltaError) {
@@ -48,7 +131,7 @@ Deno.serve(async (req) => {
     const { data: movements, error: movementsError } = await supabase
       .from('line_moves')
       .select('*')
-      .eq('game_id', gameId)
+      .eq('game_id', finalGameId)
       .order('ts');
     
     if (movementsError) {
