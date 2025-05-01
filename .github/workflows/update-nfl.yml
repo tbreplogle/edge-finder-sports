@@ -1,0 +1,21 @@
+
+name: Daily NFL Data Update
+
+on:
+  schedule:
+    - cron: '15 13 * * *'  # every day at 8:15 AM CT (10 minutes after MLB)
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: node workers/updateNflData.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
