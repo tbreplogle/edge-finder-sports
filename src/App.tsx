@@ -17,7 +17,6 @@ import AdminLogic from "./pages/AdminLogic";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Contact from "./pages/Contact";
-import LineTracker from "./pages/LineTracker";
 
 const queryClient = new QueryClient();
 
@@ -35,7 +34,6 @@ const App = () => (
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/account" element={<Account />} />
           <Route path="/history" element={<History />} />
-          <Route path="/line-tracker" element={<LineTracker />} />
           <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
           <Route path="/admin/logic" element={<AdminLogic />} />
           <Route path="/terms" element={<Terms />} />
