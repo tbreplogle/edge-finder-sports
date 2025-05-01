@@ -9,7 +9,63 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      predictions: {
+        Row: {
+          away_ml: number | null
+          away_team: string
+          confidence_pct: number | null
+          created_at: string
+          edge: number | null
+          game_date: string
+          game_id: string
+          home_ml: number | null
+          home_team: string
+          id: number
+          market_away_ml: number | null
+          market_home_ml: number | null
+          predicted_margin: number | null
+          predicted_total: number | null
+          sport: string
+          updated_at: string
+        }
+        Insert: {
+          away_ml?: number | null
+          away_team: string
+          confidence_pct?: number | null
+          created_at?: string
+          edge?: number | null
+          game_date: string
+          game_id: string
+          home_ml?: number | null
+          home_team: string
+          id?: number
+          market_away_ml?: number | null
+          market_home_ml?: number | null
+          predicted_margin?: number | null
+          predicted_total?: number | null
+          sport: string
+          updated_at?: string
+        }
+        Update: {
+          away_ml?: number | null
+          away_team?: string
+          confidence_pct?: number | null
+          created_at?: string
+          edge?: number | null
+          game_date?: string
+          game_id?: string
+          home_ml?: number | null
+          home_team?: string
+          id?: number
+          market_away_ml?: number | null
+          market_home_ml?: number | null
+          predicted_margin?: number | null
+          predicted_total?: number | null
+          sport?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

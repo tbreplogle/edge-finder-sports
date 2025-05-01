@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,24 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Tables } from "@/integrations/supabase/types";
 
-interface Prediction {
-  id: number;
-  sport: string;
-  game_id: string;
-  home_team: string;
-  away_team: string;
-  predicted_margin?: number;
-  predicted_total?: number;
-  confidence_pct?: number;
-  home_ml?: number;
-  away_ml?: number;
-  market_home_ml?: number;
-  market_away_ml?: number;
-  edge?: number;
-  game_date: string;
-  created_at: string;
-  updated_at: string;
+interface Prediction extends Tables<"predictions"> {
+  // Add any additional properties not in the database schema if needed
 }
 
 const AdminPreview = () => {
@@ -121,9 +106,9 @@ const AdminPreview = () => {
       
       const dateString = dateFilter.toISOString().split('T')[0];
       
-      // Create the query
+      // Create the query with proper typing
       let query = supabase
-        .from('predictions')
+        .from("predictions")
         .select('*')
         .gte('game_date', dateString)
         .order('updated_at', { ascending: false });
@@ -155,7 +140,7 @@ const AdminPreview = () => {
   };
   
   // Function to format moneyline odds with + sign
-  const formatMoneyline = (ml?: number) => {
+  const formatMoneyline = (ml?: number | null) => {
     if (ml === undefined || ml === null) return "—";
     return ml > 0 ? `+${ml}` : `${ml}`;
   };
@@ -364,9 +349,9 @@ const AdminPreview = () => {
                       <TableCell className="text-right">
                         {prediction.predicted_margin ? (
                           prediction.predicted_margin > 0 ? (
-                            <span className="text-green-600">+{prediction.predicted_margin.toFixed(1)}</span>
+                            <span className="text-green-600">+{Number(prediction.predicted_margin).toFixed(1)}</span>
                           ) : (
-                            <span className="text-red-600">{prediction.predicted_margin.toFixed(1)}</span>
+                            <span className="text-red-600">{Number(prediction.predicted_margin).toFixed(1)}</span>
                           )
                         ) : (
                           "—"
@@ -389,9 +374,9 @@ const AdminPreview = () => {
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right">
-                        {prediction.edge !== undefined && prediction.edge !== null ? (
-                          <span className={prediction.edge > 0 ? "text-green-600" : "text-red-600"}>
-                            {prediction.edge.toFixed(1)}
+                        {prediction.edge !== null ? (
+                          <span className={Number(prediction.edge) > 0 ? "text-green-600" : "text-red-600"}>
+                            {Number(prediction.edge).toFixed(1)}
                           </span>
                         ) : (
                           "—"
