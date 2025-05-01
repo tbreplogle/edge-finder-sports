@@ -11,7 +11,7 @@ WORKDIR /app
 COPY . /app
 
 # Install Node.js dependencies
-RUN cd workers && npm install
+RUN cd workers && npm install && npm install axios
 
 # Set execute permissions for the runner script
 RUN chmod +x workers/run_models.sh
