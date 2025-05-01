@@ -1,3 +1,4 @@
+
 import { Bell, Menu, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -10,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger, navigationMenuTriggerStyle } from "@/components/ui/navigation-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { Logo } from "./Logo";
+
 interface HeaderProps {
   isAuthenticated?: boolean;
   isAdmin?: boolean;
@@ -105,10 +108,9 @@ export function Header({
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <a href="/" className="flex items-center gap-2 text-lg md:text-xl font-bold text-edge-secondary">
-            <span className="hidden md:inline">Game</span>
-            <span>Intel</span>
-          </a>
+          <Link to="/" className="flex items-center">
+            <Logo size="md" />
+          </Link>
           <div className="hidden md:flex items-center space-x-1">
             <nav className="flex items-center space-x-1">
               <Link to="/dashboard" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
