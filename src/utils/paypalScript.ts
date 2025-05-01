@@ -110,7 +110,7 @@ export function renderPayPalButton(containerId: string, buttonId: string): Promi
       container.innerHTML = '';
       
       // Render the button with the correct button ID and styling
-      window.paypal.HostedButtons({
+      const renderer = window.paypal!.HostedButtons({
         hostedButtonId: buttonId,
         onInit: function(data: any) {
           // Add custom styling for PayPal buttons after they render
@@ -150,7 +150,10 @@ export function renderPayPalButton(containerId: string, buttonId: string): Promi
             `;
           }
         }
-      }).render(`#${containerId}`).catch((err: any) => {
+      });
+      
+      // The render method returns a Promise now according to our type definition
+      renderer.render(`#${containerId}`).catch((err: any) => {
         console.error("PayPal render error:", err);
         reject(new Error(`PayPal render error: ${err.message || String(err)}`));
         
