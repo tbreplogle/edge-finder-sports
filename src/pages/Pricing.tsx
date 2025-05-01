@@ -3,13 +3,30 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { PricingCard } from "@/components/PricingCard";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CheckCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const Pricing = () => {
   const navigate = useNavigate();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+  
+  // Check if user is logged in and get their current plan
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        // In a real app, this would fetch from an API or Supabase
+        // For demo, we'll assume all logged-in users are on the basic plan by default
+        setCurrentPlan("basic");
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    }
+  }, []);
   
   const basicFeatures = [
     { text: "Today's games preview", included: true },
@@ -46,8 +63,14 @@ const Pricing = () => {
   const handleSelectPlan = (plan: string) => {
     // For demo purposes just log the selected plan
     console.log(`Selected plan: ${plan}`);
-    // Here you would normally redirect to Stripe checkout
-    navigate("/auth/register");
+    // Here you would normally redirect to authentication if not logged in
+    if (!localStorage.getItem("user")) {
+      navigate("/auth/register");
+    }
+  };
+
+  const handleBillingToggle = () => {
+    setBillingCycle(billingCycle === "monthly" ? "yearly" : "monthly");
   };
   
   return (
@@ -65,20 +88,16 @@ const Pricing = () => {
           
           {/* Billing cycle selector */}
           <div className="flex items-center justify-center gap-4 mt-8">
-            <Button
-              variant={billingCycle === "monthly" ? "default" : "outline"}
-              className={billingCycle === "monthly" ? "bg-edge-secondary hover:bg-edge-secondary/90" : ""}
-              onClick={() => setBillingCycle("monthly")}
-            >
+            <span className={`text-sm ${billingCycle === "monthly" ? "font-medium" : "text-muted-foreground"}`}>
               Monthly
-            </Button>
-            <Button
-              variant={billingCycle === "yearly" ? "default" : "outline"}
-              className={billingCycle === "yearly" ? "bg-edge-secondary hover:bg-edge-secondary/90" : ""}
-              onClick={() => setBillingCycle("yearly")}
-            >
+            </span>
+            <Switch
+              checked={billingCycle === "yearly"}
+              onCheckedChange={handleBillingToggle}
+            />
+            <span className={`text-sm ${billingCycle === "yearly" ? "font-medium" : "text-muted-foreground"}`}>
               Yearly (Save 15%)
-            </Button>
+            </span>
           </div>
         </div>
         
@@ -89,6 +108,8 @@ const Pricing = () => {
             price="Free"
             description="For casual fans just getting started"
             features={basicFeatures}
+            isCurrentPlan={currentPlan === "basic"}
+            billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("basic")}
           />
           
@@ -99,6 +120,8 @@ const Pricing = () => {
             description="For serious bettors and analysts"
             features={premiumFeatures}
             highlighted={true}
+            isCurrentPlan={currentPlan === "premium"}
+            billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("premium")}
           />
           
@@ -108,6 +131,8 @@ const Pricing = () => {
             price={billingCycle === "monthly" ? "$99.99" : "$1,019.88"}
             description="For professional organizations"
             features={enterpriseFeatures}
+            isCurrentPlan={currentPlan === "enterprise"}
+            billingCycle={billingCycle}
             onSelectPlan={() => handleSelectPlan("enterprise")}
           />
         </div>

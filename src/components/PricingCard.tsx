@@ -1,8 +1,10 @@
 
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { loadPayPal } from "@/utils/paypalScript";
 
 interface PricingFeature {
   text: string;
@@ -17,8 +19,25 @@ interface PricingCardProps {
   features: PricingFeature[];
   highlighted?: boolean;
   isCurrentPlan?: boolean;
+  billingCycle: "monthly" | "yearly";
   onSelectPlan: () => void;
 }
+
+// PayPal button IDs for different plans and billing cycles
+const PAYPAL_BUTTON_IDS = {
+  basic: {
+    monthly: null,
+    yearly: null
+  },
+  premium: {
+    monthly: "V953RFZLU5TLL",
+    yearly: "V953RYYYYYYY"
+  },
+  enterprise: {
+    monthly: "V953RFENTER",
+    yearly: "V953RFENTERYR"
+  }
+};
 
 export function PricingCard({
   type,
@@ -28,8 +47,35 @@ export function PricingCard({
   features,
   highlighted = false,
   isCurrentPlan = false,
+  billingCycle,
   onSelectPlan
 }: PricingCardProps) {
+  const [showPayPal, setShowPayPal] = useState(false);
+  const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
+  
+  useEffect(() => {
+    if (!showPayPal || !buttonId) return;
+    
+    loadPayPal().then(() => {
+      // @ts-ignore - PayPal SDK is loaded dynamically
+      if (window.paypal && window.paypal.HostedButtons) {
+        // @ts-ignore - PayPal types aren't available
+        window.paypal.HostedButtons({ 
+          hostedButtonId: buttonId
+        }).render(`#paypal-container-${type}-${billingCycle}`);
+      }
+    });
+  }, [showPayPal, buttonId, type, billingCycle]);
+  
+  const handleSelectPlan = () => {
+    if (buttonId) {
+      setShowPayPal(true);
+    } else {
+      // For free plan or if no PayPal button ID exists
+      onSelectPlan();
+    }
+  };
+
   return (
     <Card className={cn(
       "flex flex-col",
@@ -46,7 +92,7 @@ export function PricingCard({
         </CardTitle>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-bold">{price}</span>
-          {price !== "Free" && <span className="text-muted-foreground">/month</span>}
+          {price !== "Free" && <span className="text-muted-foreground">/{billingCycle === "monthly" ? "month" : "year"}</span>}
         </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
@@ -74,12 +120,30 @@ export function PricingCard({
             "w-full",
             highlighted && "bg-edge-secondary hover:bg-edge-secondary/90"
           )}
-          disabled={isCurrentPlan}
-          onClick={onSelectPlan}
+          disabled={isCurrentPlan || (type !== "basic" && !buttonId)}
+          onClick={handleSelectPlan}
         >
           {isCurrentPlan ? "Current Plan" : "Select Plan"}
         </Button>
       </CardFooter>
+      
+      {showPayPal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg p-6 shadow-lg">
+            <div
+              id={`paypal-container-${type}-${billingCycle}`}
+              className="min-w-[300px]"
+            />
+            <Button 
+              variant="ghost" 
+              className="mt-4 w-full text-sm"
+              onClick={() => setShowPayPal(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
