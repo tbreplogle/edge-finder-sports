@@ -12,7 +12,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
-import { LineMovementModal } from "./LineMovementModal";
 
 export interface GameProps {
   id: string;
@@ -179,16 +178,6 @@ export function GameCard({
                         {edge.toFixed(1)} pts
                       </span>
                     </>
-                  )}
-                  
-                  {/* Line movement sparkline */}
-                  {!isLocked && !isBaseball && (
-                    <LineMovementModal 
-                      gameId={id} 
-                      homeTeam={homeTeam} 
-                      awayTeam={awayTeam}
-                      isBaseball={isBaseball}
-                    />
                   )}
                 </>
               ) : (
