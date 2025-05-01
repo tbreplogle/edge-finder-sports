@@ -152,9 +152,7 @@ const Pricing = () => {
           <div className="space-y-6">
             <div>
               <h3 className="font-medium mb-2">How often is the data updated?</h3>
-              <p className="text-muted-foreground">
-                Our data is updated every 15 minutes during active seasons for all supported sports.
-              </p>
+              <p className="text-muted-foreground">Data is refreshed every 15 minutes during active seasons across all supported sports. Predictive model updates are released every Tuesday at 8:00 AM CT.</p>
             </div>
             
             <div>
