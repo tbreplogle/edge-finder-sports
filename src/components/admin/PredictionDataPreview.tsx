@@ -10,100 +10,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TeamStats, Matchup, PitcherStats } from "@/lib/formulas/mlbPredict";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PredictionDataPreviewProps {
   sport: string;
 }
 
-// Mock data for different leagues
+// League options for selection
 const LEAGUE_OPTIONS = [
   { value: "mlb", label: "MLB" },
   { value: "nfl", label: "NFL" },
   { value: "ncaaf", label: "NCAAF" },
   { value: "ncaab", label: "NCAAB" }
 ];
-
-// Mock function to get MLB team stats - in a real app, this would come from the API
-const getMockMlbData = async (): Promise<{
-  teamStats: Record<string, TeamStats>;
-  matchups: Matchup[];
-  pitchers: Record<string, PitcherStats>;
-}> => {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // Sample mock data
-  const teamStats: Record<string, TeamStats> = {
-    "NYY": { team: "NYY", HR: 35, HRA: 28, BA: 0.267 },
-    "BOS": { team: "BOS", HR: 30, HRA: 32, BA: 0.255 },
-    "TB": { team: "TB", HR: 27, HRA: 26, BA: 0.248 },
-    "LAD": { team: "LAD", HR: 40, HRA: 24, BA: 0.275 },
-    "SF": { team: "SF", HR: 29, HRA: 30, BA: 0.252 }
-  };
-  
-  const pitchers: Record<string, PitcherStats> = {
-    "685100_home": {
-      game_id: "685100",
-      team: "LAD",
-      ERAplus: 120,
-      WHIP: 1.05
-    },
-    "685100_away": {
-      game_id: "685100",
-      team: "SF",
-      ERAplus: 95,
-      WHIP: 1.32
-    },
-    "685101_home": {
-      game_id: "685101",
-      team: "NYY",
-      ERAplus: 115,
-      WHIP: 1.15
-    },
-    "685101_away": {
-      game_id: "685101",
-      team: "BOS",
-      ERAplus: 97,
-      WHIP: 1.28
-    }
-  };
-  
-  const matchups: Matchup[] = [
-    {
-      game_id: "685100",
-      home: "LAD",
-      away: "SF",
-      pitcher_home: pitchers["685100_home"],
-      pitcher_away: pitchers["685100_away"]
-    },
-    {
-      game_id: "685101",
-      home: "NYY",
-      away: "BOS",
-      pitcher_home: pitchers["685101_home"],
-      pitcher_away: pitchers["685101_away"]
-    }
-  ];
-  
-  return { teamStats, matchups, pitchers };
-};
-
-// Mock NFL data
-const getMockNflData = async () => {
-  await new Promise(resolve => setTimeout(resolve, 800));
-  return {
-    teamStats: {
-      "KC": { team: "KC", pointsFor: 28.2, pointsAgainst: 17.3, ydsPerGame: 401 },
-      "SF": { team: "SF", pointsFor: 26.5, pointsAgainst: 18.1, ydsPerGame: 389 },
-      "BUF": { team: "BUF", pointsFor: 27.1, pointsAgainst: 19.2, ydsPerGame: 375 },
-      "DAL": { team: "DAL", pointsFor: 25.8, pointsAgainst: 20.3, ydsPerGame: 362 }
-    },
-    matchups: [
-      { game_id: "123001", home: "KC", away: "BUF" },
-      { game_id: "123002", home: "SF", away: "DAL" }
-    ]
-  };
-};
 
 export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   const [activeDataTab, setActiveDataTab] = useState<string>("teamStats");
@@ -121,58 +40,97 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   
   // Load the data for the selected league
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
+    fetchLeagueData();
+  }, [selectedLeague]);
+
+  // Function to fetch data from the database
+  const fetchLeagueData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      let teamStats = {};
+      let matchups = [];
+      let pitchers = {};
       
-      try {
-        let leagueData = null;
+      if (selectedLeague === "mlb") {
+        // Fetch MLB team stats
+        const { data: teamData, error: teamError } = await supabase.rpc('get_mlb_team_stats');
         
-        switch (selectedLeague) {
-          case "mlb":
-            leagueData = await getMockMlbData();
-            break;
-          case "nfl":
-            leagueData = await getMockNflData();
-            break;
-          default:
-            setError(`Data preview not available for ${selectedLeague.toUpperCase()}`);
-            break;
+        if (teamError) throw teamError;
+        
+        if (teamData && teamData.length > 0) {
+          teamStats = teamData.reduce((acc, team) => {
+            acc[team.team] = {
+              team: team.team,
+              HR: team.hr || 0,
+              HRA: team.hra || 0, 
+              BA: team.ba || 0
+            };
+            return acc;
+          }, {});
         }
         
-        setData(leagueData);
-      } catch (err: any) {
-        console.error("Error loading prediction data:", err);
-        setError(err.message || "Failed to load prediction data");
-        setData(null);
-      } finally {
-        setIsLoading(false);
+        // Fetch MLB matchups and pitchers
+        const { data: matchupData, error: matchupError } = await supabase.rpc('get_mlb_matchups');
+        
+        if (matchupError) throw matchupError;
+        
+        if (matchupData && matchupData.length > 0) {
+          matchups = matchupData;
+          
+          // Extract pitcher data from matchups
+          pitchers = matchupData.reduce((acc, game) => {
+            if (game.pitcher_home) {
+              acc[`${game.game_id}_home`] = game.pitcher_home;
+            }
+            if (game.pitcher_away) {
+              acc[`${game.game_id}_away`] = game.pitcher_away;
+            }
+            return acc;
+          }, {});
+        }
+      } else if (selectedLeague === "nfl") {
+        // Fetch NFL data
+        const { data: nflData, error: nflError } = await supabase.rpc('get_nfl_data');
+        
+        if (nflError) throw nflError;
+        
+        if (nflData) {
+          // Process NFL data
+          teamStats = nflData.team_stats || {};
+          matchups = nflData.matchups || [];
+        }
       }
-    };
-    
-    fetchData();
-  }, [selectedLeague]);
+      
+      // If we don't have any real data, use empty objects/arrays to avoid errors
+      setData({
+        teamStats: Object.keys(teamStats).length > 0 ? teamStats : {}, 
+        matchups: matchups.length > 0 ? matchups : [],
+        pitchers: Object.keys(pitchers).length > 0 ? pitchers : {}
+      });
+      
+      // If we don't have any data, show a message
+      if (Object.keys(teamStats).length === 0 && matchups.length === 0) {
+        setError(`No ${selectedLeague.toUpperCase()} data currently available in the database. Run the prediction pipeline to see live data.`);
+      }
+    } catch (err: any) {
+      console.error(`Error loading ${selectedLeague} prediction data:`, err);
+      setError(err.message || `Failed to load ${selectedLeague.toUpperCase()} prediction data`);
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Function to refresh the data
   const refreshData = async () => {
     try {
       setIsLoading(true);
-      
-      let leagueData = null;
-        
-      switch (selectedLeague) {
-        case "mlb":
-          leagueData = await getMockMlbData();
-          break;
-        case "nfl":
-          leagueData = await getMockNflData();
-          break;
-      }
-      
-      setData(leagueData);
+      await fetchLeagueData();
       toast.success("Data refreshed successfully");
     } catch (err: any) {
-      console.error("Error refreshing data:", err);
+      console.error(`Error refreshing ${selectedLeague} data:`, err);
       toast.error("Failed to refresh data", {
         description: err.message || "An unexpected error occurred"
       });
@@ -301,7 +259,14 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
 
   // MLB-specific renderers
   const renderMlbTeamStatsTable = () => {
-    if (!data?.teamStats) return null;
+    if (!data?.teamStats || Object.keys(data.teamStats).length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Team Data Available</AlertTitle>
+          <AlertDescription>No MLB team stats available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
     
     return (
       <div className="rounded-md border">
@@ -320,7 +285,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
                 <TableCell className="font-medium">{team.team}</TableCell>
                 <TableCell className="text-right">{team.HR}</TableCell>
                 <TableCell className="text-right">{team.HRA}</TableCell>
-                <TableCell className="text-right">{team.BA.toFixed(3)}</TableCell>
+                <TableCell className="text-right">{team.BA?.toFixed(3) || "0.000"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -330,7 +295,14 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   };
   
   const renderMlbMatchupsTable = () => {
-    if (!data?.matchups) return null;
+    if (!data?.matchups || data.matchups.length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Matchup Data Available</AlertTitle>
+          <AlertDescription>No MLB matchups available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
     
     return (
       <div className="rounded-md border">
@@ -340,6 +312,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
               <TableHead>Game ID</TableHead>
               <TableHead>Away Team</TableHead>
               <TableHead>Home Team</TableHead>
+              <TableHead className="text-right">Moneyline H/A</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -348,6 +321,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
                 <TableCell className="font-mono text-xs">{matchup.game_id}</TableCell>
                 <TableCell>{matchup.away}</TableCell>
                 <TableCell>{matchup.home}</TableCell>
+                <TableCell className="text-right">
+                  {matchup.moneyline ? matchup.moneyline : "-"} / {matchup.moneyline_opponent ? matchup.moneyline_opponent : "-"}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -357,7 +333,14 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   };
   
   const renderMlbPitchersTable = () => {
-    if (!data?.pitchers) return null;
+    if (!data?.pitchers || Object.keys(data.pitchers).length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Pitcher Data Available</AlertTitle>
+          <AlertDescription>No MLB pitcher stats available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
     
     return (
       <div className="rounded-md border">
@@ -387,7 +370,14 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
 
   // NFL-specific renderers
   const renderNflTeamStatsTable = () => {
-    if (!data?.teamStats) return null;
+    if (!data?.teamStats || Object.keys(data.teamStats).length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Team Data Available</AlertTitle>
+          <AlertDescription>No NFL team stats available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
     
     return (
       <div className="rounded-md border">
@@ -416,7 +406,14 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   };
   
   const renderNflMatchupsTable = () => {
-    if (!data?.matchups) return null;
+    if (!data?.matchups || data.matchups.length === 0) {
+      return (
+        <Alert>
+          <AlertTitle>No Matchup Data Available</AlertTitle>
+          <AlertDescription>No NFL matchups available in the database. Run the prediction pipeline to generate data.</AlertDescription>
+        </Alert>
+      );
+    }
     
     return (
       <div className="rounded-md border">
@@ -478,7 +475,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           <Button
             variant="outline"
             onClick={refreshData}
-            disabled={isLoading || !!error}
+            disabled={isLoading}
             className="flex items-center gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -488,7 +485,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           <Button
             variant="outline"
             onClick={exportData}
-            disabled={isLoading || !!error}
+            disabled={isLoading || !!error || !data}
             className="flex items-center gap-2"
           >
             <Download className="h-4 w-4" />
