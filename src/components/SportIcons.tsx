@@ -1,5 +1,5 @@
 
-import { Rugby, Basketball, Baseball } from "lucide-react";
+import { Football, CircleDashed, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface IconProps {
@@ -8,7 +8,7 @@ interface IconProps {
 
 export function FootballIcon({ className }: IconProps) {
   return (
-    <Rugby
+    <Football
       className={cn("w-6 h-6", className)}
     />
   );
@@ -16,7 +16,7 @@ export function FootballIcon({ className }: IconProps) {
 
 export function BasketballIcon({ className }: IconProps) {
   return (
-    <Basketball
+    <CircleDashed
       className={cn("w-6 h-6", className)}
     />
   );
@@ -24,7 +24,7 @@ export function BasketballIcon({ className }: IconProps) {
 
 export function BaseballIcon({ className }: IconProps) {
   return (
-    <Baseball
+    <Dumbbell
       className={cn("w-6 h-6", className)}
     />
   );
