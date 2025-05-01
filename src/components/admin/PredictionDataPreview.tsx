@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,9 +84,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       let pitchers: Record<string, PitcherStats> = {};
       
       if (selectedLeague === "mlb") {
-        // Fetch MLB team stats
+        // Fetch MLB team stats - use type assertion for the RPC function
         const { data: teamData, error: teamError } = await supabase
-          .rpc('get_mlb_team_stats');
+          .rpc('get_mlb_team_stats') as { data: any, error: any };
         
         if (teamError) throw teamError;
         
@@ -103,8 +104,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           teamStats = mlbTeamStats;
         }
         
-        // Fetch MLB matchups - explicitly use any to handle the unknown shape 
-        // from the RPC function since it doesn't have a type definition
+        // Fetch MLB matchups - use type assertion for the RPC function
         const { data: matchupData, error: matchupError } = await supabase
           .rpc('get_mlb_matchups') as { data: any, error: any };
         
@@ -135,7 +135,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           }, {});
         }
       } else if (selectedLeague === "nfl") {
-        // Fetch NFL data - explicitly use any to handle the unknown shape
+        // Fetch NFL data - use type assertion for the RPC function
         const { data: nflData, error: nflError } = await supabase
           .rpc('get_nfl_data') as { data: any, error: any };
         
