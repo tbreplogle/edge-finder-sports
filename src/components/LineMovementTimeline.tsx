@@ -4,22 +4,31 @@ import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, ReferenceL
 import { supabase } from "@/integrations/supabase/client";
 import { formatInTimeZone } from "date-fns-tz";
 import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
 
 interface LineMovementTimelineProps {
   gameId: string;
   homeTeam: string;
   awayTeam: string;
+  onLoadComplete?: () => void;
 }
 
-export function LineMovementTimeline({ gameId, homeTeam, awayTeam }: LineMovementTimelineProps) {
+export function LineMovementTimeline({ 
+  gameId, 
+  homeTeam, 
+  awayTeam,
+  onLoadComplete
+}: LineMovementTimelineProps) {
   const [data, setData] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchLineMovements = async () => {
       try {
         setIsLoading(true);
+        setError(null);
         
         const { data: response, error } = await supabase.functions.invoke('get-line-movements', {
           body: { gameId }
@@ -27,6 +36,7 @@ export function LineMovementTimeline({ gameId, homeTeam, awayTeam }: LineMovemen
         
         if (error) {
           console.error('Error fetching line movements:', error);
+          setError('Could not load line movement data');
           return;
         }
         
@@ -47,23 +57,41 @@ export function LineMovementTimeline({ gameId, homeTeam, awayTeam }: LineMovemen
           if (response.summary) {
             setSummary(response.summary);
           }
+        } else {
+          setData([]);
         }
       } catch (error) {
         console.error('Error in line movements fetch:', error);
+        setError('Failed to load movement data');
       } finally {
         setIsLoading(false);
+        if (onLoadComplete) onLoadComplete();
       }
     };
     
     fetchLineMovements();
-  }, [gameId]);
+  }, [gameId, onLoadComplete]);
   
   if (isLoading) {
-    return <div className="flex justify-center py-8">Loading line movement data...</div>;
+    return (
+      <div className="flex justify-center items-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">Loading movement data...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-center py-4 text-red-500">{error}</div>;
   }
   
   if (data.length < 2) {
-    return <div className="flex justify-center py-8">Not enough line movement data available.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+        <p>Not enough line movement data available for this game.</p>
+        <p className="text-sm mt-2">Our system is collecting data continuously.</p>
+      </div>
+    );
   }
   
   // Formatter for the tooltip
@@ -72,11 +100,6 @@ export function LineMovementTimeline({ gameId, homeTeam, awayTeam }: LineMovemen
       return [`${value > 0 ? '+' : ''}${value}`, 'Home Spread'];
     }
     return [value, name];
-  };
-  
-  // Format X-axis tick values
-  const xAxisTickFormatter = (value: string) => {
-    return value;
   };
   
   // Calculate total movement
@@ -104,7 +127,6 @@ export function LineMovementTimeline({ gameId, homeTeam, awayTeam }: LineMovemen
         <LineChart data={data} margin={{ top: 5, right: 20, bottom: 25, left: 0 }}>
           <XAxis 
             dataKey="formattedTs" 
-            tickFormatter={xAxisTickFormatter} 
             angle={-45}
             textAnchor="end"
             height={50}

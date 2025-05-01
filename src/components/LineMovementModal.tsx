@@ -7,9 +7,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Activity } from "lucide-react";
+import { Activity, Loader2 } from "lucide-react";
 import { LineMovementTimeline } from "./LineMovementTimeline";
 import { useState } from "react";
+import { toast } from "sonner";
 
 interface LineMovementModalProps {
   gameId: string;
@@ -25,17 +26,27 @@ export function LineMovementModal({
   isBaseball = false
 }: LineMovementModalProps) {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   
-  // Skip for MLB
+  // Skip for MLB since they use moneyline rather than spreads
   if (isBaseball) return null;
   
+  const handleOpen = (newOpen: boolean) => {
+    if (newOpen) {
+      setLoading(true);
+      // Loading will be handled by the LineMovementTimeline component
+    }
+    setOpen(newOpen);
+  };
+  
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button 
           variant="ghost" 
           size="sm" 
           className="p-1 h-auto flex items-center gap-1 hover:bg-transparent"
+          title="View line movement history"
         >
           <Activity className="h-4 w-4 text-edge-secondary hover:opacity-75" />
         </Button>
@@ -47,7 +58,17 @@ export function LineMovementModal({
             <span>{awayTeam} @ {homeTeam} Line Movements</span>
           </DialogTitle>
         </DialogHeader>
-        <LineMovementTimeline gameId={gameId} homeTeam={homeTeam} awayTeam={awayTeam} />
+        <LineMovementTimeline 
+          gameId={gameId} 
+          homeTeam={homeTeam} 
+          awayTeam={awayTeam} 
+          onLoadComplete={() => setLoading(false)} 
+        />
+        {loading && (
+          <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

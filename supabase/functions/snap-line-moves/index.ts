@@ -1,12 +1,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import axios from 'https://esm.sh/axios@1.6.2';
-import { SPORT_KEYS } from '../../functions/utils/config/sportKeys.ts';
+import { SPORT_KEYS } from '../utils/config/sportKeys.ts';
 
 // Constants and configuration
 const sports = ['NFL', 'NCAAF', 'NCAAB', 'MLB']; 
 const ODDS_API_URL = 'https://api.the-odds-api.com/v4/sports';
-const ODDS_API_KEY = Deno.env.get('ODDS_API_KEY') || '';
+const ODDS_API_KEY = Deno.env.get('ODDS_API_KEY') || 'ca659a5203c1cfc6a0275ebd54c57262'; // Use the provided key
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
@@ -65,8 +65,11 @@ async function snapSport(sport: string, supabase: any) {
 
       const gameTotal = total?.outcomes?.[0]?.point ?? null;
 
-      // Skip if we don't have valid data
-      if (isBaseball || homeSpread === null) continue;
+      // Skip if we don't have valid data for non-baseball sports
+      if (!isBaseball && homeSpread === null) continue;
+
+      // For baseball, we'll store the moneyline instead of spread
+      if (isBaseball && !total) continue;
 
       // Insert the snapshot into the database
       rows.push(
@@ -75,9 +78,12 @@ async function snapSport(sport: string, supabase: any) {
           .insert({
             sport: sport,
             game_id: ev.id,
+            home_team: ev.home_team,
+            away_team: ev.away_team,
             ts: now,
             spread_home: homeSpread,
-            total: gameTotal
+            total: gameTotal,
+            commence_time: ev.commence_time
           })
           .select()
       );
