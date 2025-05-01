@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
+import { LineMovementModal } from "./LineMovementModal";
 
 export interface GameProps {
   id: string;
@@ -87,6 +88,9 @@ export function GameCard({
     : marketSpread < 0 
       ? `${awayTeam} -${Math.abs(marketSpread)}` 
       : "Pick'em";
+
+  // Is this a baseball game? (MLB uses moneyline rather than spread)
+  const isBaseball = sport === "mlb";
   
   return (
     <Card 
@@ -175,6 +179,16 @@ export function GameCard({
                         {edge.toFixed(1)} pts
                       </span>
                     </>
+                  )}
+                  
+                  {/* Line movement sparkline */}
+                  {!isLocked && !isBaseball && (
+                    <LineMovementModal 
+                      gameId={id} 
+                      homeTeam={homeTeam} 
+                      awayTeam={awayTeam}
+                      isBaseball={isBaseball}
+                    />
                   )}
                 </>
               ) : (

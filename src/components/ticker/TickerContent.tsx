@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { TickerGameItem } from "./TickerGameItem";
@@ -15,8 +16,8 @@ export const TickerContent = ({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger className="flex items-center gap-1">
-              
-              
+              <Clock className="h-3 w-3" />
+              <span>Auto-refreshed</span>
             </TooltipTrigger>
             <TooltipContent>
               <p>Predictions refresh every Tuesday at 8:00 AM CT</p>
