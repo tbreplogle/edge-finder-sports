@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileNavLogo } from "./MobileNavLogo";
 
 interface MobileNavProps {
   isOpen: boolean;
@@ -35,9 +36,7 @@ export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = 
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="container h-full flex flex-col">
         <div className="flex items-center justify-between h-16">
-          <a href="/" className="flex items-center gap-2 text-xl font-bold text-edge-secondary">
-            <span>PlayEdge</span>
-          </a>
+          <MobileNavLogo />
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-5 w-5" />
           </Button>
