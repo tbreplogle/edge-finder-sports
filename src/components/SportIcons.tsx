@@ -1,5 +1,9 @@
 
-import { Football, CircleDashed, Dumbbell } from "lucide-react";
+import { 
+  Timer, 
+  GalleryHorizontalEnd, 
+  Dumbbell 
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface IconProps {
@@ -8,7 +12,7 @@ interface IconProps {
 
 export function FootballIcon({ className }: IconProps) {
   return (
-    <Football
+    <Timer
       className={cn("w-6 h-6", className)}
     />
   );
@@ -16,7 +20,7 @@ export function FootballIcon({ className }: IconProps) {
 
 export function BasketballIcon({ className }: IconProps) {
   return (
-    <CircleDashed
+    <GalleryHorizontalEnd
       className={cn("w-6 h-6", className)}
     />
   );
