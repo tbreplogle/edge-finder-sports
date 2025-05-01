@@ -1,10 +1,10 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckIcon, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadPayPal, cleanupPayPal, resetPayPalContainer, isPayPalLoaded } from "@/utils/paypalScript";
+import { loadPayPal, isPayPalLoaded, renderPayPalButton } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,7 +33,7 @@ const PAYPAL_BUTTON_IDS = {
     yearly: null
   },
   premium: {
-    monthly: "V953RFZLU5TLL",
+    monthly: "V953RFZLU5TLL", // Production button ID
     yearly: "V953RYYYYYYY"
   },
   enterprise: {
@@ -61,7 +61,6 @@ export function PricingCard({
   const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
   const navigate = useNavigate();
   const { toast } = useToast();
-  const paypalContainerRef = useRef<HTMLDivElement | null>(null);
   
   // Create a unique container ID for this pricing card
   const containerId = `paypal-container-${type}-${billingCycle}`;
@@ -72,48 +71,19 @@ export function PricingCard({
     
     // Reset states
     setPaypalError(null);
-    setPaypalLoaded(false);
     setIsLoadingPayPal(true);
-    
-    // Make sure we reset the container first
-    resetPayPalContainer(containerId);
     
     loadPayPal()
       .then(() => {
         setPaypalLoaded(true);
         setIsLoadingPayPal(false);
         
-        // Ensure the PayPal object and HostedButtons are available
-        if (window.paypal && window.paypal.HostedButtons) {
-          try {
-            // Make sure container exists before trying to manipulate it
-            const container = document.getElementById(containerId);
-            if (container) {
-              // Render the button with the correct button ID
-              window.paypal.HostedButtons({ 
-                hostedButtonId: buttonId || 'test-button-id' // Fallback for testing
-              }).render(`#${containerId}`);
-            } else {
-              console.error(`PayPal container #${containerId} not found`);
-              setPaypalError(`Could not find payment container`);
-            }
-          } catch (err: any) {
-            console.error("Error rendering PayPal button:", err);
-            setPaypalError(`Could not display PayPal button: ${err.message || String(err)}`);
-            toast({
-              title: "PayPal Error",
-              description: "There was an issue displaying the PayPal button. Please try again.",
-              variant: "destructive"
-            });
+        // Short delay to ensure DOM is stable before rendering
+        setTimeout(() => {
+          if (buttonId) {
+            renderPayPalButton(containerId, buttonId);
           }
-        } else {
-          setPaypalError("PayPal HostedButtons not available");
-          toast({
-            title: "PayPal Not Available",
-            description: "The PayPal payment system is not available right now. Please try again later.",
-            variant: "destructive"
-          });
-        }
+        }, 100);
       })
       .catch((err: any) => {
         console.error("Error loading PayPal:", err);
@@ -134,16 +104,7 @@ export function PricingCard({
     if (showPayPal && buttonId) {
       loadPayPalScript();
     }
-    
-    // Cleanup function - crucial for preventing the DOM removal error
-    return () => {
-      resetPayPalContainer(containerId); // Safely clear container first
-      if (!showPayPal) {
-        // When modal closes, cleanup PayPal resources
-        cleanupPayPal();
-      }
-    };
-  }, [showPayPal, buttonId, type, billingCycle, containerId]);
+  }, [showPayPal, buttonId]);
   
   const handleSelectPlan = () => {
     // If user is not authenticated, redirect to login
@@ -164,8 +125,6 @@ export function PricingCard({
   };
 
   const handleClosePayPal = () => {
-    // Before closing modal, make sure to clean up the container
-    resetPayPalContainer(containerId);
     // Close the modal
     setShowPayPal(false);
   };
@@ -233,7 +192,6 @@ export function PricingCard({
             
             <div
               id={containerId}
-              ref={paypalContainerRef}
               className="min-w-[300px] min-h-[150px] flex items-center justify-center"
             >
               {isLoadingPayPal && !paypalError && (

@@ -1,36 +1,45 @@
 
 let loaded = false;
 let scriptInjected = false;
-let currentScript: HTMLScriptElement | null = null;
+
+// Client ID from user-provided PayPal credentials
+const CLIENT_ID = "BAAatRVr-J8kMeDiDC_MUjCVoKzFSP6EXRRMnDDZ81KyGnPs2tEXwM0lXqp28xxEj4Vcrx79R3fPbM_Tms";
 
 export function loadPayPal(): Promise<void> {
   // If already loaded successfully, just resolve
-  if (loaded) return Promise.resolve();
+  if (loaded && window.paypal && window.paypal.HostedButtons) {
+    return Promise.resolve();
+  }
   
   return new Promise((resolve, reject) => {
     try {
-      // Clean up any existing PayPal script tags to avoid conflicts, but do it safely
-      if (!scriptInjected) {
-        const existingScripts = document.querySelectorAll('script[src*="paypal.com/sdk/js"]');
-        existingScripts.forEach(script => {
-          try {
-            // Check if the element is still in the DOM and has a parent before removing
-            if (script.parentNode && document.body.contains(script)) {
-              const parent = script.parentNode;
-              parent.removeChild(script);
+      // If script is already in the process of loading, don't add another
+      if (scriptInjected) {
+        // Check if we can find the script on the page
+        const existingScript = document.querySelector('script[src*="paypal.com/sdk/js"]');
+        if (existingScript) {
+          // Wait for the existing script to load
+          const checkPayPal = setInterval(() => {
+            if (window.paypal && window.paypal.HostedButtons) {
+              clearInterval(checkPayPal);
+              loaded = true;
+              resolve();
             }
-          } catch (err) {
-            console.warn("Error removing existing PayPal script:", err);
-          }
-        });
+          }, 100);
+          
+          // Set a timeout to prevent infinite checking
+          setTimeout(() => {
+            clearInterval(checkPayPal);
+            reject(new Error('PayPal SDK initialization timed out'));
+          }, 10000);
+          
+          return;
+        }
       }
       
-      // Create a new script element
+      // Add PayPal script to head as recommended by PayPal
       const script = document.createElement('script');
-      currentScript = script;
-      
-      // Use a sandbox client ID for development
-      script.src = 'https://www.paypal.com/sdk/js?client-id=sb&components=hosted-buttons&enable-funding=venmo&currency=USD';
+      script.src = `https://www.paypal.com/sdk/js?client-id=${CLIENT_ID}&components=hosted-buttons&enable-funding=venmo&currency=USD`;
       script.async = true;
       
       script.onload = () => {
@@ -38,7 +47,6 @@ export function loadPayPal(): Promise<void> {
         
         // Give the SDK a moment to initialize
         setTimeout(() => {
-          // Check if PayPal and HostedButtons are actually available
           if (window.paypal && window.paypal.HostedButtons) {
             loaded = true;
             console.log("PayPal HostedButtons component available");
@@ -47,24 +55,17 @@ export function loadPayPal(): Promise<void> {
             console.error("PayPal SDK loaded but HostedButtons not available");
             reject(new Error('PayPal SDK loaded but HostedButtons component not available'));
           }
-        }, 500); // Increased timeout for slower connections
+        }, 500);
       };
       
       script.onerror = (error) => {
         console.error("PayPal script failed to load:", error);
-        // Better error handling
-        let errorMessage = 'Failed to load PayPal SDK';
-        if (error instanceof Event) {
-          errorMessage += ': Script loading error';
-        } else {
-          errorMessage += ': ' + String(error);
-        }
-        reject(new Error(errorMessage));
+        reject(new Error(`Failed to load PayPal SDK: ${error instanceof Event ? "[Error loading script]" : String(error)}`));
       };
       
       // Mark that we've attempted to inject the script
       scriptInjected = true;
-      document.body.appendChild(script);
+      document.head.appendChild(script);
       
       // Set a timeout in case the script loads but doesn't properly initialize
       setTimeout(() => {
@@ -79,37 +80,33 @@ export function loadPayPal(): Promise<void> {
   });
 }
 
-// Function to safely clean up PayPal resources
-export function cleanupPayPal(): void {
-  // Reset state
-  if (!loaded) {
-    if (currentScript) {
-      try {
-        // Check if the script is still in the DOM and has a parent before removing
-        if (currentScript.parentNode && document.body.contains(currentScript)) {
-          currentScript.parentNode.removeChild(currentScript);
-        }
-        currentScript = null;
-        scriptInjected = false;
-      } catch (err) {
-        console.warn("Error removing PayPal script during cleanup:", err);
-      }
-    }
-  }
-}
-
-// Helper function to safely check if PayPal is loaded
+// Check if PayPal is loaded
 export function isPayPalLoaded(): boolean {
   return loaded && !!window.paypal && !!window.paypal.HostedButtons;
 }
 
-// Helper to safely reset container
-export function resetPayPalContainer(containerId: string): void {
-  const container = document.getElementById(containerId);
-  if (container) {
-    // Safely clear the container
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
+// Safely render PayPal button to container
+export function renderPayPalButton(containerId: string, buttonId: string): void {
+  if (!isPayPalLoaded()) {
+    console.error("PayPal not loaded, cannot render button");
+    return;
+  }
+  
+  try {
+    // Make sure the container exists before trying to render
+    const container = document.getElementById(containerId);
+    if (container) {
+      // Clear the container first
+      container.innerHTML = '';
+      
+      // Render the button with the correct button ID
+      window.paypal.HostedButtons({
+        hostedButtonId: buttonId
+      }).render(`#${containerId}`);
+    } else {
+      console.error(`PayPal container #${containerId} not found`);
     }
+  } catch (err) {
+    console.error("Error rendering PayPal button:", err);
   }
 }
