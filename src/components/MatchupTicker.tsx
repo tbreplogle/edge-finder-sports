@@ -3,7 +3,9 @@ import { useState, useEffect } from 'react';
 import { SportSelector } from './ticker/SportSelector';
 import { DateSelector } from './ticker/DateSelector';
 import { TickerContent } from './ticker/TickerContent';
-import { Info } from 'lucide-react';
+import { Info, Activity } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import {
   fetchOdds,
   convertToTickerGames,
@@ -159,6 +161,15 @@ export function MatchupTicker() {
               onDateChange={setSelectedDate}
             />
           )}
+          
+          <div className="flex items-center">
+            <Link to="/line-tracker">
+              <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Activity className="h-3.5 w-3.5" />
+                <span className="text-xs">Line Tracker</span>
+              </Button>
+            </Link>
+          </div>
           
           <div className="hidden sm:flex items-center text-xs text-muted-foreground ml-auto">
             <Info className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1 sm:mr-1.5" />
