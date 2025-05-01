@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,18 +34,28 @@ type NflTeamStats = {
   ydsPerGame: number;
 };
 
+type NflMatchup = {
+  game_id: string;
+  away: string;
+  home: string;
+};
+
 type NflDataResponse = {
   team_stats: Record<string, NflTeamStats>;
-  matchups: { game_id: string; away: string; home: string }[];
+  matchups: NflMatchup[];
 };
 
 export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   const [activeDataTab, setActiveDataTab] = useState<string>("teamStats");
   const [data, setData] = useState<{
     teamStats: Record<string, TeamStats> | Record<string, NflTeamStats>;
-    matchups: Matchup[] | { game_id: string; away: string; home: string }[];
+    matchups: Matchup[] | NflMatchup[];
     pitchers: Record<string, PitcherStats>;
-  } | null>(null);
+  }>({
+    teamStats: {},
+    matchups: [],
+    pitchers: {}
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedLeague, setSelectedLeague] = useState<string>("mlb");
@@ -70,7 +79,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
     
     try {
       let teamStats: Record<string, TeamStats | NflTeamStats> = {};
-      let matchups: Matchup[] | { game_id: string; away: string; home: string }[] = [];
+      let matchups: Matchup[] | NflMatchup[] = [];
       let pitchers: Record<string, PitcherStats> = {};
       
       if (selectedLeague === "mlb") {
@@ -99,7 +108,14 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         
         // Handle matchup data safely
         if (matchupData && Array.isArray(matchupData)) {
-          matchups = matchupData as Matchup[];
+          // Convert JSON data to Matchup[] type
+          matchups = matchupData.map((item: any) => ({
+            game_id: item.game_id,
+            home: item.home,
+            away: item.away,
+            moneyline: item.moneyline,
+            moneyline_opponent: item.moneyline_opponent
+          })) as Matchup[];
           
           // Extract pitcher data from matchups (if available)
           pitchers = (matchupData as any[]).reduce((acc: Record<string, PitcherStats>, game: any) => {
@@ -145,7 +161,6 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
     } catch (err: any) {
       console.error(`Error loading ${selectedLeague} prediction data:`, err);
       setError(err.message || `Failed to load ${selectedLeague.toUpperCase()} prediction data`);
-      setData(null);
     } finally {
       setIsLoading(false);
     }
@@ -265,7 +280,7 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         case "teamStats":
           return <NflTeamStatsTable teamStats={data.teamStats as Record<string, NflTeamStats>} />;
         case "matchups":
-          return <NflMatchupsTable matchups={data.matchups as {game_id: string; away: string; home: string}[]} />;
+          return <NflMatchupsTable matchups={data.matchups as NflMatchup[]} />;
         default:
           return (
             <Alert>

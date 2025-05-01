@@ -9,6 +9,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      mlb_matchups: {
+        Row: {
+          away_team: string | null
+          created_at: string | null
+          game_date: string | null
+          game_id: string
+          home_team: string | null
+        }
+        Insert: {
+          away_team?: string | null
+          created_at?: string | null
+          game_date?: string | null
+          game_id: string
+          home_team?: string | null
+        }
+        Update: {
+          away_team?: string | null
+          created_at?: string | null
+          game_date?: string | null
+          game_id?: string
+          home_team?: string | null
+        }
+        Relationships: []
+      }
+      pitcher_stats: {
+        Row: {
+          era_plus: number | null
+          game_id: string
+          side: string
+          team_abbr: string | null
+          whip: number | null
+        }
+        Insert: {
+          era_plus?: number | null
+          game_id: string
+          side: string
+          team_abbr?: string | null
+          whip?: number | null
+        }
+        Update: {
+          era_plus?: number | null
+          game_id?: string
+          side?: string
+          team_abbr?: string | null
+          whip?: number | null
+        }
+        Relationships: []
+      }
       predictions: {
         Row: {
           away_ml: number | null
@@ -63,6 +111,30 @@ export type Database = {
           predicted_total?: number | null
           sport?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      team_stats: {
+        Row: {
+          ba: number | null
+          hr: number | null
+          hra: number | null
+          team_abbr: string
+          updated_at: string | null
+        }
+        Insert: {
+          ba?: number | null
+          hr?: number | null
+          hra?: number | null
+          team_abbr: string
+          updated_at?: string | null
+        }
+        Update: {
+          ba?: number | null
+          hr?: number | null
+          hra?: number | null
+          team_abbr?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
