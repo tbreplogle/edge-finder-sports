@@ -10,9 +10,9 @@ export function generateSampleMlbData(): GameProps[] {
     {
       id: "685100",
       sport: "mlb",
-      homeTeam: "NYY",
-      awayTeam: "BOS",
-      startTime: `${todayDateStr}T18:05:00Z`,
+      homeTeam: "PHI",
+      awayTeam: "WSH",
+      startTime: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
       marketSpread: -1.5,
       predictedMargin: 1.8,
       edge: 3.3,
@@ -23,9 +23,9 @@ export function generateSampleMlbData(): GameProps[] {
     {
       id: "685101",
       sport: "mlb",
-      homeTeam: "LAD",
-      awayTeam: "SF",
-      startTime: `${todayDateStr}T19:10:00Z`,
+      homeTeam: "TOR",
+      awayTeam: "BOS",
+      startTime: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
       marketSpread: -1,
       predictedMargin: 1.2,
       edge: 2.2,
@@ -35,37 +35,73 @@ export function generateSampleMlbData(): GameProps[] {
     {
       id: "685102",
       sport: "mlb",
-      homeTeam: "HOU",
-      awayTeam: "TEX",
-      startTime: `${todayDateStr}T17:10:00Z`,
-      marketSpread: 0,
-      predictedMargin: -0.5,
-      edge: -0.5,
-      confidence: 52,
+      homeTeam: "LAA",
+      awayTeam: "DET",
+      startTime: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
+      marketSpread: 1.5,
+      predictedMargin: -0.8,
+      edge: -2.3,
+      confidence: 56,
       isPremium: true
     },
     {
       id: "685103",
       sport: "mlb",
-      homeTeam: "CHC",
-      awayTeam: "STL",
-      startTime: `${todayDateStr}T13:20:00Z`,
-      marketSpread: 1,
-      predictedMargin: -1.5,
-      edge: -2.5,
-      confidence: 60,
+      homeTeam: "SF",
+      awayTeam: "COL",
+      startTime: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
+      marketSpread: -2,
+      predictedMargin: 2.5,
+      edge: 4.5,
+      confidence: 65,
       isPremium: true
     },
     {
       id: "685104",
       sport: "mlb",
-      homeTeam: "ATL",
-      awayTeam: "PHI",
-      startTime: `${todayDateStr}T18:20:00Z`,
+      homeTeam: "LAD",
+      awayTeam: "SD",
+      startTime: `${todayDateStr}T02:10:00Z`, // 10:10 p.m. ET
       marketSpread: -1,
       predictedMargin: 1.3,
       edge: 2.3,
       confidence: 57,
+      isPremium: true
+    },
+    {
+      id: "685105",
+      sport: "mlb",
+      homeTeam: "SEA",
+      awayTeam: "OAK",
+      startTime: `${todayDateStr}T02:15:00Z`, // 10:15 p.m. ET
+      marketSpread: -1.5,
+      predictedMargin: 2.1,
+      edge: 3.6,
+      confidence: 61,
+      isPremium: true
+    },
+    {
+      id: "685106",
+      sport: "mlb",
+      homeTeam: "CLE",
+      awayTeam: "KC",
+      startTime: `${todayDateStr}T18:10:00Z`, // 2:10 p.m. ET
+      marketSpread: -1,
+      predictedMargin: 1.4,
+      edge: 2.4,
+      confidence: 58,
+      isPremium: true
+    },
+    {
+      id: "685107",
+      sport: "mlb",
+      homeTeam: "NYM",
+      awayTeam: "ATL",
+      startTime: `${todayDateStr}T19:10:00Z`, // 3:10 p.m. ET
+      marketSpread: 1,
+      predictedMargin: -0.7,
+      edge: -1.7,
+      confidence: 55,
       isPremium: true
     }
   ];
