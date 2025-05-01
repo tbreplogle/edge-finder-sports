@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,14 +6,6 @@ import { cn } from "@/lib/utils";
 import { loadPayPal, isPayPalLoaded, renderPayPalButton } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogClose
-} from "@/components/ui/dialog";
 
 interface PricingFeature {
   text: string;
@@ -37,16 +28,16 @@ interface PricingCardProps {
 // PayPal button IDs for different plans and billing cycles
 const PAYPAL_BUTTON_IDS = {
   basic: {
-    monthly: null,
-    yearly: null
+    monthly: "TPLREYRLUKUL4", // Demo button ID for basic monthly
+    yearly: "STU5JRQLPCNPS"   // Demo button ID for basic yearly
   },
   premium: {
-    monthly: "V953RFZLU5TLL", // Production button ID
-    yearly: "V953RYYYYYYY"
+    monthly: "V953RFZLU5TLL", // Production button ID for premium monthly
+    yearly: "DSXNW4WZXKR6S"   // Production button ID for premium yearly
   },
   enterprise: {
-    monthly: "V953RFENTER",
-    yearly: "V953RFENTERYR"
+    monthly: "6MSNH8L4LWVGY", // Production button ID for enterprise monthly
+    yearly: "YFPNWKVSSTX9W"   // Production button ID for enterprise yearly
   }
 };
 
@@ -187,7 +178,7 @@ export function PricingCard({
         </Button>
       </CardFooter>
       
-      {/* Updated PayPal Modal */}
+      {/* PayPal Modal */}
       {showPayPal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div
