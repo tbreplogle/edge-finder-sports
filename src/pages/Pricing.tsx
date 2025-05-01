@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AppLayout } from "@/components/AppLayout";
+
 const Pricing = () => {
   const navigate = useNavigate();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
@@ -33,78 +34,88 @@ const Pricing = () => {
       setCurrentPlan(null);
     }
   }, []);
-  const basicFeatures = [{
-    text: "Today's games preview",
-    included: true
-  }, {
-    text: "NFL edges up to ±2 points",
-    included: true
-  }, {
-    text: "Basic mobile access",
-    included: true
-  }, {
-    text: "Full edge values",
-    included: false
-  }, {
-    text: "Historical dashboard",
-    included: false
-  }, {
-    text: "Custom alerts",
-    included: false
-  }, {
-    text: "CSV exports",
-    included: false
-  }];
-  const premiumFeatures = [{
-    text: "Today's games preview",
-    included: true
-  }, {
-    text: "NFL edges up to ±2 points",
-    included: true
-  }, {
-    text: "Basic mobile access",
-    included: true
-  }, {
-    text: "Full edge values",
-    included: true
-  }, {
-    text: "Historical dashboard",
-    included: true
-  }, {
-    text: "Custom alerts",
-    included: true
-  }, {
-    text: "CSV exports",
-    included: true
-  }];
-  const enterpriseFeatures = [{
-    text: "Today's games preview",
-    included: true
-  }, {
-    text: "NFL edges up to ±2 points",
-    included: true
-  }, {
-    text: "Basic mobile access",
-    included: true
-  }, {
-    text: "Full edge values",
-    included: true
-  }, {
-    text: "Historical dashboard",
-    included: true
-  }, {
-    text: "Custom alerts",
-    included: true
-  }, {
-    text: "CSV exports",
-    included: true
-  }, {
-    text: "API access",
-    included: true
-  }, {
-    text: "Private formula consultation",
-    included: true
-  }];
+  
+  const basicFeatures = [
+    {
+      text: "Today's games preview",
+      included: true
+    }, {
+      text: "NFL edges up to ±2 points",
+      included: true
+    }, {
+      text: "Basic mobile access",
+      included: true
+    }, {
+      text: "Full edge values",
+      included: false
+    }, {
+      text: "Historical dashboard",
+      included: false
+    }, {
+      text: "Custom alerts",
+      included: false
+    }, {
+      text: "CSV exports",
+      included: false
+    }
+  ];
+  
+  const premiumFeatures = [
+    {
+      text: "Today's games preview",
+      included: true
+    }, {
+      text: "NFL edges up to ±2 points",
+      included: true
+    }, {
+      text: "Basic mobile access",
+      included: true
+    }, {
+      text: "Full edge values",
+      included: true
+    }, {
+      text: "Historical dashboard",
+      included: true
+    }, {
+      text: "Custom alerts",
+      included: true
+    }, {
+      text: "CSV exports",
+      included: true
+    }
+  ];
+  
+  const enterpriseFeatures = [
+    {
+      text: "Today's games preview",
+      included: true
+    }, {
+      text: "NFL edges up to ±2 points",
+      included: true
+    }, {
+      text: "Basic mobile access",
+      included: true
+    }, {
+      text: "Full edge values",
+      included: true
+    }, {
+      text: "Historical dashboard",
+      included: true
+    }, {
+      text: "Custom alerts",
+      included: true
+    }, {
+      text: "CSV exports",
+      included: true
+    }, {
+      text: "API access",
+      included: true
+    }, {
+      text: "Private formula consultation",
+      included: true
+    }
+  ];
+  
   const handleSelectPlan = (plan: string) => {
     // For demo purposes just log the selected plan
     console.log(`Selected plan: ${plan}`);
@@ -113,9 +124,11 @@ const Pricing = () => {
       navigate("/auth/register");
     }
   };
+  
   const handleBillingToggle = () => {
     setBillingCycle(billingCycle === "monthly" ? "yearly" : "monthly");
   };
+  
   return <AppLayout>
       <main className="flex-1 container py-12">
         <div className="text-center max-w-3xl mx-auto mb-12">
@@ -139,11 +152,42 @@ const Pricing = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          <PricingCard type="basic" title="Basic" price="Free" description="For casual fans just getting started" features={basicFeatures} isCurrentPlan={isAuthenticated && currentPlan === "basic"} billingCycle={billingCycle} onSelectPlan={() => handleSelectPlan("basic")} isAuthenticated={isAuthenticated} />
+          <PricingCard 
+            type="basic" 
+            title="Basic" 
+            price="Free" 
+            description="For casual fans just getting started" 
+            features={basicFeatures} 
+            isCurrentPlan={isAuthenticated && currentPlan === "basic"} 
+            billingCycle={billingCycle} 
+            onSelectPlan={() => handleSelectPlan("basic")} 
+            isAuthenticated={isAuthenticated} 
+          />
           
-          <PricingCard type="premium" title="Premium" price={billingCycle === "monthly" ? "$19.99" : "$203.88"} description="For serious bettors and analysts" features={premiumFeatures} highlighted={true} isCurrentPlan={isAuthenticated && currentPlan === "premium"} billingCycle={billingCycle} onSelectPlan={() => handleSelectPlan("premium")} isAuthenticated={isAuthenticated} />
+          <PricingCard 
+            type="premium" 
+            title="Premium" 
+            price={billingCycle === "monthly" ? "$20/month" : "$200/year"} 
+            description="For serious bettors and analysts" 
+            features={premiumFeatures} 
+            highlighted={true} 
+            isCurrentPlan={isAuthenticated && currentPlan === "premium"} 
+            billingCycle={billingCycle} 
+            onSelectPlan={() => handleSelectPlan("premium")} 
+            isAuthenticated={isAuthenticated} 
+          />
           
-          <PricingCard type="enterprise" title="Enterprise" price={billingCycle === "monthly" ? "$99.99" : "$1,019.88"} description="For professional organizations" features={enterpriseFeatures} isCurrentPlan={isAuthenticated && currentPlan === "enterprise"} billingCycle={billingCycle} onSelectPlan={() => handleSelectPlan("enterprise")} isAuthenticated={isAuthenticated} />
+          <PricingCard 
+            type="enterprise" 
+            title="Enterprise" 
+            price={billingCycle === "monthly" ? "$100/month" : "$1,000/year"} 
+            description="For professional organizations" 
+            features={enterpriseFeatures} 
+            isCurrentPlan={isAuthenticated && currentPlan === "enterprise"} 
+            billingCycle={billingCycle} 
+            onSelectPlan={() => handleSelectPlan("enterprise")} 
+            isAuthenticated={isAuthenticated} 
+          />
         </div>
         
         <div className="max-w-3xl mx-auto mt-16">
@@ -165,11 +209,6 @@ const Pricing = () => {
             <div>
               <h3 className="font-medium mb-2">What payment methods do you accept?</h3>
               <p className="text-muted-foreground">We only accept PayPal through our secure payment processor.</p>
-            </div>
-            
-            <div>
-              
-              
             </div>
           </div>
         </div>
@@ -206,4 +245,5 @@ const Pricing = () => {
       </main>
     </AppLayout>;
 };
+
 export default Pricing;

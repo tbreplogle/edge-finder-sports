@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -156,7 +155,6 @@ export function PricingCard({
         </CardTitle>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-bold">{price}</span>
-          {price !== "Free" && <span className="text-muted-foreground">/{billingCycle === "monthly" ? "month" : "year"}</span>}
         </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
@@ -207,14 +205,13 @@ export function PricingCard({
             </button>
 
             <h3 className="text-lg font-semibold">{title} Plan</h3>
-            <p className="text-sm text-muted-foreground">
-              {price}/{billingCycle === "monthly" ? "month" : "year"}
-            </p>
+            <p className="text-sm text-muted-foreground">{price}</p>
 
             {/* PayPal button container */}
             <div
               id={containerId}
               className="paypal-hosted-button w-full min-h-[48px]"
+              style={{ width: "100%" }}
             >
               {isLoadingPayPal && !paypalError && (
                 <div className="py-4 text-center">
