@@ -55,24 +55,44 @@ export function PricingCard({
 }: PricingCardProps) {
   const [showPayPal, setShowPayPal] = useState(false);
   const [paypalLoaded, setPaypalLoaded] = useState(false);
+  const [paypalError, setPaypalError] = useState<string | null>(null);
   const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
   const navigate = useNavigate();
   
   useEffect(() => {
     if (!showPayPal || !buttonId) return;
     
-    loadPayPal().then(() => {
-      setPaypalLoaded(true);
-      // @ts-ignore - PayPal SDK is loaded dynamically
-      if (window.paypal && window.paypal.HostedButtons) {
-        // @ts-ignore - PayPal types aren't available
-        window.paypal.HostedButtons({ 
-          hostedButtonId: buttonId
-        }).render(`#paypal-container-${type}-${billingCycle}`);
-      }
-    }).catch(err => {
-      console.error("Error loading PayPal:", err);
-    });
+    // Reset error state on each attempt
+    setPaypalError(null);
+    
+    loadPayPal()
+      .then(() => {
+        setPaypalLoaded(true);
+        
+        // Ensure the PayPal object and HostedButtons are available
+        if (window.paypal && window.paypal.HostedButtons) {
+          try {
+            // Clear the container first to prevent duplicated buttons
+            const container = document.getElementById(`paypal-container-${type}-${billingCycle}`);
+            if (container) container.innerHTML = '';
+            
+            // Render the button with the correct button ID (Fix #4)
+            window.paypal.HostedButtons({ 
+              hostedButtonId: buttonId 
+            }).render(`#paypal-container-${type}-${billingCycle}`);
+          } catch (err) {
+            console.error("Error rendering PayPal button:", err);
+            setPaypalError(`Could not display PayPal button: ${err.message}`);
+          }
+        } else {
+          setPaypalError("PayPal Hosted Buttons not available");
+        }
+      })
+      .catch(err => {
+        console.error("Error loading PayPal:", err);
+        setPaypalError(`PayPal error: ${err.message}`);
+        setPaypalLoaded(false);
+      });
   }, [showPayPal, buttonId, type, billingCycle]);
   
   const handleSelectPlan = () => {
@@ -158,9 +178,15 @@ export function PricingCard({
               id={`paypal-container-${type}-${billingCycle}`}
               className="min-w-[300px]"
             >
-              {!paypalLoaded && (
+              {!paypalLoaded && !paypalError && (
                 <div className="py-4 text-center text-sm text-muted-foreground">
                   Loading PayPal...
+                </div>
+              )}
+              
+              {paypalError && (
+                <div className="py-4 text-center text-sm text-red-500">
+                  {paypalError}
                 </div>
               )}
             </div>
