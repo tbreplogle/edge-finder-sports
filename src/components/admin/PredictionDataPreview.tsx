@@ -46,6 +46,12 @@ type NflDataResponse = {
   matchups: NflMatchup[];
 };
 
+// Define types for RPC function responses
+type RpcResponse<T> = {
+  data: T | null;
+  error: Error | null;
+};
+
 export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
   const [activeDataTab, setActiveDataTab] = useState<string>("teamStats");
   const [data, setData] = useState<{
@@ -84,9 +90,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
       let pitchers: Record<string, PitcherStats> = {};
       
       if (selectedLeague === "mlb") {
-        // Fetch MLB team stats - use type assertion for the RPC function
+        // Fetch MLB team stats
         const { data: teamData, error: teamError } = await supabase
-          .rpc('get_mlb_team_stats') as { data: any, error: any };
+          .rpc<any>('get_mlb_team_stats');
         
         if (teamError) throw teamError;
         
@@ -104,9 +110,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           teamStats = mlbTeamStats;
         }
         
-        // Fetch MLB matchups - use type assertion for the RPC function
+        // Fetch MLB matchups
         const { data: matchupData, error: matchupError } = await supabase
-          .rpc('get_mlb_matchups') as { data: any, error: any };
+          .rpc<any>('get_mlb_matchups');
         
         if (matchupError) throw matchupError;
         
@@ -135,9 +141,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
           }, {});
         }
       } else if (selectedLeague === "nfl") {
-        // Fetch NFL data - use type assertion for the RPC function
+        // Fetch NFL data
         const { data: nflData, error: nflError } = await supabase
-          .rpc('get_nfl_data') as { data: any, error: any };
+          .rpc<any>('get_nfl_data');
         
         if (nflError) throw nflError;
         
