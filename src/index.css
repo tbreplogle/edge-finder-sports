@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -91,5 +92,10 @@
   .premium-mask {
     @apply absolute inset-0 flex items-center justify-center bg-black/60 text-white rounded pointer-events-auto;
     user-select: none;
+  }
+
+  /* Ensure PayPal iframe takes full width */
+  .paypal-hosted-button iframe { 
+    width: 100% !important; 
   }
 }

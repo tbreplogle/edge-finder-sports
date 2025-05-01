@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,52 +187,63 @@ export function PricingCard({
         </Button>
       </CardFooter>
       
-      <Dialog open={showPayPal} onOpenChange={setShowPayPal}>
-        <DialogContent className="bg-background text-foreground max-w-md w-full border border-border rounded-lg">
-          <DialogHeader>
-            <DialogTitle className="text-center text-xl font-semibold">{title} Plan</DialogTitle>
-            <DialogDescription className="text-center">
-              {price}/{billingCycle === "monthly" ? "month" : "year"}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div 
-            id={containerId}
-            className="min-w-[280px] min-h-[150px] flex items-center justify-center py-4 mx-auto"
+      {/* Updated PayPal Modal */}
+      {showPayPal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div
+            className="w-[90vw] max-w-sm sm:max-w-md rounded-lg bg-background p-6 shadow-2xl
+                     flex flex-col items-center text-center space-y-5"
           >
-            {isLoadingPayPal && !paypalError && (
-              <div className="py-4 text-center">
-                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
-                <p className="text-sm text-muted-foreground">Loading PayPal...</p>
-              </div>
-            )}
-            
-            {paypalError && (
-              <div className="py-4 text-center">
-                <p className="text-sm text-red-500 mb-4">{paypalError}</p>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={loadPayPalScript}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  Try Again
-                </Button>
-              </div>
-            )}
-          </div>
-          
-          <DialogClose asChild>
-            <Button 
-              variant="ghost" 
-              className="w-full"
+            <button
+              onClick={() => setShowPayPal(false)}
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="text-lg font-semibold">{title} Plan</h3>
+            <p className="text-sm text-muted-foreground">
+              {price}/{billingCycle === "monthly" ? "month" : "year"}
+            </p>
+
+            {/* PayPal button container */}
+            <div
+              id={containerId}
+              className="paypal-hosted-button w-full min-h-[48px]"
+            >
+              {isLoadingPayPal && !paypalError && (
+                <div className="py-4 text-center">
+                  <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">Loading PayPal...</p>
+                </div>
+              )}
+              
+              {paypalError && (
+                <div className="py-4 text-center">
+                  <p className="text-sm text-red-500 mb-4">{paypalError}</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={loadPayPalScript}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    Try Again
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowPayPal(false)}
+              className="text-xs underline text-muted-foreground hover:text-foreground"
             >
               Cancel
-            </Button>
-          </DialogClose>
-        </DialogContent>
-      </Dialog>
+            </button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
