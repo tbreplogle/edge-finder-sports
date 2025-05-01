@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckIcon, RefreshCcw } from "lucide-react";
+import { CheckIcon, RefreshCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { loadPayPal, isPayPalLoaded, renderPayPalButton } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
@@ -104,6 +104,11 @@ export function PricingCard({
     if (showPayPal && buttonId) {
       loadPayPalScript();
     }
+    
+    // Clean up function to manage cleanup when modal closes
+    return () => {
+      // No need to do anything specific here as we're using a better container management approach
+    };
   }, [showPayPal, buttonId]);
   
   const handleSelectPlan = () => {
@@ -181,18 +186,26 @@ export function PricingCard({
       </CardFooter>
       
       {showPayPal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 shadow-lg max-w-md w-full">
-            <div className="text-center mb-4">
-              <h3 className="font-medium">{title} Plan</h3>
-              <p className="text-sm text-muted-foreground">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-lg p-6 shadow-lg max-w-md w-full relative">
+            <button 
+              onClick={handleClosePayPal}
+              className="absolute right-4 top-4 p-1 rounded-full hover:bg-muted"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-medium">{title} Plan</h3>
+              <p className="text-sm text-muted-foreground mt-1">
                 {price}/{billingCycle === "monthly" ? "month" : "year"}
               </p>
             </div>
             
             <div
               id={containerId}
-              className="min-w-[300px] min-h-[150px] flex items-center justify-center"
+              className="min-w-[300px] min-h-[150px] flex items-center justify-center py-4"
             >
               {isLoadingPayPal && !paypalError && (
                 <div className="py-4 text-center">

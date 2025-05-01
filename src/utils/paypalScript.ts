@@ -38,8 +38,9 @@ export function loadPayPal(): Promise<void> {
       }
       
       // Add PayPal script to head as recommended by PayPal
+      // Remove venmo from enable-funding to disable it
       const script = document.createElement('script');
-      script.src = `https://www.paypal.com/sdk/js?client-id=${CLIENT_ID}&components=hosted-buttons&enable-funding=venmo&currency=USD`;
+      script.src = `https://www.paypal.com/sdk/js?client-id=${CLIENT_ID}&components=hosted-buttons&currency=USD`;
       script.async = true;
       
       script.onload = () => {
@@ -85,7 +86,7 @@ export function isPayPalLoaded(): boolean {
   return loaded && !!window.paypal && !!window.paypal.HostedButtons;
 }
 
-// Safely render PayPal button to container
+// Safely render PayPal button to container with styling options
 export function renderPayPalButton(containerId: string, buttonId: string): void {
   if (!isPayPalLoaded()) {
     console.error("PayPal not loaded, cannot render button");
@@ -99,9 +100,27 @@ export function renderPayPalButton(containerId: string, buttonId: string): void 
       // Clear the container first
       container.innerHTML = '';
       
-      // Render the button with the correct button ID
+      // Render the button with the correct button ID and styling
       window.paypal.HostedButtons({
-        hostedButtonId: buttonId
+        hostedButtonId: buttonId,
+        onInit: function(data) {
+          // Add custom styling for PayPal buttons after they render
+          setTimeout(() => {
+            const styles = document.createElement('style');
+            styles.innerHTML = `
+              .paypal-button.paypal-button-number-0 {
+                max-width: 300px !important;
+                margin: 0 auto !important;
+              }
+              
+              /* Hide any non-PayPal buttons (like Venmo) */
+              .paypal-button:not(.paypal-button-number-0) {
+                display: none !important;
+              }
+            `;
+            document.head.appendChild(styles);
+          }, 100);
+        }
       }).render(`#${containerId}`);
     } else {
       console.error(`PayPal container #${containerId} not found`);
