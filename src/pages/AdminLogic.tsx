@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import Editor from "@monaco-editor/react";
@@ -8,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { SPORT_KEYS, SportKey } from "@/utils/config/sportKeys";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, Download, Code, Eye } from "lucide-react";
+import { RefreshCw, Download, Code, Eye, Database } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -419,12 +418,23 @@ const AdminLogic = () => {
             </Button>
           </div>
           
-          <Button
-            variant="outline"
-            onClick={() => navigate("/dashboard")}
-          >
-            View Dashboard
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => navigate("/admin/preview")}
+            >
+              <Database className="h-4 w-4" />
+              Preview Data
+            </Button>
+            
+            <Button
+              variant="outline"
+              onClick={() => navigate("/dashboard")}
+            >
+              View Dashboard
+            </Button>
+          </div>
         </div>
         
         {/* Error display */}
