@@ -17,9 +17,6 @@ export function HeaderNavLinks({ showAdminTab = true }: HeaderNavLinksProps) {
       <Link to="/injuries" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
         Injuries
       </Link>
-      <Link to="/injury-resources" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
-        Injury Resources
-      </Link>
       <Link to="/pricing" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
         Pricing
       </Link>
