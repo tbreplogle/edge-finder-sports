@@ -1,3 +1,4 @@
+
 import { AppLayout } from "@/components/AppLayout";
 import { SportTabs } from "@/components/SportTabs";
 import { TabsContent } from "@/components/ui/tabs";
@@ -14,7 +15,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { format } from "date-fns";
+import { format, addDays, setHours, setMinutes, setSeconds, isBefore } from "date-fns";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -27,6 +28,33 @@ const Dashboard = () => {
   const [generatedDate, setGeneratedDate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [refreshTime, setRefreshTime] = useState<string | null>("08:00 AM CT");
+  const [nextRefreshDate, setNextRefreshDate] = useState<string | null>(null);
+  
+  // Calculate next Tuesday at 8:00 AM CT
+  useEffect(() => {
+    const calculateNextTuesday = () => {
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0 is Sunday, 1 is Monday, 2 is Tuesday, etc.
+      
+      // Calculate days until next Tuesday (2)
+      const daysUntilNextTuesday = (dayOfWeek <= 2) ? (2 - dayOfWeek) : (9 - dayOfWeek);
+      
+      // Set next Tuesday at 8:00 AM CT
+      let nextTuesday = addDays(now, daysUntilNextTuesday);
+      nextTuesday = setHours(nextTuesday, 8);
+      nextTuesday = setMinutes(nextTuesday, 0);
+      nextTuesday = setSeconds(nextTuesday, 0);
+      
+      // If it's Tuesday and already past 8:00 AM CT, move to next week
+      if (dayOfWeek === 2 && isBefore(nextTuesday, now)) {
+        nextTuesday = addDays(nextTuesday, 7);
+      }
+      
+      return format(nextTuesday, "EEE, MMM d, yyyy 'at' h:mm a 'CT'");
+    };
+    
+    setNextRefreshDate(calculateNextTuesday());
+  }, []);
   
   // Check authentication state
   useEffect(() => {
@@ -190,6 +218,17 @@ const Dashboard = () => {
             </Button>
           </div>
         </div>
+        
+        {nextRefreshDate && (
+          <Alert className="mb-6 bg-muted">
+            <Clock className="h-4 w-4" />
+            <AlertTitle>Automated Predictions</AlertTitle>
+            <AlertDescription>
+              Predictions are automatically refreshed every Tuesday at 8:00 AM CT. 
+              Next refresh: {nextRefreshDate}
+            </AlertDescription>
+          </Alert>
+        )}
         
         {userRole === 'guest' && (
           <Alert className="mb-6 bg-muted">
@@ -359,10 +398,11 @@ const Dashboard = () => {
             <div className="text-xs text-muted-foreground">
               <div className="flex items-center gap-1 mb-1">
                 <Clock className="h-3 w-3" />
-                <p>Data refreshed daily at {refreshTime}.</p>
+                <p>Data refreshed every Tuesday at {refreshTime}.</p>
               </div>
               <p>All times displayed in CT (America/Chicago).</p>
               <p>Last updated: {generatedDate || todayFormatted}</p>
+              {nextRefreshDate && <p>Next refresh: {nextRefreshDate}</p>}
             </div>
           </div>
         </div>

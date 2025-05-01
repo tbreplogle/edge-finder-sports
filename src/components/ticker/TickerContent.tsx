@@ -3,6 +3,8 @@ import React from "react";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { TickerGameItem } from "./TickerGameItem";
 import { TickerGame } from "@/utils/types/sports";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Clock } from "lucide-react";
 
 interface TickerContentProps {
   games: TickerGame[];
@@ -11,6 +13,20 @@ interface TickerContentProps {
 export const TickerContent = ({ games }: TickerContentProps) => {
   return (
     <div className="relative w-full">
+      <div className="absolute -top-7 right-0 flex items-center text-xs text-muted-foreground">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>Auto-updated weekly</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Predictions refresh every Tuesday at 8:00 AM CT</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
       <Carousel 
         opts={{
           align: "start",

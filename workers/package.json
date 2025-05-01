@@ -1,0 +1,11 @@
+
+{
+  "name": "prediction-workers",
+  "version": "1.0.0",
+  "description": "Workers for importing model predictions",
+  "main": "importCsv.js",
+  "dependencies": {
+    "csv-parse": "^5.5.5",
+    "pg": "^8.11.3"
+  }
+}

@@ -1,0 +1,20 @@
+
+name: Weekly R models
+
+on:
+  schedule:
+    # 08:00 America/Chicago = 13:00 UTC (standard) / 14:00 UTC (DST)
+    - cron: '0 13 * * 2'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build worker image
+        run: docker build -f docker/worker.Dockerfile -t playedge-worker .
+      - name: Run R models
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: docker run --rm -e DATABASE_URL playedge-worker
