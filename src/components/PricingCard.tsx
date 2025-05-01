@@ -1,10 +1,10 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckIcon, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadPayPal } from "@/utils/paypalScript";
+import { loadPayPal, cleanupPayPal } from "@/utils/paypalScript";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
@@ -61,6 +61,10 @@ export function PricingCard({
   const buttonId = PAYPAL_BUTTON_IDS[type]?.[billingCycle];
   const navigate = useNavigate();
   const { toast } = useToast();
+  const paypalContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Create a unique container ID for this pricing card
+  const containerId = `paypal-container-${type}-${billingCycle}`;
   
   const loadPayPalScript = () => {
     // Don't try loading if already loading
@@ -79,14 +83,22 @@ export function PricingCard({
         // Ensure the PayPal object and HostedButtons are available
         if (window.paypal && window.paypal.HostedButtons) {
           try {
-            // Clear the container first to prevent duplicated buttons
-            const container = document.getElementById(`paypal-container-${type}-${billingCycle}`);
-            if (container) container.innerHTML = '';
-            
-            // Render the button with the correct button ID
-            window.paypal.HostedButtons({ 
-              hostedButtonId: buttonId || 'test-button-id' // Fallback for testing
-            }).render(`#paypal-container-${type}-${billingCycle}`);
+            // Make sure container exists before trying to manipulate it
+            const container = document.getElementById(containerId);
+            if (container) {
+              // Clear the container safely
+              while (container.firstChild) {
+                container.removeChild(container.firstChild);
+              }
+              
+              // Render the button with the correct button ID
+              window.paypal.HostedButtons({ 
+                hostedButtonId: buttonId || 'test-button-id' // Fallback for testing
+              }).render(`#${containerId}`);
+            } else {
+              console.error(`PayPal container #${containerId} not found`);
+              setPaypalError(`Could not find payment container`);
+            }
           } catch (err: any) {
             console.error("Error rendering PayPal button:", err);
             setPaypalError(`Could not display PayPal button: ${err.message}`);
@@ -118,9 +130,20 @@ export function PricingCard({
       });
   };
   
+  // Cleanup when component unmounts or when showPayPal changes
   useEffect(() => {
-    if (!showPayPal || !buttonId) return;
-    loadPayPalScript();
+    // Only load PayPal when showPayPal is true and we have a button ID
+    if (showPayPal && buttonId) {
+      loadPayPalScript();
+    }
+    
+    // Cleanup function
+    return () => {
+      if (!showPayPal) {
+        // When modal closes, cleanup
+        cleanupPayPal();
+      }
+    };
   }, [showPayPal, buttonId, type, billingCycle]);
   
   const handleSelectPlan = () => {
@@ -139,6 +162,13 @@ export function PricingCard({
       // For free plan or if no PayPal button ID exists
       onSelectPlan();
     }
+  };
+
+  const handleClosePayPal = () => {
+    // Close the modal
+    setShowPayPal(false);
+    
+    // Let the cleanup effect handle resource management
   };
 
   return (
@@ -203,7 +233,8 @@ export function PricingCard({
             </div>
             
             <div
-              id={`paypal-container-${type}-${billingCycle}`}
+              id={containerId}
+              ref={paypalContainerRef}
               className="min-w-[300px] min-h-[150px] flex items-center justify-center"
             >
               {isLoadingPayPal && !paypalError && (
@@ -232,7 +263,7 @@ export function PricingCard({
             <Button 
               variant="ghost" 
               className="mt-4 w-full text-sm"
-              onClick={() => setShowPayPal(false)}
+              onClick={handleClosePayPal}
             >
               Cancel
             </Button>
