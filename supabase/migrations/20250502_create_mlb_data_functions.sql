@@ -9,9 +9,30 @@ AS $$
 DECLARE
   result JSONB;
 BEGIN
-  -- Temporary function that returns empty data since we don't have real data yet
-  -- In production, this would query a team_stats table or similar
-  result := '[]'::JSONB;
+  -- Get team stats from the actual data in predictions table
+  -- This is a simplified example that creates a list of unique teams with some stats
+  WITH unique_teams AS (
+    SELECT DISTINCT 
+      home_team as team 
+    FROM predictions 
+    WHERE sport = 'MLB'
+    UNION
+    SELECT DISTINCT 
+      away_team as team 
+    FROM predictions 
+    WHERE sport = 'MLB'
+  )
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'team', t.team,
+      'hr', 20 + floor(random() * 30), -- Placeholder data
+      'hra', 15 + floor(random() * 25), -- Placeholder data
+      'ba', (0.220 + (random() * 0.080))::numeric(4,3) -- Placeholder data
+    )
+  ), '[]'::JSONB)
+  INTO result
+  FROM unique_teams t;
+  
   RETURN result;
 END;
 $$;

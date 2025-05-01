@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,9 +48,9 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
     setError(null);
     
     try {
-      let teamStats = {};
-      let matchups = [];
-      let pitchers = {};
+      let teamStats: Record<string, TeamStats> = {};
+      let matchups: Matchup[] = [];
+      let pitchers: Record<string, PitcherStats> = {};
       
       if (selectedLeague === "mlb") {
         // Fetch MLB team stats
@@ -59,8 +58,8 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         
         if (teamError) throw teamError;
         
-        if (teamData && teamData.length > 0) {
-          teamStats = teamData.reduce((acc, team) => {
+        if (teamData && Array.isArray(teamData) && teamData.length > 0) {
+          teamStats = teamData.reduce((acc: Record<string, TeamStats>, team: any) => {
             acc[team.team] = {
               team: team.team,
               HR: team.hr || 0,
@@ -76,11 +75,11 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         
         if (matchupError) throw matchupError;
         
-        if (matchupData && matchupData.length > 0) {
+        if (matchupData && Array.isArray(matchupData) && matchupData.length > 0) {
           matchups = matchupData;
           
           // Extract pitcher data from matchups
-          pitchers = matchupData.reduce((acc, game) => {
+          pitchers = matchupData.reduce((acc: Record<string, PitcherStats>, game: any) => {
             if (game.pitcher_home) {
               acc[`${game.game_id}_home`] = game.pitcher_home;
             }
@@ -98,8 +97,12 @@ export function PredictionDataPreview({ sport }: PredictionDataPreviewProps) {
         
         if (nflData) {
           // Process NFL data
-          teamStats = nflData.team_stats || {};
-          matchups = nflData.matchups || [];
+          if (nflData.team_stats) {
+            teamStats = nflData.team_stats;
+          }
+          if (nflData.matchups) {
+            matchups = nflData.matchups;
+          }
         }
       }
       
