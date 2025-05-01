@@ -36,7 +36,7 @@ export function PregameLineWidget() {
   return (
     <div className="w-full my-4">
       {/* Pregame's script will replace this div with its iframe */}
-      <div id="pregame-game-center" ref={containerRef} className="w-full max-w-6xl mx-auto" />
+      <div id="pregame-game-center" ref={containerRef} className="w-full max-w-6xl mx-auto min-h-[500px]" />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 
 import { AppLayout } from "@/components/AppLayout";
 import { PregameLineWidget } from "@/components/PregameLineWidget";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LineTracker() {
   return (
@@ -13,9 +14,17 @@ export default function LineTracker() {
           </p>
         </div>
         
-        <div className="border rounded-lg bg-card p-4">
-          <PregameLineWidget />
-        </div>
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl">Live Line Movements</CardTitle>
+            <CardDescription>
+              View and track the latest betting line movements across major sportsbooks
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PregameLineWidget />
+          </CardContent>
+        </Card>
         
         <div className="mt-6 text-sm text-muted-foreground">
           <p>Line movement data provided by Pregame.com</p>
