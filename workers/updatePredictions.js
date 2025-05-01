@@ -43,6 +43,26 @@ function predictMatchup(matchup, teamStats) {
   const totalStrength = adjustedHomeStrength + awayStrength;
   const homeProbability = adjustedHomeStrength / totalStrength;
   
+  // Convert probability to American odds for the home team
+  let homeOdds;
+  if (homeProbability > 0.5) {
+    // Favorite: odds to win $100
+    homeOdds = Math.round(-100 / (homeProbability - 0.5) - 100);
+  } else {
+    // Underdog: odds on a $100 bet
+    homeOdds = Math.round((1 - homeProbability) / homeProbability * 100);
+  }
+  
+  // Calculate away team odds (opposite of home)
+  let awayOdds;
+  if (homeProbability < 0.5) {
+    // Away team is favorite
+    awayOdds = Math.round(-100 / ((1 - homeProbability) - 0.5) - 100);
+  } else {
+    // Away team is underdog
+    awayOdds = Math.round(homeProbability / (1 - homeProbability) * 100);
+  }
+  
   // Convert to a run margin with some randomness (MLB typical margin is ~1.5-2 runs)
   const marginFactor = 4.5; // Tunable parameter
   const rawMargin = (homeProbability - 0.5) * marginFactor;
@@ -55,7 +75,12 @@ function predictMatchup(matchup, teamStats) {
     home_team: matchup.home,
     away_team: matchup.away,
     predicted_margin: predictedMargin,
-    home_prob: homeProbability
+    home_prob: homeProbability,
+    home_ml: homeOdds,
+    away_ml: awayOdds,
+    // Include the moneyline values from the API if available
+    market_home_ml: matchup.moneyline,
+    market_away_ml: matchup.moneyline_opponent
   };
 }
 
@@ -75,6 +100,15 @@ async function runMlb() {
     for (const m of games) {
       try {
         const row = predictMatchup(m, teamMap);
+        
+        // Calculate edge for moneyline odds
+        let edge = 0;
+        if (row.market_home_ml && row.home_ml) {
+          // Calculate edge as market ML - predicted ML
+          // For betting on home team
+          edge = row.market_home_ml - row.home_ml;
+        }
+        
         await importCsvRow({
           sport: 'MLB',
           game_id: row.game_id,
@@ -82,7 +116,13 @@ async function runMlb() {
           away_team: row.away_team,
           predicted_margin: row.predicted_margin,
           predicted_total: null,
-          confidence_pct: Math.round(row.home_prob * 100)
+          confidence_pct: Math.round(row.home_prob * 100),
+          home_ml: row.home_ml,
+          away_ml: row.away_ml,
+          market_home_ml: row.market_home_ml,
+          market_away_ml: row.market_away_ml,
+          edge: edge,
+          date: new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
         });
         processedCount++;
       } catch (err) {

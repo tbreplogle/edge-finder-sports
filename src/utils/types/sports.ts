@@ -59,3 +59,17 @@ export interface Outcome {
   price: number;
   point?: number;
 }
+
+// MLB prediction types
+export interface MlbPrediction {
+  game_id: string;
+  home_team: string;
+  away_team: string;
+  predicted_margin: number;
+  home_prob: number;
+  home_ml?: number;
+  away_ml?: number;
+  market_home_ml?: number;
+  market_away_ml?: number;
+  edge?: number;
+}

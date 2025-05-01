@@ -89,6 +89,11 @@ export const TickerGameItem = ({ game }: Props) => {
                 {!isBaseball && game.spread < 0 && (
                   <span className="text-xs text-secondary">-{Math.abs(game.spread)}</span>
                 )}
+                {isBaseball && game.moneyline_opponent !== undefined && (
+                  <span className="text-xs text-muted-foreground">
+                    {game.moneyline_opponent > 0 ? `+${game.moneyline_opponent}` : game.moneyline_opponent}
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between w-20">
                 <span className="font-medium text-sm">{homeTeam}</span>
@@ -97,6 +102,11 @@ export const TickerGameItem = ({ game }: Props) => {
                 )}
                 {!isBaseball && game.spread > 0 && (
                   <span className="text-xs text-secondary">-{Math.abs(game.spread)}</span>
+                )}
+                {isBaseball && game.moneyline !== undefined && (
+                  <span className="text-xs text-muted-foreground">
+                    {game.moneyline > 0 ? `+${game.moneyline}` : game.moneyline}
+                  </span>
                 )}
               </div>
             </div>

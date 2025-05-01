@@ -27,6 +27,9 @@ export interface GameProps {
   rawFactors?: Record<string, any> | null;
   isPreviewGame?: boolean;
   isPreview?: boolean;
+  // Additional props for moneyline odds
+  homeMoneyline?: number | null;
+  awayMoneyline?: number | null;
 }
 
 export function GameCard({
@@ -42,7 +45,9 @@ export function GameCard({
   isPremium = false,
   rawFactors,
   isPreviewGame = false,
-  isPreview = false
+  isPreview = false,
+  homeMoneyline,
+  awayMoneyline
 }: GameProps) {
   const [open, setOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -81,16 +86,33 @@ export function GameCard({
   // Check if card is locked (guest/free user)
   const isLocked = (predictedMargin === null || edge === null) && !isPreviewGame;
   
-  // Format the market spread for display
-  const formattedMarketSpread = marketSpread > 0 
-    ? `${homeTeam} -${Math.abs(marketSpread)}` 
-    : marketSpread < 0 
-      ? `${awayTeam} -${Math.abs(marketSpread)}` 
-      : "Pick'em";
-
   // Is this a baseball game? (MLB uses moneyline rather than spread)
   const isBaseball = sport === "mlb";
   
+  // Format the market odds for display
+  let formattedMarketOdds = "";
+  
+  if (isBaseball && homeMoneyline !== undefined && awayMoneyline !== undefined) {
+    // For baseball games, show moneyline favorite
+    // Determine favorite (negative odds or less positive odds)
+    const homeIsFavorite = 
+      (homeMoneyline < 0 && awayMoneyline > 0) || // Home negative, away positive
+      (homeMoneyline < 0 && awayMoneyline < 0 && homeMoneyline < awayMoneyline) || // Both negative, home more negative
+      (homeMoneyline > 0 && awayMoneyline > 0 && homeMoneyline < awayMoneyline); // Both positive, home less positive
+    
+    const favTeam = homeIsFavorite ? homeTeam : awayTeam;
+    const favOdds = homeIsFavorite ? homeMoneyline : awayMoneyline;
+    
+    formattedMarketOdds = `${favTeam} ${favOdds > 0 ? '+' + favOdds : favOdds}`;
+  } else {
+    // For other sports, show spread
+    formattedMarketOdds = marketSpread > 0 
+      ? `${homeTeam} -${Math.abs(marketSpread)}` 
+      : marketSpread < 0 
+        ? `${awayTeam} -${Math.abs(marketSpread)}` 
+        : "Pick'em";
+  }
+
   return (
     <Card 
       className={cn(
@@ -135,9 +157,11 @@ export function GameCard({
           
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
-              <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>Market Spread</div>
+              <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>
+                {isBaseball ? "Market ML Favorite" : "Market Spread"}
+              </div>
               <div className={cn("font-medium", isLocked ? "text-slate-400" : "")}>
-                {formattedMarketSpread}
+                {formattedMarketOdds}
               </div>
             </div>
             <div>
@@ -168,14 +192,14 @@ export function GameCard({
                     <>
                       <ArrowUp className="w-4 h-4 text-edge-secondary" />
                       <span className="text-edge-secondary">
-                        {edge.toFixed(1)} pts
+                        {edge.toFixed(1)} {isBaseball ? "pts" : "pts"}
                       </span>
                     </>
                   ) : (
                     <>
                       <ArrowDown className="w-4 h-4 text-edge-accent" />
                       <span className="text-edge-accent">
-                        {edge.toFixed(1)} pts
+                        {edge.toFixed(1)} {isBaseball ? "pts" : "pts"}
                       </span>
                     </>
                   )}
