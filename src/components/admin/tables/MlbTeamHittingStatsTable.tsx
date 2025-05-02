@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { 
   Table, 
@@ -167,8 +166,7 @@ export function MlbTeamHittingStatsTable({
               <TableHead>League</TableHead>
               <TableHead className="text-right">GP</TableHead>
               <TableHead className="text-right">HR</TableHead>
-              <TableHead className="text-right">AVG</TableHead>
-              <TableHead className="text-right">BA</TableHead>
+              <TableHead className="text-right">AVG</TableHead> 
               <TableHead className="text-right">OBP</TableHead>
               <TableHead className="text-right">SLG</TableHead>
               <TableHead className="text-right">OPS</TableHead>
@@ -178,7 +176,7 @@ export function MlbTeamHittingStatsTable({
           <TableBody>
             {filteredStats.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-4 text-muted-foreground">
                   No data available for {timeframe}-day timeframe
                 </TableCell>
               </TableRow>
@@ -191,7 +189,6 @@ export function MlbTeamHittingStatsTable({
                   <TableCell className="text-right">{stat.games_played}</TableCell>
                   <TableCell className="text-right">{stat.home_runs}</TableCell>
                   <TableCell className="text-right">{stat.avg?.toFixed(3)}</TableCell>
-                  <TableCell className="text-right">{stat.batting_average?.toFixed(3)}</TableCell>
                   <TableCell className="text-right">{stat.obp?.toFixed(3)}</TableCell>
                   <TableCell className="text-right">{stat.slg?.toFixed(3)}</TableCell>
                   <TableCell className="text-right">{stat.ops?.toFixed(3)}</TableCell>
