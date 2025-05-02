@@ -54,32 +54,57 @@ export async function scrapeTeamHittingStats() {
     // Extract rows from the table
     const rawRows = await page.$$eval('table.bui-table tbody tr', (trs) => {
       return trs.map(tr => {
-        const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
+        const cells = Array.from(tr.querySelectorAll('td'));
         
         // Skip rows with insufficient data
         if (cells.length < 13) return null;
         
-        // Extract team name (first cell might contain a link)
-        let teamName = cells[0];
+        // Extract team name properly from the first cell
+        // First try to get the team name from the tooltip aria-label
+        let teamNameElement = cells[0].querySelector('span[aria-label]');
+        let teamName = teamNameElement ? teamNameElement.getAttribute('aria-label') : null;
+        
+        // If not found in aria-label, try to get the text directly
+        if (!teamName) {
+          teamName = cells[0].textContent.trim();
+          
+          // Filter out "American League" or "National League" entries
+          if (teamName === 'American League' || teamName === 'National League' || 
+              teamName === 'AL' || teamName === 'NL') {
+            return null;
+          }
+        }
+        
+        // Helper function to convert null/NaN values to 0
+        const parseIntSafe = (value) => {
+          const parsed = parseInt(value.replace(/,/g, ''), 10);
+          return isNaN(parsed) ? 0 : parsed;
+        };
+        
+        // Helper function to convert null/NaN values to 0.0 for floats
+        const parseFloatSafe = (value) => {
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? 0.0 : parsed;
+        };
         
         return {
           team_name: teamName,
-          games_played: parseInt(cells[1], 10) || null,
-          at_bats: parseInt(cells[2].replace(/,/g, ''), 10) || null,
-          runs: parseInt(cells[3], 10) || null,
-          hits: parseInt(cells[4], 10) || null,
-          doubles: parseInt(cells[5], 10) || null,
-          triples: parseInt(cells[6], 10) || null,
-          home_runs: parseInt(cells[7], 10) || null,
-          rbi: parseInt(cells[8], 10) || null,
-          bb: parseInt(cells[9], 10) || null,
-          so: parseInt(cells[10], 10) || null,
-          sb: parseInt(cells[11], 10) || null,
-          cs: parseInt(cells[12], 10) || null,
-          avg: parseFloat(cells[13]) || null,
-          obp: parseFloat(cells[14]) || null,
-          slg: parseFloat(cells[15]) || null,
-          ops: parseFloat(cells[16]) || null
+          games_played: parseIntSafe(cells[1].textContent.trim()),
+          at_bats: parseIntSafe(cells[2].textContent.trim()),
+          runs: parseIntSafe(cells[3].textContent.trim()),
+          hits: parseIntSafe(cells[4].textContent.trim()),
+          doubles: parseIntSafe(cells[5].textContent.trim()),
+          triples: parseIntSafe(cells[6].textContent.trim()),
+          home_runs: parseIntSafe(cells[7].textContent.trim()),
+          rbi: parseIntSafe(cells[8].textContent.trim()),
+          bb: parseIntSafe(cells[9].textContent.trim()),
+          so: parseIntSafe(cells[10].textContent.trim()),
+          sb: parseIntSafe(cells[11].textContent.trim()),
+          cs: parseIntSafe(cells[12].textContent.trim()),
+          avg: parseFloatSafe(cells[13].textContent.trim()),
+          obp: parseFloatSafe(cells[14].textContent.trim()),
+          slg: parseFloatSafe(cells[15].textContent.trim()),
+          ops: parseFloatSafe(cells[16].textContent.trim())
         };
       }).filter(item => item !== null); // Remove null entries
     });
