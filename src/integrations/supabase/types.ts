@@ -116,6 +116,7 @@ export type Database = {
       }
       mlb_team_hitting_stats: {
         Row: {
+          actual_team_name: string | null
           at_bats: number | null
           avg: number | null
           bb: number | null
@@ -135,11 +136,13 @@ export type Database = {
           sb: number | null
           slg: number | null
           so: number | null
+          team_abbr: string | null
           team_name: string
           timeframe_days: number
           triples: number | null
         }
         Insert: {
+          actual_team_name?: string | null
           at_bats?: number | null
           avg?: number | null
           bb?: number | null
@@ -159,11 +162,13 @@ export type Database = {
           sb?: number | null
           slg?: number | null
           so?: number | null
+          team_abbr?: string | null
           team_name: string
           timeframe_days: number
           triples?: number | null
         }
         Update: {
+          actual_team_name?: string | null
           at_bats?: number | null
           avg?: number | null
           bb?: number | null
@@ -183,6 +188,7 @@ export type Database = {
           sb?: number | null
           slg?: number | null
           so?: number | null
+          team_abbr?: string | null
           team_name?: string
           timeframe_days?: number
           triples?: number | null

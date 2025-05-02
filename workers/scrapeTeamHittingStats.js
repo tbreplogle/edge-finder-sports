@@ -168,6 +168,111 @@ export async function scrapeTeamHittingStats() {
 }
 
 /**
+ * Runs the SQL migration and cleanup on the mlb_team_hitting_stats table
+ * @returns {Promise<boolean>} Success status
+ */
+async function runTeamStatsMigration() {
+  try {
+    console.log('Running SQL migration and cleanup on mlb_team_hitting_stats table');
+    
+    const migrationSQL = `
+    BEGIN;
+
+    -- 1) Add two new columns: actual_team_name and team_abbr
+    ALTER TABLE mlb_team_hitting_stats
+      ADD COLUMN IF NOT EXISTS actual_team_name TEXT,
+      ADD COLUMN IF NOT EXISTS team_abbr CHAR(3);
+
+    -- 2) Populate them based on the broken 'team_name'
+    UPDATE mlb_team_hitting_stats
+    SET
+      actual_team_name = CASE
+        WHEN team_name ILIKE 'Seattle Mariners%'       THEN 'Seattle Mariners'
+        WHEN team_name ILIKE 'Cleveland Guardians%'    THEN 'Cleveland Guardians'
+        WHEN team_name ILIKE 'Pittsburgh Pirates%'     THEN 'Pittsburgh Pirates'
+        WHEN team_name ILIKE 'Los Angeles Angels%'     THEN 'Los Angeles Angels'
+        WHEN team_name ILIKE 'Toronto Blue Jays%'      THEN 'Toronto Blue Jays'
+        WHEN team_name ILIKE 'Miami Marlins%'          THEN 'Miami Marlins'
+        WHEN team_name ILIKE 'Oakland Athletics%'      THEN 'Oakland Athletics'
+        WHEN team_name ILIKE 'New York Yankees%'       THEN 'New York Yankees'
+        WHEN team_name ILIKE 'Tampa Bay Rays%'         THEN 'Tampa Bay Rays'
+        WHEN team_name ILIKE 'Minnesota Twins%'        THEN 'Minnesota Twins'
+        WHEN team_name ILIKE 'Kansas City Royals%'     THEN 'Kansas City Royals'
+        WHEN team_name ILIKE 'San Francisco Giants%'   THEN 'San Francisco Giants'
+        WHEN team_name ILIKE 'Arizona Diamondbacks%'   THEN 'Arizona Diamondbacks'
+        WHEN team_name ILIKE 'Milwaukee Brewers%'      THEN 'Milwaukee Brewers'
+        WHEN team_name ILIKE 'Chicago White Sox%'      THEN 'Chicago White Sox'
+        WHEN team_name ILIKE 'Chicago Cubs%'           THEN 'Chicago Cubs'
+        WHEN team_name ILIKE 'Atlanta Braves%'         THEN 'Atlanta Braves'
+        WHEN team_name ILIKE 'San Diego Padres%'       THEN 'San Diego Padres'
+        WHEN team_name ILIKE 'Houston Astros%'         THEN 'Houston Astros'
+        WHEN team_name ILIKE 'New York Mets%'         THEN 'New York Mets'
+        WHEN team_name ILIKE 'Los Angeles Dodgers%'    THEN 'Los Angeles Dodgers'
+        WHEN team_name ILIKE 'Colorado Rockies%'       THEN 'Colorado Rockies'
+        WHEN team_name ILIKE 'Cincinnati Reds%'        THEN 'Cincinnati Reds'
+        WHEN team_name ILIKE 'Washington Nationals%'   THEN 'Washington Nationals'
+        WHEN team_name ILIKE 'Detroit Tigers%'         THEN 'Detroit Tigers'
+        WHEN team_name ILIKE 'Philadelphia Phillies%'  THEN 'Philadelphia Phillies'
+        WHEN team_name ILIKE 'St. Louis Cardinals%'    THEN 'St. Louis Cardinals'
+        WHEN team_name ILIKE 'Texas Rangers%'          THEN 'Texas Rangers'
+        WHEN team_name ILIKE 'Boston Red Sox%'         THEN 'Boston Red Sox'
+        WHEN team_name ILIKE 'Baltimore Orioles%'      THEN 'Baltimore Orioles'
+        ELSE NULL
+      END,
+      team_abbr = CASE
+        WHEN team_name ILIKE 'Seattle Mariners%'       THEN 'SEA'
+        WHEN team_name ILIKE 'Cleveland Guardians%'    THEN 'CLE'
+        WHEN team_name ILIKE 'Pittsburgh Pirates%'     THEN 'PIT'
+        WHEN team_name ILIKE 'Los Angeles Angels%'     THEN 'LAA'
+        WHEN team_name ILIKE 'Toronto Blue Jays%'      THEN 'TOR'
+        WHEN team_name ILIKE 'Miami Marlins%'          THEN 'MIA'
+        WHEN team_name ILIKE 'Oakland Athletics%'      THEN 'OAK'
+        WHEN team_name ILIKE 'New York Yankees%'       THEN 'NYY'
+        WHEN team_name ILIKE 'Tampa Bay Rays%'         THEN 'TBR'
+        WHEN team_name ILIKE 'Minnesota Twins%'        THEN 'MIN'
+        WHEN team_name ILIKE 'Kansas City Royals%'     THEN 'KCR'
+        WHEN team_name ILIKE 'San Francisco Giants%'   THEN 'SFG'
+        WHEN team_name ILIKE 'Arizona Diamondbacks%'   THEN 'ARI'
+        WHEN team_name ILIKE 'Milwaukee Brewers%'      THEN 'MIL'
+        WHEN team_name ILIKE 'Chicago White Sox%'      THEN 'CWS'
+        WHEN team_name ILIKE 'Chicago Cubs%'           THEN 'CHC'
+        WHEN team_name ILIKE 'Atlanta Braves%'         THEN 'ATL'
+        WHEN team_name ILIKE 'San Diego Padres%'       THEN 'SDP'
+        WHEN team_name ILIKE 'Houston Astros%'         THEN 'HOU'
+        WHEN team_name ILIKE 'New York Mets%'         THEN 'NYM'
+        WHEN team_name ILIKE 'Los Angeles Dodgers%'    THEN 'LAD'
+        WHEN team_name ILIKE 'Colorado Rockies%'       THEN 'COL'
+        WHEN team_name ILIKE 'Cincinnati Reds%'        THEN 'CIN'
+        WHEN team_name ILIKE 'Washington Nationals%'   THEN 'WSH'
+        WHEN team_name ILIKE 'Detroit Tigers%'         THEN 'DET'
+        WHEN team_name ILIKE 'Philadelphia Phillies%'  THEN 'PHI'
+        WHEN team_name ILIKE 'St. Louis Cardinals%'    THEN 'STL'
+        WHEN team_name ILIKE 'Texas Rangers%'          THEN 'TEX'
+        WHEN team_name ILIKE 'Boston Red Sox%'         THEN 'BOS'
+        WHEN team_name ILIKE 'Baltimore Orioles%'      THEN 'BAL'
+        ELSE NULL
+      END;
+
+    COMMIT;
+    `;
+    
+    const { error } = await supabase.rpc('exec_sql', { sql: migrationSQL });
+    
+    if (error) {
+      console.error('Error running SQL migration:', error);
+      return false;
+    }
+    
+    console.log('✅ Successfully ran SQL migration and cleanup');
+    return true;
+  } catch (err) {
+    console.error('Error running SQL migration:', err.message);
+    if (err.stack) console.error(err.stack);
+    return false;
+  }
+}
+
+/**
  * Saves team hitting stats to Supabase
  * @param {object[]} teamStats - Array of team hitting stats
  * @returns {Promise<boolean>} Success status
@@ -219,6 +324,13 @@ async function saveTeamStatsToSupabase(teamStats) {
       return false;
     } else {
       console.log('✅ Successfully saved team hitting stats to Supabase');
+      
+      // Run the SQL migration and cleanup after successful save
+      const migrationSuccess = await runTeamStatsMigration();
+      if (!migrationSuccess) {
+        console.error('⚠️ Team stats saved, but migration/cleanup failed');
+      }
+      
       return true;
     }
   } catch (err) {

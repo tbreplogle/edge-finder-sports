@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { 
   Table, 
@@ -13,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tables } from "@/integrations/supabase/types";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { getTeamAbbreviation } from "@/utils/helpers/teamAbbreviations";
 
 type TeamHittingStats = Tables<"mlb_team_hitting_stats">;
 
@@ -161,6 +163,7 @@ export function MlbTeamHittingStatsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Team</TableHead>
+              <TableHead>Abbr</TableHead>
               <TableHead>League</TableHead>
               <TableHead className="text-right">GP</TableHead>
               <TableHead className="text-right">HR</TableHead>
@@ -174,14 +177,15 @@ export function MlbTeamHittingStatsTable({
           <TableBody>
             {filteredStats.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-4 text-muted-foreground">
                   No data available for {timeframe}-day timeframe
                 </TableCell>
               </TableRow>
             ) : (
               filteredStats.map((stat) => (
                 <TableRow key={stat.id}>
-                  <TableCell className="font-medium">{stat.team_name}</TableCell>
+                  <TableCell className="font-medium">{stat.actual_team_name || stat.team_name}</TableCell>
+                  <TableCell>{stat.team_abbr || getTeamAbbreviation(stat.team_name)}</TableCell>
                   <TableCell>{stat.league || '-'}</TableCell>
                   <TableCell className="text-right">{stat.games_played}</TableCell>
                   <TableCell className="text-right">{stat.home_runs}</TableCell>
