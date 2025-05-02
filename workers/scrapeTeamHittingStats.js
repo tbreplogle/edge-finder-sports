@@ -353,9 +353,27 @@ async function saveTeamStatsToSupabase(teamStats) {
       return false;
     }
     
+    // Enhanced pre-processing: Calculate batting_average for each team
+    const enhancedTeamStats = teamStats.map(stat => {
+      // Calculate batting_average (hits / at_bats)
+      const battingAverage = stat.at_bats > 0 ? stat.hits / stat.at_bats : 0;
+      
+      // Ensure it's properly formatted as a decimal (e.g., 0.275)
+      const formattedBattingAverage = parseFloat(battingAverage.toFixed(3));
+      
+      return {
+        ...stat,
+        batting_average: formattedBattingAverage
+      };
+    });
+    
+    if (DEBUG) {
+      console.log('Sample team with batting average calculated:', enhancedTeamStats[0]);
+    }
+    
     // Extract timeframe and game date for filtering
-    const timeframe = teamStats[0].timeframe_days;
-    const gameDate = teamStats[0].game_date;
+    const timeframe = enhancedTeamStats[0].timeframe_days;
+    const gameDate = enhancedTeamStats[0].game_date;
     
     // Step 1: Delete existing records for the same timeframe and game date
     console.log(`Deleting existing records for timeframe: ${timeframe} days and date: ${gameDate}...`);
@@ -375,19 +393,19 @@ async function saveTeamStatsToSupabase(teamStats) {
     // Step 2: Insert new records
     console.log('Inserting new team stats records...');
     // Log the first record we're trying to insert for debugging
-    console.log('First record to insert:', JSON.stringify(teamStats[0], null, 2));
+    console.log('First record to insert:', JSON.stringify(enhancedTeamStats[0], null, 2));
     
     // Insert data (no need for upsert since we've already deleted existing records)
     const { data, error } = await supabase
       .from('mlb_team_hitting_stats')
-      .insert(teamStats);
+      .insert(enhancedTeamStats);
     
     if (error) {
       console.error('Error saving team stats to Supabase:', error);
       
       if (DEBUG) {
         console.error('Error details:', JSON.stringify(error, null, 2));
-        console.log('Sample of attempted insert:', JSON.stringify(teamStats[0], null, 2));
+        console.log('Sample of attempted insert:', JSON.stringify(enhancedTeamStats[0], null, 2));
       }
       
       // Always create a report even on error
@@ -395,7 +413,7 @@ async function saveTeamStatsToSupabase(teamStats) {
         success: false,
         error: error.message,
         timestamp: new Date().toISOString(),
-        stats: { seven_day: teamStats.length }
+        stats: { seven_day: enhancedTeamStats.length }
       });
       
       return false;

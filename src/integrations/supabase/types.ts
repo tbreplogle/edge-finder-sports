@@ -119,6 +119,7 @@ export type Database = {
           actual_team_name: string | null
           at_bats: number | null
           avg: number | null
+          batting_average: number | null
           bb: number | null
           created_at: string | null
           cs: number | null
@@ -145,6 +146,7 @@ export type Database = {
           actual_team_name?: string | null
           at_bats?: number | null
           avg?: number | null
+          batting_average?: number | null
           bb?: number | null
           created_at?: string | null
           cs?: number | null
@@ -171,6 +173,7 @@ export type Database = {
           actual_team_name?: string | null
           at_bats?: number | null
           avg?: number | null
+          batting_average?: number | null
           bb?: number | null
           created_at?: string | null
           cs?: number | null
