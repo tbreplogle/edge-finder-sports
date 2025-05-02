@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import axiosRetry from 'axios-retry';
@@ -179,7 +180,7 @@ export async function scrapeTeamHittingStats(days = -7) {
           
           // First determine the column indices by examining the headers
           const headers = [];
-          $(selector).find('thead th').each((i, el) => {
+          $(selector).find('thead th, thead td, tr:first-child th, tr:first-child td').each((i, el) => {
             headers.push($(el).text().trim().toLowerCase());
           });
           
@@ -404,69 +405,6 @@ export async function scrapeTeamHittingStats(days = -7) {
       }
     }
     
-    // If we still don't have stats, try direct page analysis for client-rendered content
-    if (stats.length === 0) {
-      console.log('Table parsing methods failed, attempting to extract from page structure...');
-      
-      // Look for any patterns that might indicate team names and stats
-      // This is a last resort fallback method
-      const teamNames = [];
-      const teamStats = {};
-      
-      // Look for team names first
-      $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        const text = $(el).text().trim();
-        
-        // MLB team links often have patterns like /team/123/name
-        if (href && href.includes('/team/') && text.length > 0) {
-          if (!teamNames.includes(text)) {
-            teamNames.push(text);
-            teamStats[text] = { team_name: text };
-          }
-        }
-      });
-      
-      console.log(`Found ${teamNames.length} potential team names from links`);
-      
-      // If we still don't have team names, create fallback data
-      if (teamNames.length === 0) {
-        console.warn('Could not extract any team data, using fallback MLB teams');
-        
-        // All MLB team abbreviations
-        const mlbTeams = [
-          'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET', 
-          'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK', 
-          'PHI', 'PIT', 'SD', 'SF', 'SEA', 'STL', 'TB', 'TEX', 'TOR', 'WSH'
-        ];
-        
-        // Create a placeholder entry for each team
-        mlbTeams.forEach(team => {
-          stats.push({
-            team_name: team,
-            timeframe_days: Math.abs(days),
-            game_date: new Date().toISOString().slice(0, 10),
-            games_played: null,
-            at_bats: null,
-            runs: null,
-            hits: null,
-            doubles: null,
-            triples: null,
-            home_runs: null,
-            rbi: null,
-            bb: null,
-            so: null,
-            sb: null,
-            cs: null,
-            avg: null,
-            obp: null,
-            slg: null,
-            ops: null
-          });
-        });
-      }
-    }
-    
     console.log(`Successfully scraped ${stats.length} team hitting stats`);
     
     if (DEBUG) {
@@ -474,12 +412,18 @@ export async function scrapeTeamHittingStats(days = -7) {
       fs.writeFileSync(`debug-stats-${Math.abs(days)}-day.json`, JSON.stringify(stats, null, 2));
     }
     
+    // If no stats were found, return an empty array instead of fallback data
+    if (stats.length === 0) {
+      console.warn('No team stats data could be extracted from the page');
+      return [];
+    }
+    
     return stats;
   } catch (err) {
     console.error('Error scraping MLB team hitting stats:', err.message);
     if (err.stack) console.error(err.stack);
     
-    // Always create a result file even on error
+    // Create a report indicating the error
     createScrapeReport({
       success: false,
       error: err.message,
@@ -487,6 +431,7 @@ export async function scrapeTeamHittingStats(days = -7) {
       stats: { seven_day: 0, fourteen_day: 0 }
     });
     
+    // Return empty array instead of fallback data
     return [];
   }
 }

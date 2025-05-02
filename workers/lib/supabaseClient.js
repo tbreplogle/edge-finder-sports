@@ -45,14 +45,7 @@ export function createScrapeReport(report) {
     fs.writeFileSync('scrape-result.json', JSON.stringify(report, null, 2));
     console.log('✅ Scrape report saved to scrape-result.json');
     
-    // Also save to a fallback location just in case
-    try {
-      fs.writeFileSync('scrape-result-fallback.json', JSON.stringify(report, null, 2));
-    } catch (fallbackErr) {
-      console.warn('Warning: Could not write fallback report file:', fallbackErr.message);
-    }
-    
-    // Append to a log file for history
+    // Also save to a log file for history
     try {
       const logEntry = `${new Date().toISOString()}: ${JSON.stringify(report)}\n`;
       fs.appendFileSync('scrape-history.log', logEntry);
