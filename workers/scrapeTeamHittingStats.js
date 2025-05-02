@@ -16,6 +16,11 @@ const TIMEFRAME_DAYS = 7;
  * @returns {object} Object containing actual_team_name and team_abbr
  */
 function mapTeamNameAndAbbreviation(teamName) {
+  // Special case for Athletics with duplicate name
+  if (teamName.includes('ATHLETIC') || teamName.includes('Oakland')) {
+    return { actual_team_name: 'Oakland Athletics', team_abbr: 'ATH' };
+  }
+
   // Define the mapping for team names and abbreviations
   const teamMap = {
     'Seattle Mariners': { actual_team_name: 'Seattle Mariners', team_abbr: 'SEA' },
@@ -24,7 +29,7 @@ function mapTeamNameAndAbbreviation(teamName) {
     'Los Angeles Angels': { actual_team_name: 'Los Angeles Angels', team_abbr: 'LAA' },
     'Toronto Blue Jays': { actual_team_name: 'Toronto Blue Jays', team_abbr: 'TOR' },
     'Miami Marlins': { actual_team_name: 'Miami Marlins', team_abbr: 'MIA' },
-    'Oakland Athletics': { actual_team_name: 'Oakland Athletics', team_abbr: 'OAK' },
+    'Oakland Athletics': { actual_team_name: 'Oakland Athletics', team_abbr: 'ATH' },
     'New York Yankees': { actual_team_name: 'New York Yankees', team_abbr: 'NYY' },
     'Tampa Bay Rays': { actual_team_name: 'Tampa Bay Rays', team_abbr: 'TBR' },
     'Minnesota Twins': { actual_team_name: 'Minnesota Twins', team_abbr: 'MIN' },
