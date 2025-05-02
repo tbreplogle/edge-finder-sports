@@ -20,7 +20,6 @@ jobs:
       
       - name: Install dependencies
         run: |
-          cd workers
           npm install
       
       - name: Show environment information
@@ -51,7 +50,7 @@ jobs:
       
       - name: Run MLB hitting stats scraper
         id: scrape
-        run: cd workers && node scrapeTeamHittingStats.js
+        run: node workers/scrapeTeamHittingStats.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

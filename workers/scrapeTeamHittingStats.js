@@ -1,5 +1,6 @@
 
 import fs from 'fs';
+import path from 'path';
 import puppeteer from 'puppeteer';
 import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
 
@@ -86,9 +87,14 @@ export async function scrapeTeamHittingStats() {
     // Close the browser
     await browser.close();
     
+    // Deduplicate by team_name
+    const uniqueRows = rawRows.filter((row, idx, arr) =>
+      arr.findIndex(r => r.team_name === row.team_name) === idx
+    );
+    
     // Add timeframe_days & game_date
     const gameDate = new Date().toISOString().split('T')[0];
-    const stats = rawRows.map(r => ({
+    const stats = uniqueRows.map(r => ({
       ...r,
       timeframe_days: TIMEFRAME_DAYS,
       game_date: gameDate
@@ -100,9 +106,10 @@ export async function scrapeTeamHittingStats() {
       console.log('Sample data:', JSON.stringify(stats.slice(0, 2), null, 2));
     }
     
-    // Write debug file for GH Action check
-    fs.writeFileSync('scrape-result.json', JSON.stringify(stats, null, 2));
-    console.log(`✅ Wrote scrape-result.json with ${stats.length} rows`);
+    // Write to repo root for GitHub Actions to find
+    const outPath = path.resolve(process.cwd(), 'scrape-result.json');
+    fs.writeFileSync(outPath, JSON.stringify(stats, null, 2));
+    console.log(`✅ Wrote scrape-result.json with ${stats.length} rows to ${outPath}`);
     
     // If no stats were found, return an empty array
     if (stats.length === 0) {
