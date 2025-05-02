@@ -1,3 +1,4 @@
+
 import fs from 'fs';
 import puppeteer from 'puppeteer';
 import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
@@ -5,14 +6,16 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 // Enable debug mode when environment variable is set
 const DEBUG = process.env.DEBUG === 'true';
 
+// Only 7 days needed
+const TIMEFRAME_DAYS = 7;
+
 /**
  * Scrapes MLB team hitting statistics from the MLB stats website using Puppeteer
- * @param {number} days - Number of days for the timeframe (-7 or -14)
  * @returns {Promise<object[]>} An array of team hitting stats
  */
-export async function scrapeTeamHittingStats(days = -7) {
+export async function scrapeTeamHittingStats() {
   try {
-    const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=${days}`;
+    const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=-${TIMEFRAME_DAYS}`;
     console.log(`🕵️‍♂️ Launching browser to scrape: ${url}`);
     
     if (DEBUG) {
@@ -41,14 +44,14 @@ export async function scrapeTeamHittingStats(days = -7) {
     
     if (DEBUG) {
       // Save screenshot and HTML for debugging
-      await page.screenshot({ path: `debug-screenshot-${Math.abs(days)}-day.png` });
+      await page.screenshot({ path: `debug-screenshot-${TIMEFRAME_DAYS}-day.png` });
       const html = await page.content();
-      fs.writeFileSync(`debug-html-${Math.abs(days)}-day.html`, html);
-      console.log(`Debug screenshot and HTML saved for ${Math.abs(days)}-day stats`);
+      fs.writeFileSync(`debug-html-${TIMEFRAME_DAYS}-day.html`, html);
+      console.log(`Debug screenshot and HTML saved for ${TIMEFRAME_DAYS}-day stats`);
     }
     
     // Extract rows from the table
-    const stats = await page.$$eval('table.bui-table tbody tr', (trs) => {
+    const rawRows = await page.$$eval('table.bui-table tbody tr', (trs) => {
       return trs.map(tr => {
         const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
         
@@ -60,8 +63,6 @@ export async function scrapeTeamHittingStats(days = -7) {
         
         return {
           team_name: teamName,
-          timeframe_days: Math.abs(days),
-          game_date: new Date().toISOString().slice(0, 10),
           games_played: parseInt(cells[1], 10) || null,
           at_bats: parseInt(cells[2].replace(/,/g, ''), 10) || null,
           runs: parseInt(cells[3], 10) || null,
@@ -80,17 +81,28 @@ export async function scrapeTeamHittingStats(days = -7) {
           ops: parseFloat(cells[16]) || null
         };
       }).filter(item => item !== null); // Remove null entries
-    }, Math.abs(days)); // Pass the timeframe days value to the browser context
+    });
     
     // Close the browser
     await browser.close();
     
-    console.log(`Successfully scraped ${stats.length} team hitting stats for ${Math.abs(days)}-day period`);
+    // Add timeframe_days & game_date
+    const gameDate = new Date().toISOString().split('T')[0];
+    const stats = rawRows.map(r => ({
+      ...r,
+      timeframe_days: TIMEFRAME_DAYS,
+      game_date: gameDate
+    }));
+    
+    console.log(`Successfully scraped ${stats.length} team hitting stats for ${TIMEFRAME_DAYS}-day period`);
     
     if (DEBUG) {
       console.log('Sample data:', JSON.stringify(stats.slice(0, 2), null, 2));
-      fs.writeFileSync(`debug-stats-${Math.abs(days)}-day.json`, JSON.stringify(stats, null, 2));
     }
+    
+    // Write debug file for GH Action check
+    fs.writeFileSync('scrape-result.json', JSON.stringify(stats, null, 2));
+    console.log(`✅ Wrote scrape-result.json with ${stats.length} rows`);
     
     // If no stats were found, return an empty array
     if (stats.length === 0) {
@@ -100,7 +112,7 @@ export async function scrapeTeamHittingStats(days = -7) {
     
     return stats;
   } catch (err) {
-    console.error(`Error scraping MLB team hitting stats for ${Math.abs(days)}-day period:`, err.message);
+    console.error(`Error scraping MLB team hitting stats for ${TIMEFRAME_DAYS}-day period:`, err.message);
     if (err.stack) console.error(err.stack);
     
     // Create a report indicating the error
@@ -108,7 +120,7 @@ export async function scrapeTeamHittingStats(days = -7) {
       success: false,
       error: err.message,
       timestamp: new Date().toISOString(),
-      stats: { seven_day: 0, fourteen_day: 0 }
+      stats: { seven_day: 0 }
     });
     
     // Return empty array instead of fallback data
@@ -155,14 +167,6 @@ async function saveTeamStatsToSupabase(teamStats) {
       if (DEBUG) {
         console.error('Error details:', JSON.stringify(error, null, 2));
         console.log('Sample of attempted insert:', JSON.stringify(teamStats[0], null, 2));
-        
-        // Try a single row insert to diagnose issues
-        console.log('Attempting single row insert for diagnosis...');
-        const singleInsertResult = await supabase
-          .from('mlb_team_hitting_stats')
-          .insert(teamStats[0]);
-          
-        console.log('Single row insert result:', JSON.stringify(singleInsertResult, null, 2));
       }
       
       // Always create a report even on error
@@ -170,10 +174,7 @@ async function saveTeamStatsToSupabase(teamStats) {
         success: false,
         error: error.message,
         timestamp: new Date().toISOString(),
-        stats: { 
-          seven_day: teamStats.filter(s => s.timeframe_days === 7).length,
-          fourteen_day: teamStats.filter(s => s.timeframe_days === 14).length
-        }
+        stats: { seven_day: teamStats.length }
       });
       
       return false;
@@ -190,10 +191,7 @@ async function saveTeamStatsToSupabase(teamStats) {
       success: false,
       error: err.message,
       timestamp: new Date().toISOString(),
-      stats: { 
-        seven_day: teamStats.filter(s => s.timeframe_days === 7).length,
-        fourteen_day: teamStats.filter(s => s.timeframe_days === 14).length
-      }
+      stats: { seven_day: teamStats.length }
     });
     
     return false;
@@ -208,7 +206,7 @@ export async function updateTeamHittingStats() {
   const startTime = new Date();
   const results = { 
     success: false, 
-    stats: { seven_day: 0, fourteen_day: 0 }, 
+    stats: { seven_day: 0 }, 
     timestamp: startTime.toISOString() 
   };
   
@@ -223,41 +221,27 @@ export async function updateTeamHittingStats() {
         success: false,
         error: 'Failed to connect to Supabase - check your credentials',
         timestamp: startTime.toISOString(),
-        stats: { seven_day: 0, fourteen_day: 0 }
+        stats: { seven_day: 0 }
       });
       
       throw new Error('Failed to connect to Supabase - aborting scrape job');
     }
     
-    // Scrape 7-day stats
-    console.log('Scraping 7-day team stats...');
-    const sevenDayStats = await scrapeTeamHittingStats(-7);
-    console.log(`Fetched ${sevenDayStats.length} 7-day team stats`);
-    results.stats.seven_day = sevenDayStats.length;
-    
-    // Scrape 14-day stats
-    console.log('Scraping 14-day team stats...');
-    const fourteenDayStats = await scrapeTeamHittingStats(-14);
-    console.log(`Fetched ${fourteenDayStats.length} 14-day team stats`);
-    results.stats.fourteen_day = fourteenDayStats.length;
+    // Scrape team stats (7-day only now)
+    console.log(`Scraping ${TIMEFRAME_DAYS}-day team stats...`);
+    const teamStats = await scrapeTeamHittingStats();
+    console.log(`Fetched ${teamStats.length} team stats`);
+    results.stats.seven_day = teamStats.length;
     
     // Save stats to Supabase only if we have data
     let saveSuccess = true;
     
-    if (sevenDayStats.length > 0) {
-      console.log('Saving 7-day stats to Supabase...');
-      const sevenDaySuccess = await saveTeamStatsToSupabase(sevenDayStats);
-      saveSuccess = saveSuccess && sevenDaySuccess;
+    if (teamStats.length > 0) {
+      console.log('Saving stats to Supabase...');
+      saveSuccess = await saveTeamStatsToSupabase(teamStats);
     } else {
-      console.warn('No 7-day stats to save to Supabase');
-    }
-    
-    if (fourteenDayStats.length > 0) {
-      console.log('Saving 14-day stats to Supabase...');
-      const fourteenDaySuccess = await saveTeamStatsToSupabase(fourteenDayStats);
-      saveSuccess = saveSuccess && fourteenDaySuccess;
-    } else {
-      console.warn('No 14-day stats to save to Supabase');
+      console.warn('No stats to save to Supabase');
+      saveSuccess = false;
     }
     
     results.success = saveSuccess;
@@ -275,8 +259,7 @@ export async function updateTeamHittingStats() {
     createScrapeReport(results);
     
     return {
-      sevenDayStats,
-      fourteenDayStats,
+      stats: teamStats,
       success: saveSuccess
     };
   } catch (error) {
@@ -287,14 +270,13 @@ export async function updateTeamHittingStats() {
       success: false, 
       error: error.message,
       timestamp: new Date().toISOString(),
-      stats: { seven_day: 0, fourteen_day: 0 } 
+      stats: { seven_day: 0 } 
     };
     createScrapeReport(errorResults);
     
     // Don't throw the error, let the process complete but with an error status
     return {
-      sevenDayStats: [],
-      fourteenDayStats: [],
+      stats: [],
       success: false
     };
   }
@@ -308,10 +290,10 @@ if (import.meta.url.endsWith('scrapeTeamHittingStats.js')) {
   console.log('Environment variables set:', Object.keys(process.env).filter(key => !key.includes('KEY')).join(', '));
   
   updateTeamHittingStats()
-    .then(stats => {
+    .then(result => {
       console.log('Script completed successfully!');
-      console.log(JSON.stringify(stats, null, 2));
-      process.exit(stats.success ? 0 : 1);
+      console.log(`Scraped ${result.stats.length} team stats records.`);
+      process.exit(result.success ? 0 : 1);
     })
     .catch(error => {
       console.error('Error in updateTeamHittingStats:', error);
@@ -321,7 +303,7 @@ if (import.meta.url.endsWith('scrapeTeamHittingStats.js')) {
         success: false,
         error: error.message,
         timestamp: new Date().toISOString(),
-        stats: { seven_day: 0, fourteen_day: 0 }
+        stats: { seven_day: 0 }
       });
       
       process.exit(1);

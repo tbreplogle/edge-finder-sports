@@ -20,8 +20,8 @@ jobs:
       
       - name: Install dependencies
         run: |
+          cd workers
           npm install
-          npm install puppeteer@^21.6.1
       
       - name: Show environment information
         run: |
@@ -51,7 +51,7 @@ jobs:
       
       - name: Run MLB hitting stats scraper
         id: scrape
-        run: node workers/scrapeTeamHittingStats.js
+        run: cd workers && node scrapeTeamHittingStats.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
