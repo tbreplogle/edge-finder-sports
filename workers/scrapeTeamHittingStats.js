@@ -51,7 +51,7 @@ export async function scrapeTeamHittingStats() {
       console.log(`Debug screenshot and HTML saved for ${TIMEFRAME_DAYS}-day stats`);
     }
     
-    // Extract rows from the table with improved selectors and error handling
+    // Extract rows from the table - simplified approach
     const rawRows = await page.evaluate(() => {
       const results = [];
       const rows = document.querySelectorAll('table.bui-table tbody tr');
@@ -61,69 +61,36 @@ export async function scrapeTeamHittingStats() {
           const cells = row.querySelectorAll('td');
           if (cells.length < 13) continue;
           
-          // Get the team name, handling various HTML structures
-          let teamName = '';
-          const nameCell = cells[0];
+          // Basic team name extraction - this approach worked before
+          const teamName = cells[0].textContent.trim();
           
-          // Try to get team name from aria-label first
-          const teamNameSpan = nameCell.querySelector('span[aria-label]');
-          if (teamNameSpan && teamNameSpan.getAttribute('aria-label')) {
-            teamName = teamNameSpan.getAttribute('aria-label');
-          } else {
-            // Fall back to text content
-            teamName = nameCell.textContent.trim();
-          }
-          
-          // Skip league headers
-          if (['American League', 'National League', 'AL', 'NL'].includes(teamName)) {
-            continue;
-          }
-          
-          // Parse numbers with fallbacks to zero
-          const parseIntSafe = (cell) => {
-            try {
-              const text = cell.textContent.trim().replace(/,/g, '');
-              const value = parseInt(text, 10);
-              return isNaN(value) ? 0 : value;
-            } catch (e) {
-              return 0;
-            }
-          };
-          
-          const parseFloatSafe = (cell) => {
-            try {
-              const text = cell.textContent.trim();
-              const value = parseFloat(text);
-              return isNaN(value) ? 0.0 : value;
-            } catch (e) {
-              return 0.0;
-            }
-          };
+          // Skip if it's clearly not a team
+          if (!teamName || teamName.length < 2) continue;
           
           // Build the team stats object
           const teamStats = {
             team_name: teamName,
-            games_played: parseIntSafe(cells[1]),
-            at_bats: parseIntSafe(cells[2]),
-            runs: parseIntSafe(cells[3]),
-            hits: parseIntSafe(cells[4]),
-            doubles: parseIntSafe(cells[5]),
-            triples: parseIntSafe(cells[6]),
-            home_runs: parseIntSafe(cells[7]),
-            rbi: parseIntSafe(cells[8]),
-            bb: parseIntSafe(cells[9]),
-            so: parseIntSafe(cells[10]),
-            sb: parseIntSafe(cells[11]),
-            cs: parseIntSafe(cells[12]),
-            avg: parseFloatSafe(cells[13]),
-            obp: parseFloatSafe(cells[14]),
-            slg: parseFloatSafe(cells[15]),
-            ops: parseFloatSafe(cells[16])
+            games_played: parseInt(cells[1].textContent.trim().replace(/,/g, '')) || 0,
+            at_bats: parseInt(cells[2].textContent.trim().replace(/,/g, '')) || 0,
+            runs: parseInt(cells[3].textContent.trim()) || 0,
+            hits: parseInt(cells[4].textContent.trim()) || 0,
+            doubles: parseInt(cells[5].textContent.trim()) || 0,
+            triples: parseInt(cells[6].textContent.trim()) || 0,
+            home_runs: parseInt(cells[7].textContent.trim()) || 0,
+            rbi: parseInt(cells[8].textContent.trim()) || 0,
+            bb: parseInt(cells[9].textContent.trim()) || 0,
+            so: parseInt(cells[10].textContent.trim()) || 0,
+            sb: parseInt(cells[11].textContent.trim()) || 0,
+            cs: parseInt(cells[12].textContent.trim()) || 0,
+            avg: parseFloat(cells[13].textContent.trim()) || 0.0,
+            obp: parseFloat(cells[14].textContent.trim()) || 0.0,
+            slg: parseFloat(cells[15].textContent.trim()) || 0.0,
+            ops: parseFloat(cells[16].textContent.trim()) || 0.0
           };
           
           results.push(teamStats);
         } catch (err) {
-          console.error("Error parsing row:", err);
+          // Silently continue on parsing errors
         }
       }
       
@@ -133,14 +100,9 @@ export async function scrapeTeamHittingStats() {
     // Close the browser
     await browser.close();
     
-    // Deduplicate by team_name
-    const uniqueRows = rawRows.filter((row, idx, arr) =>
-      arr.findIndex(r => r.team_name === row.team_name) === idx
-    );
-    
     // Add timeframe_days & game_date
     const gameDate = new Date().toISOString().split('T')[0];
-    const stats = uniqueRows.map(r => ({
+    const stats = rawRows.map(r => ({
       ...r,
       timeframe_days: TIMEFRAME_DAYS,
       game_date: gameDate
@@ -157,24 +119,10 @@ export async function scrapeTeamHittingStats() {
     fs.writeFileSync(outPath, JSON.stringify(stats, null, 2));
     console.log(`✅ Wrote scrape-result.json with ${stats.length} rows to ${outPath}`);
     
-    // If no stats were found, return an empty array
-    if (stats.length === 0) {
-      console.warn('No team stats data could be extracted from the page');
-      return [];
-    }
-    
     return stats;
   } catch (err) {
     console.error(`Error scraping MLB team hitting stats for ${TIMEFRAME_DAYS}-day period:`, err.message);
     if (err.stack) console.error(err.stack);
-    
-    // Create a report indicating the error
-    createScrapeReport({
-      success: false,
-      error: err.message,
-      timestamp: new Date().toISOString(),
-      stats: { seven_day: 0 }
-    });
     
     // Return empty array instead of fallback data
     return [];
