@@ -1,0 +1,28 @@
+
+name: Daily MLB Matchup Data Update
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # every day at 8:00 AM CT
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      # Install dependencies
+      - name: Install dependencies
+        working-directory: ./workers
+        run: npm install
+        
+      # Run the matchup scraper
+      - name: Scrape and save MLB matchups
+        run: node workers/saveMatchupsToSupabase.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
