@@ -12,32 +12,59 @@ const endDate = today.toISOString().slice(0, 10);
 
 // ✅ API URLs
 const MLB_API = 'https://statsapi.mlb.com/api/v1';
-const SAVANT_CSV = 'https://baseballsavant.mlb.com/preview';
+const SAVANT_CSV = 'https://baseballsavant.mlb.com/statcast_search/csv';
 
-// 1. Pull team stats
+// 1. Pull team stats from Baseball Savant
 async function fetchTeamStats() {
-  const { data } = await axios.get(`${MLB_API}/teams/statistics`, {
-    params: {
-      sportId: 1,
-      group: 'hitting,pitching',
-      startDate,
-      endDate
+  try {
+    console.log('Fetching team stats from Baseball Savant...');
+    
+    // Construct Baseball Savant URL for team stats
+    const savantTeamUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${startDate}&hfDateLt=${endDate}`;
+    console.log(`Savant URL: ${savantTeamUrl}`);
+    
+    // Download CSV
+    const response = await axios.get(savantTeamUrl);
+    const csvData = response.data;
+    
+    // Parse CSV
+    const rows = parse(csvData, { columns: true });
+    console.log(`Parsed ${rows.length} rows of team data`);
+    
+    // Process team stats
+    const teamMap = {};
+    for (const row of rows) {
+      const team = row.team;
+      
+      if (!teamMap[team]) {
+        teamMap[team] = {
+          team_abbr: team,
+          hr: 0,
+          hra: 0,
+          ba: 0,
+          games: 0
+        };
+      }
+      
+      // For batting stats
+      if (row.player_type === 'batter') {
+        teamMap[team].hr += parseInt(row.home_runs || 0);
+        teamMap[team].ba = parseFloat(row.ba || 0);
+      } 
+      // For pitching stats
+      else if (row.player_type === 'pitcher') {
+        teamMap[team].hra += parseInt(row.home_runs || 0);
+      }
+      
+      teamMap[team].games += 1;
     }
-  });
-
-  const teams = {};
-  for (const stat of data.stats) {
-    const hit = stat.group.find(g => g.group.displayName === 'hitting')?.splits?.[0]?.stat;
-    const pit = stat.group.find(g => g.group.displayName === 'pitching')?.splits?.[0]?.stat;
-    const abbr = stat.team.abbreviation;
-    teams[abbr] = {
-      team_abbr: abbr,
-      hr: +hit?.homeRuns ?? 0,
-      hra: +pit?.homeRuns ?? 0,
-      ba: +(hit?.avg ?? 0)
-    };
+    
+    // Convert map to array for database insertion
+    return Object.values(teamMap);
+  } catch (error) {
+    console.error('Error fetching team stats from Baseball Savant:', error.message);
+    throw error;
   }
-  return Object.values(teams);
 }
 
 // 2. Pull matchups
@@ -81,7 +108,7 @@ async function fetchPitchers(matchups) {
 
       const url = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${startDate}&game_date_lt=${endDate}&all=true`;
       try {
-        const csv = await axios.get(url).then(res => res.data);
+        const { data: csv } = await axios.get(url);
         const rows = parse(csv, { columns: true });
         const ip = rows.reduce((s, r) => s + +r.ip, 0);
         const er = rows.reduce((s, r) => s + +r.er, 0);
