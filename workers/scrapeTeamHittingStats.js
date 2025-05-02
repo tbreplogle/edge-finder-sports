@@ -11,6 +11,57 @@ const DEBUG = process.env.DEBUG === 'true';
 const TIMEFRAME_DAYS = 7;
 
 /**
+ * Maps a raw team name to its proper name and abbreviation
+ * @param {string} teamName The raw team name from MLB stats
+ * @returns {object} Object containing actual_team_name and team_abbr
+ */
+function mapTeamNameAndAbbreviation(teamName) {
+  // Define the mapping for team names and abbreviations
+  const teamMap = {
+    'Seattle Mariners': { actual_team_name: 'Seattle Mariners', team_abbr: 'SEA' },
+    'Cleveland Guardians': { actual_team_name: 'Cleveland Guardians', team_abbr: 'CLE' },
+    'Pittsburgh Pirates': { actual_team_name: 'Pittsburgh Pirates', team_abbr: 'PIT' },
+    'Los Angeles Angels': { actual_team_name: 'Los Angeles Angels', team_abbr: 'LAA' },
+    'Toronto Blue Jays': { actual_team_name: 'Toronto Blue Jays', team_abbr: 'TOR' },
+    'Miami Marlins': { actual_team_name: 'Miami Marlins', team_abbr: 'MIA' },
+    'Oakland Athletics': { actual_team_name: 'Oakland Athletics', team_abbr: 'OAK' },
+    'New York Yankees': { actual_team_name: 'New York Yankees', team_abbr: 'NYY' },
+    'Tampa Bay Rays': { actual_team_name: 'Tampa Bay Rays', team_abbr: 'TBR' },
+    'Minnesota Twins': { actual_team_name: 'Minnesota Twins', team_abbr: 'MIN' },
+    'Kansas City Royals': { actual_team_name: 'Kansas City Royals', team_abbr: 'KCR' },
+    'San Francisco Giants': { actual_team_name: 'San Francisco Giants', team_abbr: 'SFG' },
+    'Arizona Diamondbacks': { actual_team_name: 'Arizona Diamondbacks', team_abbr: 'ARI' },
+    'Milwaukee Brewers': { actual_team_name: 'Milwaukee Brewers', team_abbr: 'MIL' },
+    'Chicago White Sox': { actual_team_name: 'Chicago White Sox', team_abbr: 'CWS' },
+    'Chicago Cubs': { actual_team_name: 'Chicago Cubs', team_abbr: 'CHC' },
+    'Atlanta Braves': { actual_team_name: 'Atlanta Braves', team_abbr: 'ATL' },
+    'San Diego Padres': { actual_team_name: 'San Diego Padres', team_abbr: 'SDP' },
+    'Houston Astros': { actual_team_name: 'Houston Astros', team_abbr: 'HOU' },
+    'New York Mets': { actual_team_name: 'New York Mets', team_abbr: 'NYM' },
+    'Los Angeles Dodgers': { actual_team_name: 'Los Angeles Dodgers', team_abbr: 'LAD' },
+    'Colorado Rockies': { actual_team_name: 'Colorado Rockies', team_abbr: 'COL' },
+    'Cincinnati Reds': { actual_team_name: 'Cincinnati Reds', team_abbr: 'CIN' },
+    'Washington Nationals': { actual_team_name: 'Washington Nationals', team_abbr: 'WSH' },
+    'Detroit Tigers': { actual_team_name: 'Detroit Tigers', team_abbr: 'DET' },
+    'Philadelphia Phillies': { actual_team_name: 'Philadelphia Phillies', team_abbr: 'PHI' },
+    'St. Louis Cardinals': { actual_team_name: 'St. Louis Cardinals', team_abbr: 'STL' },
+    'Texas Rangers': { actual_team_name: 'Texas Rangers', team_abbr: 'TEX' },
+    'Boston Red Sox': { actual_team_name: 'Boston Red Sox', team_abbr: 'BOS' },
+    'Baltimore Orioles': { actual_team_name: 'Baltimore Orioles', team_abbr: 'BAL' }
+  };
+
+  // Look for the team name in our mapping (handling variations with ILIKE logic)
+  for (const [key, value] of Object.entries(teamMap)) {
+    if (teamName.includes(key)) {
+      return value;
+    }
+  }
+
+  // Default return if no match found
+  return { actual_team_name: null, team_abbr: null };
+}
+
+/**
  * Scrapes MLB team hitting statistics from the MLB stats website using Puppeteer
  * @returns {Promise<object[]>} An array of team hitting stats
  */
@@ -138,18 +189,25 @@ export async function scrapeTeamHittingStats() {
     // Close the browser
     await browser.close();
     
-    // Add timeframe_days & game_date
+    // Add timeframe_days, game_date, and map team names to proper names and abbreviations
     const gameDate = new Date().toISOString().split('T')[0];
-    const stats = rawRows.map(r => ({
-      ...r,
-      timeframe_days: TIMEFRAME_DAYS,
-      game_date: gameDate
-    }));
+    const stats = rawRows.map(r => {
+      // Get proper team name and abbreviation
+      const teamInfo = mapTeamNameAndAbbreviation(r.team_name);
+      
+      return {
+        ...r,
+        timeframe_days: TIMEFRAME_DAYS,
+        game_date: gameDate,
+        actual_team_name: teamInfo.actual_team_name,
+        team_abbr: teamInfo.team_abbr
+      };
+    });
     
     console.log(`Successfully scraped ${stats.length} team hitting stats for ${TIMEFRAME_DAYS}-day period`);
     
     if (DEBUG && stats.length > 0) {
-      console.log('Sample data:', JSON.stringify(stats.slice(0, 2), null, 2));
+      console.log('Sample data with mapped team names:', JSON.stringify(stats.slice(0, 2), null, 2));
     }
     
     // Write to repo root for GitHub Actions to find
@@ -178,12 +236,12 @@ async function runTeamStatsMigration() {
     const migrationSQL = `
     BEGIN;
 
-    -- 1) Add two new columns: actual_team_name and team_abbr
+    -- 1) Add two new columns: actual_team_name and team_abbr if they don't exist
     ALTER TABLE mlb_team_hitting_stats
       ADD COLUMN IF NOT EXISTS actual_team_name TEXT,
       ADD COLUMN IF NOT EXISTS team_abbr CHAR(3);
 
-    -- 2) Populate them based on the broken 'team_name'
+    -- 2) Update any records that might not have been properly mapped previously
     UPDATE mlb_team_hitting_stats
     SET
       actual_team_name = CASE
@@ -217,7 +275,7 @@ async function runTeamStatsMigration() {
         WHEN team_name ILIKE 'Texas Rangers%'          THEN 'Texas Rangers'
         WHEN team_name ILIKE 'Boston Red Sox%'         THEN 'Boston Red Sox'
         WHEN team_name ILIKE 'Baltimore Orioles%'      THEN 'Baltimore Orioles'
-        ELSE NULL
+        ELSE actual_team_name
       END,
       team_abbr = CASE
         WHEN team_name ILIKE 'Seattle Mariners%'       THEN 'SEA'
@@ -250,8 +308,9 @@ async function runTeamStatsMigration() {
         WHEN team_name ILIKE 'Texas Rangers%'          THEN 'TEX'
         WHEN team_name ILIKE 'Boston Red Sox%'         THEN 'BOS'
         WHEN team_name ILIKE 'Baltimore Orioles%'      THEN 'BAL'
-        ELSE NULL
-      END;
+        ELSE team_abbr
+      END
+    WHERE actual_team_name IS NULL OR team_abbr IS NULL;
 
     COMMIT;
     `;
