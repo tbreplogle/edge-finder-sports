@@ -10,42 +10,52 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
-      - run: npm install
-      - name: Check environment variables
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Check required secrets
         run: |
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "::error::SUPABASE_URL environment variable is not set"
+          echo "Checking required GitHub repository secrets..."
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            echo "::error::SUPABASE_URL secret is not configured in GitHub repository secrets!"
+            echo "Please add your Supabase project URL as a secret in GitHub repository settings."
             exit 1
           fi
-          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error::SUPABASE_SERVICE_ROLE_KEY environment variable is not set"
+          
+          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY secret is not configured in GitHub repository secrets!"
+            echo "Please add your Supabase service role key as a secret in GitHub repository settings."
             exit 1
           fi
-          echo "Environment variables set correctly"
-      - name: Run scraper with verbose logging
+          
+          echo "✅ Required secrets are configured correctly."
+      
+      - name: Run MLB hitting stats scraper
+        id: scrape
         run: node workers/scrapeTeamHittingStats.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DEBUG: 'true'
-      - name: Debug directory contents
+      
+      - name: Verify scrape results
         if: always()
         run: |
-          echo "Directory contents:"
-          ls -la
-          echo "Working directory: $(pwd)"
-      - name: Create GitHub annotation for success/failure
-        if: always()
-        run: |
+          echo "Checking for scrape results file..."
           if [ -f "scrape-result.json" ]; then
-            echo "scrape-result.json exists with content:"
+            echo "✅ scrape-result.json exists with content:"
             cat scrape-result.json
-            echo "::notice::MLB stats scraping completed successfully. See scrape-result.json for details."
+            echo "::notice::MLB stats scraping completed. See logs for details."
           else
-            echo "::error::scrape-result.json file not found. Scraping likely failed."
+            echo "::error::scrape-result.json file not found! Scraping likely failed."
+            echo "Check the scraper logs above for specific errors."
             exit 1
           fi

@@ -12,7 +12,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tables } from "@/integrations/supabase/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 type TeamHittingStats = Tables<"mlb_team_hitting_stats">;
 
@@ -20,9 +20,15 @@ interface MlbTeamHittingStatsTableProps {
   stats: TeamHittingStats[];
   isLoading?: boolean;
   lastUpdated?: string;
+  onRefresh?: () => void;
 }
 
-export function MlbTeamHittingStatsTable({ stats, isLoading = false, lastUpdated }: MlbTeamHittingStatsTableProps) {
+export function MlbTeamHittingStatsTable({ 
+  stats, 
+  isLoading = false, 
+  lastUpdated,
+  onRefresh 
+}: MlbTeamHittingStatsTableProps) {
   const [timeframe, setTimeframe] = useState<"7" | "14">("7");
   
   // Filter stats by timeframe
@@ -51,8 +57,28 @@ export function MlbTeamHittingStatsTable({ stats, isLoading = false, lastUpdated
     return (
       <Alert className="bg-amber-50 border-amber-200">
         <AlertTitle>No Team Hitting Data Available</AlertTitle>
-        <AlertDescription>
-          No MLB team hitting stats available. Run the "Daily MLB Team Hitting Stats Update" workflow in GitHub Actions to generate data.
+        <AlertDescription className="space-y-4">
+          <p>
+            No MLB team hitting stats available. This could be because:
+          </p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>The "Daily MLB Team Hitting Stats Update" workflow hasn't run yet</li>
+            <li>The scraper encountered errors when retrieving data</li>
+            <li>The connection to Supabase failed during data insertion</li>
+          </ul>
+          <div className="pt-2">
+            {onRefresh && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={onRefresh}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh Data
+              </Button>
+            )}
+          </div>
         </AlertDescription>
       </Alert>
     );
@@ -67,6 +93,17 @@ export function MlbTeamHittingStatsTable({ stats, isLoading = false, lastUpdated
             <span className="text-xs text-muted-foreground">
               Last updated: {new Date(lastUpdated).toLocaleString()}
             </span>
+          )}
+          {onRefresh && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={onRefresh}
+              className="mr-2"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
           )}
           <Tabs value={timeframe} onValueChange={(v) => setTimeframe(v as "7" | "14")}>
             <TabsList>

@@ -2,19 +2,24 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 
-// Print debug info when env vars are missing
+// Robust environment variable checking with detailed errors
 if (!process.env.SUPABASE_URL) {
-  console.error('❌ SUPABASE_URL environment variable is not set');
+  console.error('❌ ERROR: SUPABASE_URL environment variable is not set!');
+  console.error('This is required for connecting to your Supabase project.');
+  console.error('Make sure to add this as a GitHub repository secret.');
 }
 
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('❌ SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
+  console.error('❌ ERROR: SUPABASE_SERVICE_ROLE_KEY environment variable is not set!');
+  console.error('This is required for authenticating with your Supabase project.');
+  console.error('Make sure to add this as a GitHub repository secret.');
 }
 
 // Log sanitized versions of credentials for debugging
-console.log(`SUPABASE_URL set: ${process.env.SUPABASE_URL ? 'Yes (starts with: ' + process.env.SUPABASE_URL.substring(0, 8) + '...)' : 'No'}`);
-console.log(`SUPABASE_SERVICE_ROLE_KEY set: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Yes (length: ' + process.env.SUPABASE_SERVICE_ROLE_KEY.length + ')' : 'No'}`);
+console.log(`SUPABASE_URL set: ${process.env.SUPABASE_URL ? '✅ Yes (starts with: ' + process.env.SUPABASE_URL.substring(0, 8) + '...)' : '❌ No'}`);
+console.log(`SUPABASE_SERVICE_ROLE_KEY set: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ Yes (length: ' + process.env.SUPABASE_SERVICE_ROLE_KEY.length + ')' : '❌ No'}`);
 
+// Create the Supabase client with service role key
 export const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
@@ -33,32 +38,54 @@ export async function testConnection() {
     const { data, error } = await supabase.from('mlb_team_hitting_stats').select('count(*)', { count: 'exact' });
     
     if (error) {
-      console.error('Failed to connect to Supabase:', error);
+      console.error('❌ Failed to connect to Supabase:', error.message);
+      console.error('Detailed error:', JSON.stringify(error, null, 2));
       
-      // Create a failure report for GitHub Actions
-      fs.writeFileSync('scrape-result.json', JSON.stringify({
+      // Always create a report even on failure
+      createScrapeReport({
         success: false,
         error: error.message,
         timestamp: new Date().toISOString(),
         stats: { seven_day: 0, fourteen_day: 0 }
-      }, null, 2));
+      });
       
       return false;
     }
     
-    console.log('Successfully connected to Supabase. Current row count:', data);
+    console.log('✅ Successfully connected to Supabase!');
+    console.log(`Current row count in mlb_team_hitting_stats: ${data}`);
     return true;
   } catch (err) {
-    console.error('Error testing Supabase connection:', err.message);
+    console.error('❌ Error testing Supabase connection:', err.message);
+    console.error('Stack trace:', err.stack);
     
-    // Create a failure report for GitHub Actions
-    fs.writeFileSync('scrape-result.json', JSON.stringify({
+    // Always create a report even on exception
+    createScrapeReport({
       success: false,
       error: err.message,
       timestamp: new Date().toISOString(),
       stats: { seven_day: 0, fourteen_day: 0 }
-    }, null, 2));
+    });
     
     return false;
+  }
+}
+
+// Helper function to create the scrape report
+export function createScrapeReport(data) {
+  try {
+    console.log('Creating scrape report:', JSON.stringify(data, null, 2));
+    fs.writeFileSync('scrape-result.json', JSON.stringify(data, null, 2));
+    console.log('✅ Scrape report saved to scrape-result.json');
+  } catch (err) {
+    console.error('❌ Error writing scrape report file:', err.message);
+    
+    // Try writing to a differently named file in case of permission issues
+    try {
+      fs.writeFileSync('scrape-result-fallback.json', JSON.stringify(data, null, 2));
+      console.log('✅ Fallback scrape report saved to scrape-result-fallback.json');
+    } catch (fallbackErr) {
+      console.error('❌ Critical error: Could not write report file:', fallbackErr.message);
+    }
   }
 }

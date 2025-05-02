@@ -3,20 +3,21 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import axiosRetry from 'axios-retry';
 import fs from 'fs';
-import { supabase, testConnection } from './lib/supabaseClient.js';
+import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
 
 // Enable debug mode when environment variable is set
 const DEBUG = process.env.DEBUG === 'true';
 
 // Configure axios with retry logic
 axiosRetry(axios, {
-  retries: 3,
-  retryDelay: retryCount => 2000 * retryCount,
+  retries: 5, // Increased from 3 to 5
+  retryDelay: retryCount => 3000 * retryCount, // Longer delays between retries
   retryCondition: error => 
     axiosRetry.isNetworkOrIdempotentRequestError(error) || 
     error.code === 'ERR_BAD_RESPONSE' || 
     error.code === 'ECONNABORTED' ||
-    error.response?.status === 524,
+    error.response?.status === 524 ||
+    error.response?.status === 429, // Rate limiting
   onRetry: (retryCount, error) => {
     console.log(`Retry attempt #${retryCount} for MLB Stats`);
     console.log(`Reason: ${error.message}`);
@@ -33,18 +34,23 @@ export async function scrapeTeamHittingStats(days = -7) {
     const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=${days}`;
     console.log(`Fetching MLB team hitting stats from: ${url}`);
     
-    // Debug logging for environment variables (sanitized)
     if (DEBUG) {
       console.log(`SUPABASE_URL set: ${process.env.SUPABASE_URL ? 'Yes' : 'No'}`);
       console.log(`SUPABASE_SERVICE_ROLE_KEY set: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Yes' : 'No'}`);
     }
     
     const { data: html } = await axios.get(url, {
-      timeout: 30000, // 30 second timeout
+      timeout: 60000, // Increased timeout to 60 seconds
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml',
+        'Accept-Language': 'en-US,en;q=0.9'
       }
     });
+    
+    if (!html || typeof html !== 'string' || html.length < 1000) {
+      throw new Error(`Invalid or empty HTML response: ${html?.substring(0, 100)}...`);
+    }
     
     if (DEBUG) {
       console.log(`HTML content length: ${html.length}`);
@@ -53,29 +59,41 @@ export async function scrapeTeamHittingStats(days = -7) {
       console.log(`HTML sample: ${sampleHtml}`);
       
       // Save full HTML for debugging
-      fs.writeFileSync(`debug-html-${Math.abs(days)}-day.txt`, html);
+      fs.writeFileSync(`debug-html-${Math.abs(days)}-day.html`, html);
+      console.log(`Full HTML saved to debug-html-${Math.abs(days)}-day.html`);
     }
     
     // Load HTML into cheerio
     const $ = cheerio.load(html);
     const stats = [];
     
-    // Find the stats table
+    // Find the stats table - improved selectors to be more robust
     const tableRows = $('table tbody tr');
     
     if (tableRows.length === 0) {
       console.warn('Could not find stat table rows on the page');
       
-      if (DEBUG) {
-        // Save selectors for debugging
-        const selectors = ['table', 'tbody', 'tr'].map(sel => ({
-          selector: sel,
-          count: $(sel).length
-        }));
-        console.log('Selector counts:', JSON.stringify(selectors, null, 2));
-      }
+      // Try alternative selectors if the main one fails
+      const alternativeTableRows = $('.stats-table tbody tr, .team-stats tbody tr');
       
-      return [];
+      if (alternativeTableRows.length > 0) {
+        console.log(`Found ${alternativeTableRows.length} rows using alternative selector`);
+        tableRows = alternativeTableRows;
+      } else if (DEBUG) {
+        // Save detailed selector information for debugging
+        const selectors = [
+          'table', 'tbody', 'tr', 
+          '.stats-table', '.team-stats',
+          'div.table-wrapper'
+        ].map(sel => ({
+          selector: sel,
+          count: $(sel).length,
+          html: $(sel).length > 0 ? $(sel).first().html()?.substring(0, 100) + '...' : 'not found'
+        }));
+        
+        console.log('Detailed selector diagnostics:', JSON.stringify(selectors, null, 2));
+        throw new Error('Could not locate team stats table in the HTML');
+      }
     }
     
     console.log(`Found ${tableRows.length} team stats rows`);
@@ -95,11 +113,16 @@ export async function scrapeTeamHittingStats(days = -7) {
       const teamNameCell = $(cells[0]).find('a');
       const teamName = teamNameCell.text().trim();
       
+      if (!teamName) {
+        console.warn(`Could not extract team name from row ${index}`);
+        return;
+      }
+      
       if (DEBUG) {
         console.log(`Processing team: ${teamName}`);
       }
       
-      // Create stats object
+      // Create stats object with careful parsing
       const teamStats = {
         team_name: teamName,
         timeframe_days: Math.abs(days),
@@ -125,10 +148,15 @@ export async function scrapeTeamHittingStats(days = -7) {
       stats.push(teamStats);
     });
     
+    if (stats.length === 0) {
+      throw new Error('No team stats were extracted from the HTML');
+    }
+    
     console.log(`Successfully scraped ${stats.length} team hitting stats`);
     
     if (DEBUG) {
       console.log('Sample data:', JSON.stringify(stats.slice(0, 2), null, 2));
+      fs.writeFileSync(`debug-stats-${Math.abs(days)}-day.json`, JSON.stringify(stats, null, 2));
     }
     
     return stats;
@@ -137,12 +165,12 @@ export async function scrapeTeamHittingStats(days = -7) {
     if (err.stack) console.error(err.stack);
     
     // Always create a result file even on error
-    fs.writeFileSync('scrape-result.json', JSON.stringify({
+    createScrapeReport({
       success: false,
       error: err.message,
       timestamp: new Date().toISOString(),
       stats: { seven_day: 0, fourteen_day: 0 }
-    }, null, 2));
+    });
     
     return [];
   }
@@ -154,7 +182,7 @@ export async function scrapeTeamHittingStats(days = -7) {
  * @returns {Promise<boolean>} Success status
  */
 async function saveTeamStatsToSupabase(teamStats) {
-  if (teamStats.length === 0) {
+  if (!teamStats || teamStats.length === 0) {
     console.log('No team stats to save');
     return false;
   }
@@ -162,13 +190,16 @@ async function saveTeamStatsToSupabase(teamStats) {
   console.log(`Saving ${teamStats.length} team hitting stats to Supabase`);
   
   try {
-    // Test Supabase connection
+    // Test Supabase connection before attempting insert
     const connectionSuccessful = await testConnection();
     
     if (!connectionSuccessful) {
-      console.error('Failed to connect to Supabase');
+      console.error('Failed to connect to Supabase - aborting data save');
       return false;
     }
+    
+    // Log the first record we're trying to insert for debugging
+    console.log('First record to insert:', JSON.stringify(teamStats[0], null, 2));
     
     // Insert data using upsert with onConflict for handling duplicates
     const { data, error } = await supabase
@@ -194,8 +225,8 @@ async function saveTeamStatsToSupabase(teamStats) {
         console.log('Single row insert result:', JSON.stringify(singleInsertResult, null, 2));
       }
       
-      // Create a result file even on error
-      fs.writeFileSync('scrape-result.json', JSON.stringify({
+      // Always create a report even on error
+      createScrapeReport({
         success: false,
         error: error.message,
         timestamp: new Date().toISOString(),
@@ -203,19 +234,19 @@ async function saveTeamStatsToSupabase(teamStats) {
           seven_day: teamStats.filter(s => s.timeframe_days === 7).length,
           fourteen_day: teamStats.filter(s => s.timeframe_days === 14).length
         }
-      }, null, 2));
+      });
       
       return false;
     } else {
-      console.log('Successfully saved team hitting stats to Supabase');
+      console.log('✅ Successfully saved team hitting stats to Supabase');
       return true;
     }
   } catch (err) {
     console.error('Exception saving team stats to Supabase:', err.message);
     if (err.stack) console.error(err.stack);
     
-    // Create a result file even on exception
-    fs.writeFileSync('scrape-result.json', JSON.stringify({
+    // Always create a report even on exception
+    createScrapeReport({
       success: false,
       error: err.message,
       timestamp: new Date().toISOString(),
@@ -223,7 +254,7 @@ async function saveTeamStatsToSupabase(teamStats) {
         seven_day: teamStats.filter(s => s.timeframe_days === 7).length,
         fourteen_day: teamStats.filter(s => s.timeframe_days === 14).length
       }
-    }, null, 2));
+    });
     
     return false;
   }
@@ -234,42 +265,66 @@ async function saveTeamStatsToSupabase(teamStats) {
  */
 export async function updateTeamHittingStats() {
   console.log('⏳ Starting MLB team hitting stats update...');
-  const results = { success: false, stats: { seven_day: 0, fourteen_day: 0 }, timestamp: new Date().toISOString() };
+  const startTime = new Date();
+  const results = { 
+    success: false, 
+    stats: { seven_day: 0, fourteen_day: 0 }, 
+    timestamp: startTime.toISOString() 
+  };
   
   try {
+    // First check Supabase connection
+    console.log('Verifying Supabase connection...');
+    const connectionCheck = await testConnection();
+    
+    if (!connectionCheck) {
+      throw new Error('Failed to connect to Supabase - aborting scrape job');
+    }
+    
     // Scrape 7-day stats
+    console.log('Scraping 7-day team stats...');
     const sevenDayStats = await scrapeTeamHittingStats(-7);
     console.log(`Fetched ${sevenDayStats.length} 7-day team stats`);
     results.stats.seven_day = sevenDayStats.length;
     
     // Scrape 14-day stats
+    console.log('Scraping 14-day team stats...');
     const fourteenDayStats = await scrapeTeamHittingStats(-14);
     console.log(`Fetched ${fourteenDayStats.length} 14-day team stats`);
     results.stats.fourteen_day = fourteenDayStats.length;
     
-    // Save stats to Supabase
+    // Save stats to Supabase only if we have data
     let saveSuccess = true;
     
     if (sevenDayStats.length > 0) {
+      console.log('Saving 7-day stats to Supabase...');
       const sevenDaySuccess = await saveTeamStatsToSupabase(sevenDayStats);
       saveSuccess = saveSuccess && sevenDaySuccess;
+    } else {
+      console.warn('No 7-day stats to save to Supabase');
     }
     
     if (fourteenDayStats.length > 0) {
+      console.log('Saving 14-day stats to Supabase...');
       const fourteenDaySuccess = await saveTeamStatsToSupabase(fourteenDayStats);
       saveSuccess = saveSuccess && fourteenDaySuccess;
+    } else {
+      console.warn('No 14-day stats to save to Supabase');
     }
     
     results.success = saveSuccess;
     
+    const endTime = new Date();
+    const duration = (endTime - startTime) / 1000;
+    
     if (saveSuccess) {
-      console.log('✅ MLB team hitting stats update completed successfully');
+      console.log(`✅ MLB team hitting stats update completed successfully in ${duration}s`);
     } else {
-      console.log('⚠️ MLB team hitting stats update completed with issues');
+      console.log(`⚠️ MLB team hitting stats update completed with issues in ${duration}s`);
     }
     
     // Always write results to file for GitHub Actions
-    fs.writeFileSync('scrape-result.json', JSON.stringify(results, null, 2));
+    createScrapeReport(results);
     
     return {
       sevenDayStats,
@@ -286,7 +341,7 @@ export async function updateTeamHittingStats() {
       timestamp: new Date().toISOString(),
       stats: { seven_day: 0, fourteen_day: 0 } 
     };
-    fs.writeFileSync('scrape-result.json', JSON.stringify(errorResults, null, 2));
+    createScrapeReport(errorResults);
     
     throw error;
   }
@@ -294,8 +349,14 @@ export async function updateTeamHittingStats() {
 
 // Run if script is executed directly
 if (import.meta.url === import.meta.main) {
+  console.log('Running MLB team hitting stats scraper as standalone script');
+  console.log('Current directory:', process.cwd());
+  console.log('Node.js version:', process.version);
+  console.log('Environment variables set:', Object.keys(process.env).filter(key => !key.includes('KEY')).join(', '));
+  
   updateTeamHittingStats()
     .then(stats => {
+      console.log('Script completed successfully!');
       console.log(JSON.stringify(stats, null, 2));
       process.exit(0);
     })
