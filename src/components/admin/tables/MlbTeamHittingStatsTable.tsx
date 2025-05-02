@@ -162,6 +162,7 @@ export function MlbTeamHittingStatsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Team</TableHead>
+              <TableHead>League</TableHead>
               <TableHead className="text-right">GP</TableHead>
               <TableHead className="text-right">HR</TableHead>
               <TableHead className="text-right">AVG</TableHead>
@@ -174,7 +175,7 @@ export function MlbTeamHittingStatsTable({
           <TableBody>
             {filteredStats.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-4 text-muted-foreground">
                   No data available for {timeframe}-day timeframe
                 </TableCell>
               </TableRow>
@@ -182,6 +183,7 @@ export function MlbTeamHittingStatsTable({
               filteredStats.map((stat) => (
                 <TableRow key={stat.id}>
                   <TableCell className="font-medium">{stat.team_name}</TableCell>
+                  <TableCell>{stat.league}</TableCell>
                   <TableCell className="text-right">{stat.games_played}</TableCell>
                   <TableCell className="text-right">{stat.home_runs}</TableCell>
                   <TableCell className="text-right">{stat.avg?.toFixed(3)}</TableCell>
