@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import axiosRetry from 'axios-retry';
@@ -10,14 +9,14 @@ const DEBUG = process.env.DEBUG === 'true';
 
 // Configure axios with retry logic
 axiosRetry(axios, {
-  retries: 5, // Increased from 3 to 5
-  retryDelay: retryCount => 3000 * retryCount, // Longer delays between retries
+  retries: 5,
+  retryDelay: retryCount => 3000 * retryCount,
   retryCondition: error => 
     axiosRetry.isNetworkOrIdempotentRequestError(error) || 
     error.code === 'ERR_BAD_RESPONSE' || 
     error.code === 'ECONNABORTED' ||
     error.response?.status === 524 ||
-    error.response?.status === 429, // Rate limiting
+    error.response?.status === 429,
   onRetry: (retryCount, error) => {
     console.log(`Retry attempt #${retryCount} for MLB Stats`);
     console.log(`Reason: ${error.message}`);
@@ -40,11 +39,18 @@ export async function scrapeTeamHittingStats(days = -7) {
     }
     
     const { data: html } = await axios.get(url, {
-      timeout: 60000, // Increased timeout to 60 seconds
+      timeout: 60000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'max-age=0',
+        'Referer': 'https://www.mlb.com/',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1'
       }
     });
     
@@ -54,10 +60,6 @@ export async function scrapeTeamHittingStats(days = -7) {
     
     if (DEBUG) {
       console.log(`HTML content length: ${html.length}`);
-      // Save a sample of the HTML for debugging
-      const sampleHtml = html.substring(0, 500) + '... [truncated]';
-      console.log(`HTML sample: ${sampleHtml}`);
-      
       // Save full HTML for debugging
       fs.writeFileSync(`debug-html-${Math.abs(days)}-day.html`, html);
       console.log(`Full HTML saved to debug-html-${Math.abs(days)}-day.html`);
@@ -67,256 +69,402 @@ export async function scrapeTeamHittingStats(days = -7) {
     const $ = cheerio.load(html);
     const stats = [];
     
-    // Important: MLB.com uses client-side rendering, so we need to look for data in a script tag
-    // Try to find the data in the scripts or in JSON embedded in the page
-    let jsonData = null;
+    // First attempt: Try to parse data directly from the table
+    // MLB.com now uses a standard table structure in some views
+    const tableSelector = 'table.bui-table';
+    const table = $(tableSelector);
     
-    // First try to locate any JSON data in script tags
-    $('script').each((i, elem) => {
-      const scriptContent = $(elem).html() || '';
-      if (scriptContent.includes('window.__INITIAL_STATE__')) {
-        try {
-          const stateMatch = scriptContent.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});/s);
-          if (stateMatch && stateMatch[1]) {
-            jsonData = JSON.parse(stateMatch[1]);
-            console.log('Found initial state data');
-          }
-        } catch (e) {
-          console.log('Failed to parse initial state:', e.message);
+    if (table.length > 0) {
+      console.log('Found stats table using primary selector');
+      
+      // Get table headers to map columns correctly
+      const headers = [];
+      table.find('thead th').each((i, el) => {
+        headers.push($(el).text().trim().toLowerCase());
+      });
+      
+      console.log('Found headers:', headers);
+      
+      // Create a mapping from header position to our data structure
+      const headerMap = {};
+      headers.forEach((header, index) => {
+        switch(header) {
+          case 'team': headerMap.team_name = index; break;
+          case 'g': headerMap.games_played = index; break;
+          case 'ab': headerMap.at_bats = index; break;
+          case 'r': headerMap.runs = index; break;
+          case 'h': headerMap.hits = index; break;
+          case '2b': headerMap.doubles = index; break;
+          case '3b': headerMap.triples = index; break;
+          case 'hr': headerMap.home_runs = index; break;
+          case 'rbi': headerMap.rbi = index; break;
+          case 'bb': headerMap.bb = index; break;
+          case 'so': headerMap.so = index; break;
+          case 'sb': headerMap.sb = index; break;
+          case 'cs': headerMap.cs = index; break;
+          case 'avg': headerMap.avg = index; break;
+          case 'obp': headerMap.obp = index; break;
+          case 'slg': headerMap.slg = index; break;
+          case 'ops': headerMap.ops = index; break;
         }
-      }
-    });
-    
-    // If we found embedded JSON data, extract team stats from it
-    if (jsonData && jsonData.stats && jsonData.stats.leaderboards) {
-      console.log('Parsing team stats from embedded JSON data');
-      const leaderboardData = jsonData.stats.leaderboards;
-      // Extract team stats based on the structure of the JSON
-      // This would require adapting to the actual structure
-      
-      // Example extraction if data is available
-      if (leaderboardData.teamHitting) {
-        leaderboardData.teamHitting.forEach(team => {
-          stats.push({
-            team_name: team.teamName,
-            timeframe_days: Math.abs(days),
-            game_date: new Date().toISOString().slice(0, 10),
-            games_played: team.gamesPlayed || null,
-            at_bats: team.atBats || null,
-            runs: team.runs || null,
-            hits: team.hits || null,
-            doubles: team.doubles || null,
-            triples: team.triples || null,
-            home_runs: team.homeRuns || null,
-            rbi: team.rbi || null,
-            bb: team.baseOnBalls || null,
-            so: team.strikeOuts || null,
-            sb: team.stolenBases || null,
-            cs: team.caughtStealing || null,
-            avg: team.battingAverage || null,
-            obp: team.onBasePercentage || null,
-            slg: team.sluggingPercentage || null,
-            ops: team.ops || null
-          });
-        });
-      }
-    }
-    
-    // If we couldn't get data from JSON, fall back to direct HTML scraping
-    if (stats.length === 0) {
-      console.log('Falling back to direct HTML table scraping');
-      
-      // Try multiple possible selectors for the stats table
-      const tableSelectors = [
-        'table.stats-table tbody tr',
-        '.stats-table tbody tr',
-        '#stats-table-container table tbody tr',
-        '.bui-table tbody tr',
-        'table tbody tr'
-      ];
-      
-      let tableRows;
-      for (const selector of tableSelectors) {
-        tableRows = $(selector);
-        if (tableRows.length > 0) {
-          console.log(`Found ${tableRows.length} rows using selector: ${selector}`);
-          break;
-        }
-      }
-      
-      if (!tableRows || tableRows.length === 0) {
-        // If we still can't find the table, the page structure might be different than expected
-        console.warn('Could not find stat table rows on the page using standard selectors');
-        
-        // Attempt to identify any table structure on the page
-        const anyTable = $('table');
-        if (anyTable.length > 0) {
-          console.log(`Found ${anyTable.length} tables on the page, attempting to use the first one`);
-          tableRows = $(anyTable[0]).find('tbody tr');
-        }
-        
-        if (!tableRows || tableRows.length === 0) {
-          // Save detailed information about the page structure for debugging
-          if (DEBUG) {
-            // Get all HTML elements with their class names for debugging
-            const pageStructure = Array.from($('*')).map(el => {
-              const element = $(el);
-              return {
-                tag: el.tagName,
-                id: element.attr('id') || '',
-                class: element.attr('class') || ''
-              };
-            }).slice(0, 100); // Just get the first 100 to avoid excessive output
-            
-            console.log('Page structure:', JSON.stringify(pageStructure, null, 2));
-            
-            // This might be a client-rendered page, so let's check for key static elements
-            console.log('Key container elements:');
-            console.log('- #root elements:', $('#root').length);
-            console.log('- .table elements:', $('.table').length);
-            console.log('- table elements:', $('table').length);
-          }
-          
-          // Create a simple placeholder record to provide some data
-          // This ensures the workflow doesn't completely fail and we can debug further
-          console.warn('Could not extract team stats from HTML, creating placeholder data');
-          const mlbTeams = [
-            'AZ', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET', 
-            'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK', 
-            'PHI', 'PIT', 'SD', 'SF', 'SEA', 'STL', 'TB', 'TEX', 'TOR', 'WSH'
-          ];
-          
-          mlbTeams.forEach(team => {
-            stats.push({
-              team_name: team,
-              timeframe_days: Math.abs(days),
-              game_date: new Date().toISOString().slice(0, 10),
-              games_played: null,
-              at_bats: null,
-              runs: null,
-              hits: null,
-              doubles: null,
-              triples: null,
-              home_runs: null,
-              rbi: null,
-              bb: null,
-              so: null,
-              sb: null,
-              cs: null,
-              avg: null,
-              obp: null,
-              slg: null,
-              ops: null
-            });
-          });
-          
-          console.log(`Created ${stats.length} placeholder team stats`);
-          return stats;
-        }
-      }
-      
-      console.log(`Processing ${tableRows.length} team stats rows`);
+      });
       
       // Process each team row
-      tableRows.each((index, row) => {
-        const $row = $(row);
+      table.find('tbody tr').each((index, row) => {
+        const cells = $(row).find('td');
         
-        // Skip header rows or rows without enough cells
-        if ($row.find('th').length > 0) {
-          return;
-        }
-        
-        const cells = $row.find('td');
-        
-        // Skip if we don't have enough cells
-        if (cells.length < 10) {
-          console.warn(`Row ${index} has ${cells.length} cells, expected at least 10`);
-          return;
-        }
-        
-        // Extract the team name from the first cell
+        // Extract team name - it might be in a link or a plain cell
         let teamName = '';
-        const teamNameCell = $(cells[0]);
-        const teamNameLink = teamNameCell.find('a');
+        const teamCell = $(cells[headerMap.team_name]);
+        const teamLink = teamCell.find('a');
         
-        if (teamNameLink.length > 0) {
-          teamName = teamNameLink.text().trim();
+        if (teamLink.length > 0) {
+          teamName = teamLink.text().trim();
         } else {
-          teamName = teamNameCell.text().trim();
+          teamName = teamCell.text().trim();
         }
         
+        // Skip if no team name was found
         if (!teamName) {
-          console.warn(`Could not extract team name from row ${index}`);
           return;
         }
         
-        console.log(`Processing team: ${teamName}, row has ${cells.length} cells`);
-        
-        // Map the cells to our stats object
-        // The exact indices may need adjustment based on the actual table structure
+        // Create the team stats object with parsed values
         const teamStats = {
           team_name: teamName,
           timeframe_days: Math.abs(days),
-          game_date: new Date().toISOString().slice(0, 10), // Today's date
-          games_played: parseInt($(cells[1]).text().trim(), 10) || null,
-          at_bats: parseInt($(cells[2]).text().trim(), 10) || null,
-          runs: parseInt($(cells[3]).text().trim(), 10) || null,
-          hits: parseInt($(cells[4]).text().trim(), 10) || null,
-          doubles: parseInt($(cells[5]).text().trim(), 10) || null,
-          triples: parseInt($(cells[6]).text().trim(), 10) || null,
-          home_runs: parseInt($(cells[7]).text().trim(), 10) || null,
-          rbi: parseInt($(cells[8]).text().trim(), 10) || null,
-          bb: parseInt($(cells[9]).text().trim(), 10) || null,
-          so: parseInt($(cells[10]).text().trim(), 10) || null,
-          sb: parseInt($(cells[11]).text().trim(), 10) || null,
-          cs: parseInt($(cells[12]).text().trim(), 10) || null,
-          avg: parseFloat($(cells[13]).text().trim()) || null,
-          obp: parseFloat($(cells[14]).text().trim()) || null,
-          slg: parseFloat($(cells[15]).text().trim()) || null,
-          ops: parseFloat($(cells[16]).text().trim()) || null
+          game_date: new Date().toISOString().slice(0, 10),
+          games_played: headerMap.games_played !== undefined ? parseInt($(cells[headerMap.games_played]).text().trim(), 10) || null : null,
+          at_bats: headerMap.at_bats !== undefined ? parseInt($(cells[headerMap.at_bats]).text().trim(), 10) || null : null,
+          runs: headerMap.runs !== undefined ? parseInt($(cells[headerMap.runs]).text().trim(), 10) || null : null,
+          hits: headerMap.hits !== undefined ? parseInt($(cells[headerMap.hits]).text().trim(), 10) || null : null,
+          doubles: headerMap.doubles !== undefined ? parseInt($(cells[headerMap.doubles]).text().trim(), 10) || null : null,
+          triples: headerMap.triples !== undefined ? parseInt($(cells[headerMap.triples]).text().trim(), 10) || null : null,
+          home_runs: headerMap.home_runs !== undefined ? parseInt($(cells[headerMap.home_runs]).text().trim(), 10) || null : null,
+          rbi: headerMap.rbi !== undefined ? parseInt($(cells[headerMap.rbi]).text().trim(), 10) || null : null,
+          bb: headerMap.bb !== undefined ? parseInt($(cells[headerMap.bb]).text().trim(), 10) || null : null,
+          so: headerMap.so !== undefined ? parseInt($(cells[headerMap.so]).text().trim(), 10) || null : null,
+          sb: headerMap.sb !== undefined ? parseInt($(cells[headerMap.sb]).text().trim(), 10) || null : null,
+          cs: headerMap.cs !== undefined ? parseInt($(cells[headerMap.cs]).text().trim(), 10) || null : null,
+          avg: headerMap.avg !== undefined ? parseFloat($(cells[headerMap.avg]).text().trim()) || null : null,
+          obp: headerMap.obp !== undefined ? parseFloat($(cells[headerMap.obp]).text().trim()) || null : null,
+          slg: headerMap.slg !== undefined ? parseFloat($(cells[headerMap.slg]).text().trim()) || null : null,
+          ops: headerMap.ops !== undefined ? parseFloat($(cells[headerMap.ops]).text().trim()) || null : null
         };
         
         stats.push(teamStats);
+        console.log(`Processed team: ${teamName}`);
       });
-    }
-    
-    // If we still have no stats, create a manual fallback for MLB teams
-    if (stats.length === 0) {
-      console.warn('Could not extract any team stats from HTML, using fallback data');
-      // Create fallback data 
-      const fallbackTeams = [
-        {team: 'LAD', avg: 0.267, obp: 0.342, slg: 0.452, ops: 0.794},
-        {team: 'ATL', avg: 0.258, obp: 0.331, slg: 0.445, ops: 0.776},
-        {team: 'HOU', avg: 0.255, obp: 0.329, slg: 0.426, ops: 0.755},
-        {team: 'PHI', avg: 0.253, obp: 0.325, slg: 0.421, ops: 0.746},
-        {team: 'NYY', avg: 0.248, obp: 0.321, slg: 0.419, ops: 0.740}
+    } 
+    // If we couldn't find the table with the primary selector, try alternative selectors
+    else {
+      console.log('Primary table selector failed, trying alternatives...');
+      
+      // Try various alternative selectors that might contain the table
+      const alternativeSelectors = [
+        '.stats-table',
+        '#stats-table-container table',
+        '.team-stats-table',
+        '.bui-table',
+        'table'
       ];
       
-      fallbackTeams.forEach(team => {
-        stats.push({
-          team_name: team.team,
-          timeframe_days: Math.abs(days),
-          game_date: new Date().toISOString().slice(0, 10),
-          games_played: 7,
-          at_bats: 250,
-          runs: 35,
-          hits: 60,
-          doubles: 12,
-          triples: 2,
-          home_runs: 8,
-          rbi: 33,
-          bb: 25,
-          so: 58,
-          sb: 5,
-          cs: 1,
-          avg: team.avg,
-          obp: team.obp,
-          slg: team.slg,
-          ops: team.ops
-        });
+      let foundTable = false;
+      
+      for (const selector of alternativeSelectors) {
+        const tableRows = $(selector).find('tbody tr');
+        if (tableRows.length > 0) {
+          console.log(`Found table rows using alternative selector: ${selector}`);
+          foundTable = true;
+          
+          // First determine the column indices by examining the headers
+          const headers = [];
+          $(selector).find('thead th').each((i, el) => {
+            headers.push($(el).text().trim().toLowerCase());
+          });
+          
+          console.log('Found headers:', headers);
+          
+          // Create a mapping from header position to our data structure
+          const headerMap = {};
+          headers.forEach((header, index) => {
+            switch(header) {
+              case 'team': headerMap.team_name = index; break;
+              case 'g': headerMap.games_played = index; break;
+              case 'ab': headerMap.at_bats = index; break;
+              case 'r': headerMap.runs = index; break;
+              case 'h': headerMap.hits = index; break;
+              case '2b': headerMap.doubles = index; break;
+              case '3b': headerMap.triples = index; break;
+              case 'hr': headerMap.home_runs = index; break;
+              case 'rbi': headerMap.rbi = index; break;
+              case 'bb': headerMap.bb = index; break;
+              case 'so': headerMap.so = index; break;
+              case 'sb': headerMap.sb = index; break;
+              case 'cs': headerMap.cs = index; break;
+              case 'avg': headerMap.avg = index; break;
+              case 'obp': headerMap.obp = index; break;
+              case 'slg': headerMap.slg = index; break;
+              case 'ops': headerMap.ops = index; break;
+            }
+          });
+          
+          // Now process each row
+          tableRows.each((index, row) => {
+            const cells = $(row).find('td');
+            
+            if (cells.length < 3) {
+              return; // Skip rows with too few cells
+            }
+            
+            // Extract team name
+            let teamName = '';
+            if (headerMap.team_name !== undefined) {
+              const teamCell = $(cells[headerMap.team_name]);
+              const teamLink = teamCell.find('a');
+              
+              if (teamLink.length > 0) {
+                teamName = teamLink.text().trim();
+              } else {
+                teamName = teamCell.text().trim();
+              }
+            } else {
+              // If we couldn't determine the header mapping, try the first cell
+              const teamCell = $(cells[0]);
+              const teamLink = teamCell.find('a');
+              
+              if (teamLink.length > 0) {
+                teamName = teamLink.text().trim();
+              } else {
+                teamName = teamCell.text().trim();
+              }
+            }
+            
+            // Skip if no team name was found
+            if (!teamName) {
+              return;
+            }
+            
+            // Create the team stats object with parsed values
+            const teamStats = {
+              team_name: teamName,
+              timeframe_days: Math.abs(days),
+              game_date: new Date().toISOString().slice(0, 10),
+              games_played: headerMap.games_played !== undefined ? parseInt($(cells[headerMap.games_played]).text().trim(), 10) || null : null,
+              at_bats: headerMap.at_bats !== undefined ? parseInt($(cells[headerMap.at_bats]).text().trim(), 10) || null : null,
+              runs: headerMap.runs !== undefined ? parseInt($(cells[headerMap.runs]).text().trim(), 10) || null : null,
+              hits: headerMap.hits !== undefined ? parseInt($(cells[headerMap.hits]).text().trim(), 10) || null : null,
+              doubles: headerMap.doubles !== undefined ? parseInt($(cells[headerMap.doubles]).text().trim(), 10) || null : null,
+              triples: headerMap.triples !== undefined ? parseInt($(cells[headerMap.triples]).text().trim(), 10) || null : null,
+              home_runs: headerMap.home_runs !== undefined ? parseInt($(cells[headerMap.home_runs]).text().trim(), 10) || null : null,
+              rbi: headerMap.rbi !== undefined ? parseInt($(cells[headerMap.rbi]).text().trim(), 10) || null : null,
+              bb: headerMap.bb !== undefined ? parseInt($(cells[headerMap.bb]).text().trim(), 10) || null : null,
+              so: headerMap.so !== undefined ? parseInt($(cells[headerMap.so]).text().trim(), 10) || null : null,
+              sb: headerMap.sb !== undefined ? parseInt($(cells[headerMap.sb]).text().trim(), 10) || null : null,
+              cs: headerMap.cs !== undefined ? parseInt($(cells[headerMap.cs]).text().trim(), 10) || null : null,
+              avg: headerMap.avg !== undefined ? parseFloat($(cells[headerMap.avg]).text().trim()) || null : null,
+              obp: headerMap.obp !== undefined ? parseFloat($(cells[headerMap.obp]).text().trim()) || null : null,
+              slg: headerMap.slg !== undefined ? parseFloat($(cells[headerMap.slg]).text().trim()) || null : null,
+              ops: headerMap.ops !== undefined ? parseFloat($(cells[headerMap.ops]).text().trim()) || null : null
+            };
+            
+            stats.push(teamStats);
+            console.log(`Processed team: ${teamName}`);
+          });
+          
+          break; // Exit the loop once we've found a usable table
+        }
+      }
+      
+      // If we still couldn't find a table, try a more direct approach with any table on the page
+      if (!foundTable) {
+        console.log('Alternative selectors failed, trying direct table parsing...');
+        
+        // Find all tables on the page and examine each one
+        const tables = $('table');
+        console.log(`Found ${tables.length} tables on the page`);
+        
+        // Try each table until we find one with team data
+        for (let i = 0; i < tables.length; i++) {
+          const currentTable = $(tables[i]);
+          const rows = currentTable.find('tbody tr');
+          
+          if (rows.length > 0) {
+            console.log(`Examining table ${i} with ${rows.length} rows`);
+            
+            // Try to identify if this is a stats table by checking for stat-like headers
+            const headers = [];
+            currentTable.find('thead th, thead td, tr:first-child th, tr:first-child td').each((i, el) => {
+              headers.push($(el).text().trim().toLowerCase());
+            });
+            
+            // Check if this looks like a stats table
+            const statsHeaders = ['team', 'g', 'ab', 'r', 'h', 'hr', 'avg', 'obp'];
+            const matchCount = statsHeaders.filter(header => headers.includes(header)).length;
+            
+            if (matchCount >= 3) { // If we match at least 3 expected headers
+              console.log(`Table ${i} appears to be a stats table with headers: ${headers.join(', ')}`);
+              
+              // Create a mapping from header position to our data structure
+              const headerMap = {};
+              headers.forEach((header, index) => {
+                switch(header) {
+                  case 'team': headerMap.team_name = index; break;
+                  case 'g': headerMap.games_played = index; break;
+                  case 'ab': headerMap.at_bats = index; break;
+                  case 'r': headerMap.runs = index; break;
+                  case 'h': headerMap.hits = index; break;
+                  case '2b': headerMap.doubles = index; break;
+                  case '3b': headerMap.triples = index; break;
+                  case 'hr': headerMap.home_runs = index; break;
+                  case 'rbi': headerMap.rbi = index; break;
+                  case 'bb': headerMap.bb = index; break;
+                  case 'so': headerMap.so = index; break;
+                  case 'sb': headerMap.sb = index; break;
+                  case 'cs': headerMap.cs = index; break;
+                  case 'avg': headerMap.avg = index; break;
+                  case 'obp': headerMap.obp = index; break;
+                  case 'slg': headerMap.slg = index; break;
+                  case 'ops': headerMap.ops = index; break;
+                }
+              });
+              
+              // If we have a reasonable mapping, process the rows
+              if (Object.keys(headerMap).length >= 5) {
+                rows.each((index, row) => {
+                  const cells = $(row).find('td');
+                  
+                  if (cells.length < 3) {
+                    return; // Skip rows with too few cells
+                  }
+                  
+                  // Extract team name
+                  let teamName = '';
+                  if (headerMap.team_name !== undefined) {
+                    const teamCell = $(cells[headerMap.team_name]);
+                    const teamLink = teamCell.find('a');
+                    
+                    if (teamLink.length > 0) {
+                      teamName = teamLink.text().trim();
+                    } else {
+                      teamName = teamCell.text().trim();
+                    }
+                  } else {
+                    // If we couldn't determine the header mapping, try the first cell
+                    const teamCell = $(cells[0]);
+                    const teamLink = teamCell.find('a');
+                    
+                    if (teamLink.length > 0) {
+                      teamName = teamLink.text().trim();
+                    } else {
+                      teamName = teamCell.text().trim();
+                    }
+                  }
+                  
+                  // Skip if no team name was found
+                  if (!teamName) {
+                    return;
+                  }
+                  
+                  // Create the team stats object with parsed values
+                  const teamStats = {
+                    team_name: teamName,
+                    timeframe_days: Math.abs(days),
+                    game_date: new Date().toISOString().slice(0, 10),
+                    games_played: headerMap.games_played !== undefined ? parseInt($(cells[headerMap.games_played]).text().trim(), 10) || null : null,
+                    at_bats: headerMap.at_bats !== undefined ? parseInt($(cells[headerMap.at_bats]).text().trim(), 10) || null : null,
+                    runs: headerMap.runs !== undefined ? parseInt($(cells[headerMap.runs]).text().trim(), 10) || null : null,
+                    hits: headerMap.hits !== undefined ? parseInt($(cells[headerMap.hits]).text().trim(), 10) || null : null,
+                    doubles: headerMap.doubles !== undefined ? parseInt($(cells[headerMap.doubles]).text().trim(), 10) || null : null,
+                    triples: headerMap.triples !== undefined ? parseInt($(cells[headerMap.triples]).text().trim(), 10) || null : null,
+                    home_runs: headerMap.home_runs !== undefined ? parseInt($(cells[headerMap.home_runs]).text().trim(), 10) || null : null,
+                    rbi: headerMap.rbi !== undefined ? parseInt($(cells[headerMap.rbi]).text().trim(), 10) || null : null,
+                    bb: headerMap.bb !== undefined ? parseInt($(cells[headerMap.bb]).text().trim(), 10) || null : null,
+                    so: headerMap.so !== undefined ? parseInt($(cells[headerMap.so]).text().trim(), 10) || null : null,
+                    sb: headerMap.sb !== undefined ? parseInt($(cells[headerMap.sb]).text().trim(), 10) || null : null,
+                    cs: headerMap.cs !== undefined ? parseInt($(cells[headerMap.cs]).text().trim(), 10) || null : null,
+                    avg: headerMap.avg !== undefined ? parseFloat($(cells[headerMap.avg]).text().trim()) || null : null,
+                    obp: headerMap.obp !== undefined ? parseFloat($(cells[headerMap.obp]).text().trim()) || null : null,
+                    slg: headerMap.slg !== undefined ? parseFloat($(cells[headerMap.slg]).text().trim()) || null : null,
+                    ops: headerMap.ops !== undefined ? parseFloat($(cells[headerMap.ops]).text().trim()) || null : null
+                  };
+                  
+                  stats.push(teamStats);
+                  console.log(`Processed team: ${teamName}`);
+                });
+                
+                if (stats.length > 0) {
+                  console.log(`Extracted ${stats.length} team stats from table ${i}`);
+                  break; // Exit the loop if we've found usable data
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // If we still don't have stats, try direct page analysis for client-rendered content
+    if (stats.length === 0) {
+      console.log('Table parsing methods failed, attempting to extract from page structure...');
+      
+      // Look for any patterns that might indicate team names and stats
+      // This is a last resort fallback method
+      const teamNames = [];
+      const teamStats = {};
+      
+      // Look for team names first
+      $('a').each((i, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        
+        // MLB team links often have patterns like /team/123/name
+        if (href && href.includes('/team/') && text.length > 0) {
+          if (!teamNames.includes(text)) {
+            teamNames.push(text);
+            teamStats[text] = { team_name: text };
+          }
+        }
       });
       
-      console.log(`Created ${stats.length} fallback team stats`);
+      console.log(`Found ${teamNames.length} potential team names from links`);
+      
+      // If we still don't have team names, create fallback data
+      if (teamNames.length === 0) {
+        console.warn('Could not extract any team data, using fallback MLB teams');
+        
+        // All MLB team abbreviations
+        const mlbTeams = [
+          'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET', 
+          'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK', 
+          'PHI', 'PIT', 'SD', 'SF', 'SEA', 'STL', 'TB', 'TEX', 'TOR', 'WSH'
+        ];
+        
+        // Create a placeholder entry for each team
+        mlbTeams.forEach(team => {
+          stats.push({
+            team_name: team,
+            timeframe_days: Math.abs(days),
+            game_date: new Date().toISOString().slice(0, 10),
+            games_played: null,
+            at_bats: null,
+            runs: null,
+            hits: null,
+            doubles: null,
+            triples: null,
+            home_runs: null,
+            rbi: null,
+            bb: null,
+            so: null,
+            sb: null,
+            cs: null,
+            avg: null,
+            obp: null,
+            slg: null,
+            ops: null
+          });
+        });
+      }
     }
     
     console.log(`Successfully scraped ${stats.length} team hitting stats`);
