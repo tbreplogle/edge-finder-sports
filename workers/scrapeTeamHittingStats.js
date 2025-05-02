@@ -40,7 +40,7 @@ export async function scrapeTeamHittingStats() {
     // Navigate to the page and wait for content to load
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     
-    // Wait for the stats table to appear
+    // Wait for the stats table to appear - specifically look for tbody rows
     await page.waitForSelector('table.bui-table tbody tr', { timeout: 30000 });
     
     if (DEBUG) {
@@ -54,22 +54,23 @@ export async function scrapeTeamHittingStats() {
     // Wait longer to ensure table is fully loaded with data
     await page.waitForTimeout(5000);
     
-    // Extract rows from the table with the improved selector approach
+    // Extract rows from the table with updated selector to handle the new table structure
     const rawRows = await page.evaluate(() => {
       const results = [];
       
       // Get all rows from the table body
       const rows = Array.from(document.querySelectorAll('table.bui-table tbody tr'));
-      console.log(`Found ${rows.length} total rows in the table`);
+      console.log(`Found ${rows.length} total rows in the table body`);
       
       // Track teams processed for better debugging
       const teamNames = [];
       
       rows.forEach((row, index) => {
         try {
-          // Check if this is a league header row (usually has fewer cells)
-          const cells = Array.from(row.querySelectorAll('td'));
+          // Select both th and td cells to handle the first column being a th
+          const cells = Array.from(row.querySelectorAll('th, td'));
           
+          // Skip rows that don't have enough cells for a team row
           if (cells.length < 18) {
             console.log(`Skipping row ${index} with only ${cells.length} cells (likely a header)`);
             return;
