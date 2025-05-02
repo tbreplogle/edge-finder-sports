@@ -183,7 +183,7 @@ export function MlbTeamHittingStatsTable({
               filteredStats.map((stat) => (
                 <TableRow key={stat.id}>
                   <TableCell className="font-medium">{stat.team_name}</TableCell>
-                  <TableCell>{stat.league}</TableCell>
+                  <TableCell>{stat.league || '-'}</TableCell>
                   <TableCell className="text-right">{stat.games_played}</TableCell>
                   <TableCell className="text-right">{stat.home_runs}</TableCell>
                   <TableCell className="text-right">{stat.avg?.toFixed(3)}</TableCell>

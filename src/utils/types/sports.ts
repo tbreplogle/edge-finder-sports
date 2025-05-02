@@ -73,3 +73,5 @@ export interface MlbPrediction {
   market_away_ml?: number;
   edge?: number;
 }
+
+// No change to interfaces as the relevant types are already defined in Supabase types
