@@ -35,8 +35,10 @@ export function getTeamAbbreviation(teamName: string): string {
     'Toronto Blue Jays': 'TOR',
     'Washington Nationals': 'WSH',
     
-    // Special case for the duplicate name "ATHLETICSATHLETICS"
+    // Special cases for duplicate names (case-insensitive)
     'ATHLETICSATHLETICS': 'ATH',
+    'AthleticsAthletics': 'ATH',
+    'athleticsathletics': 'ATH',
     
     // NFL
     'Kansas City Chiefs': 'KC',
@@ -59,10 +61,16 @@ export function getTeamAbbreviation(teamName: string): string {
     'Duke Blue Devils': 'DUKE',
   };
   
-  // Check for specific edge case first
-  if (teamName.includes('ATHLETICS')) {
+  // First check for exact match in the map
+  if (teamMap[teamName]) {
+    return teamMap[teamName];
+  }
+  
+  // Then check for case-insensitive match for Athletics
+  if (teamName.toUpperCase().includes('ATHLETICS')) {
     return 'ATH';
   }
   
-  return teamMap[teamName] || teamName.split(' ').pop()?.substring(0, 3).toUpperCase() || teamName.substring(0, 3).toUpperCase();
+  // Default fallback if no match found
+  return teamName.split(' ').pop()?.substring(0, 3).toUpperCase() || teamName.substring(0, 3).toUpperCase();
 }

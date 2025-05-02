@@ -16,8 +16,8 @@ const TIMEFRAME_DAYS = 7;
  * @returns {object} Object containing actual_team_name and team_abbr
  */
 function mapTeamNameAndAbbreviation(teamName) {
-  // Special case for Athletics with duplicate name
-  if (teamName.includes('ATHLETICS') || teamName.includes('Oakland')) {
+  // Special case for Athletics with duplicate name (case-insensitive)
+  if (teamName.toUpperCase().includes('ATHLETICS') || teamName.includes('Oakland')) {
     return { actual_team_name: 'Oakland Athletics', team_abbr: 'ATH' };
   }
 
