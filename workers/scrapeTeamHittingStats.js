@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
@@ -51,49 +50,42 @@ export async function scrapeTeamHittingStats() {
       console.log(`Debug screenshot and HTML saved for ${TIMEFRAME_DAYS}-day stats`);
     }
     
-    // Extract rows from the table - simplified approach
+    // Extract rows from the table with the improved selector approach
+    // wait for the table to load
+    await page.waitForSelector('table.bui-table tbody tr');
+
     const rawRows = await page.evaluate(() => {
       const results = [];
-      const rows = document.querySelectorAll('table.bui-table tbody tr');
-      
-      for (const row of rows) {
-        try {
+      document
+        .querySelectorAll('table.bui-table tbody tr')
+        .forEach(row => {
           const cells = row.querySelectorAll('td');
-          if (cells.length < 13) continue;
-          
-          // Basic team name extraction - this approach worked before
-          const teamName = cells[0].textContent.trim();
-          
-          // Skip if it's clearly not a team
-          if (!teamName || teamName.length < 2) continue;
-          
-          // Build the team stats object
-          const teamStats = {
-            team_name: teamName,
-            games_played: parseInt(cells[1].textContent.trim().replace(/,/g, '')) || 0,
-            at_bats: parseInt(cells[2].textContent.trim().replace(/,/g, '')) || 0,
-            runs: parseInt(cells[3].textContent.trim()) || 0,
-            hits: parseInt(cells[4].textContent.trim()) || 0,
-            doubles: parseInt(cells[5].textContent.trim()) || 0,
-            triples: parseInt(cells[6].textContent.trim()) || 0,
-            home_runs: parseInt(cells[7].textContent.trim()) || 0,
-            rbi: parseInt(cells[8].textContent.trim()) || 0,
-            bb: parseInt(cells[9].textContent.trim()) || 0,
-            so: parseInt(cells[10].textContent.trim()) || 0,
-            sb: parseInt(cells[11].textContent.trim()) || 0,
-            cs: parseInt(cells[12].textContent.trim()) || 0,
-            avg: parseFloat(cells[13].textContent.trim()) || 0.0,
-            obp: parseFloat(cells[14].textContent.trim()) || 0.0,
-            slg: parseFloat(cells[15].textContent.trim()) || 0.0,
-            ops: parseFloat(cells[16].textContent.trim()) || 0.0
-          };
-          
-          results.push(teamStats);
-        } catch (err) {
-          // Silently continue on parsing errors
-        }
-      }
-      
+          // skip any row with fewer than 18 columns
+          if (cells.length < 18) return;
+          // only real team rows have a link in the first cell
+          const link = cells[0].querySelector('a');
+          if (!link) return;
+          results.push({
+            team_name:    link.textContent.trim(),
+            league:       cells[1].textContent.trim(),
+            games_played: parseInt(cells[2].textContent, 10) || 0,
+            at_bats:      parseInt(cells[3].textContent, 10) || 0,
+            runs:         parseInt(cells[4].textContent, 10) || 0,
+            hits:         parseInt(cells[5].textContent, 10) || 0,
+            doubles:      parseInt(cells[6].textContent, 10) || 0,
+            triples:      parseInt(cells[7].textContent, 10) || 0,
+            home_runs:    parseInt(cells[8].textContent, 10) || 0,
+            rbi:          parseInt(cells[9].textContent, 10) || 0,
+            bb:           parseInt(cells[10].textContent, 10) || 0,
+            so:           parseInt(cells[11].textContent, 10) || 0,
+            sb:           parseInt(cells[12].textContent, 10) || 0,
+            cs:           parseInt(cells[13].textContent, 10) || 0,
+            avg:          parseFloat(cells[14].textContent) || 0,
+            obp:          parseFloat(cells[15].textContent) || 0,
+            slg:          parseFloat(cells[16].textContent) || 0,
+            ops:          parseFloat(cells[17].textContent) || 0,
+          });
+        });
       return results;
     });
     
