@@ -9,6 +9,87 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      mlb_matchup_details: {
+        Row: {
+          away_pitcher: string | null
+          away_team: string
+          bullpen_away_avg: number | null
+          bullpen_away_bb: number | null
+          bullpen_away_era: number | null
+          bullpen_away_hr: number | null
+          bullpen_away_ip: number | null
+          bullpen_away_k: number | null
+          bullpen_away_obp: number | null
+          bullpen_away_whip: number | null
+          bullpen_home_avg: number | null
+          bullpen_home_bb: number | null
+          bullpen_home_era: number | null
+          bullpen_home_hr: number | null
+          bullpen_home_ip: number | null
+          bullpen_home_k: number | null
+          bullpen_home_obp: number | null
+          bullpen_home_whip: number | null
+          created_at: string
+          game_date: string
+          home_pitcher: string | null
+          home_team: string
+          id: string
+          matchup_id: string
+        }
+        Insert: {
+          away_pitcher?: string | null
+          away_team: string
+          bullpen_away_avg?: number | null
+          bullpen_away_bb?: number | null
+          bullpen_away_era?: number | null
+          bullpen_away_hr?: number | null
+          bullpen_away_ip?: number | null
+          bullpen_away_k?: number | null
+          bullpen_away_obp?: number | null
+          bullpen_away_whip?: number | null
+          bullpen_home_avg?: number | null
+          bullpen_home_bb?: number | null
+          bullpen_home_era?: number | null
+          bullpen_home_hr?: number | null
+          bullpen_home_ip?: number | null
+          bullpen_home_k?: number | null
+          bullpen_home_obp?: number | null
+          bullpen_home_whip?: number | null
+          created_at?: string
+          game_date: string
+          home_pitcher?: string | null
+          home_team: string
+          id?: string
+          matchup_id: string
+        }
+        Update: {
+          away_pitcher?: string | null
+          away_team?: string
+          bullpen_away_avg?: number | null
+          bullpen_away_bb?: number | null
+          bullpen_away_era?: number | null
+          bullpen_away_hr?: number | null
+          bullpen_away_ip?: number | null
+          bullpen_away_k?: number | null
+          bullpen_away_obp?: number | null
+          bullpen_away_whip?: number | null
+          bullpen_home_avg?: number | null
+          bullpen_home_bb?: number | null
+          bullpen_home_era?: number | null
+          bullpen_home_hr?: number | null
+          bullpen_home_ip?: number | null
+          bullpen_home_k?: number | null
+          bullpen_home_obp?: number | null
+          bullpen_home_whip?: number | null
+          created_at?: string
+          game_date?: string
+          home_pitcher?: string | null
+          home_team?: string
+          id?: string
+          matchup_id?: string
+        }
+        Relationships: []
+      }
       mlb_matchups: {
         Row: {
           away_team: string | null
