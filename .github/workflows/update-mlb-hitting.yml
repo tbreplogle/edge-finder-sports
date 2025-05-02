@@ -19,7 +19,9 @@ jobs:
           node-version: '18'
       
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install puppeteer@^21.6.1
       
       - name: Show environment information
         run: |
@@ -76,17 +78,12 @@ jobs:
           else
             echo "❌ scrape-result.json file not found! Looking for fallback files..."
             
-            if [ -f "scrape-result-fallback.json" ]; then
-              echo "Found fallback file scrape-result-fallback.json with content:"
-              cat scrape-result-fallback.json
-            else
-              echo "No fallback file found. Directory contents:"
-              ls -la
-              
-              echo "Last 30 lines of logs:"
-              cat scrape-history.log 2>/dev/null || echo "No scrape history log found"
-              
-              echo "::error::No scrape result files found! Scraping completely failed."
-              exit 1
-            fi
+            echo "Directory contents:"
+            ls -la
+            
+            echo "Last 30 lines of logs:"
+            cat scrape-history.log 2>/dev/null || echo "No scrape history log found"
+            
+            echo "::error::No scrape result files found! Scraping completely failed."
+            exit 1
           fi
