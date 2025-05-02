@@ -29,10 +29,10 @@ axiosRetry(axios, {
  * @returns {Promise<object[]>} An array of team hitting stats
  */
 export async function scrapeTeamHittingStats(days = -7) {
-  const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=${days}`;
-  console.log(`Fetching MLB team hitting stats from: ${url}`);
-  
   try {
+    const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=${days}`;
+    console.log(`Fetching MLB team hitting stats from: ${url}`);
+    
     // Debug logging for environment variables (sanitized)
     if (DEBUG) {
       console.log(`SUPABASE_URL set: ${process.env.SUPABASE_URL ? 'Yes' : 'No'}`);
@@ -135,6 +135,15 @@ export async function scrapeTeamHittingStats(days = -7) {
   } catch (err) {
     console.error('Error scraping MLB team hitting stats:', err.message);
     if (err.stack) console.error(err.stack);
+    
+    // Always create a result file even on error
+    fs.writeFileSync('scrape-result.json', JSON.stringify({
+      success: false,
+      error: err.message,
+      timestamp: new Date().toISOString(),
+      stats: { seven_day: 0, fourteen_day: 0 }
+    }, null, 2));
+    
     return [];
   }
 }
@@ -154,7 +163,12 @@ async function saveTeamStatsToSupabase(teamStats) {
   
   try {
     // Test Supabase connection
-    await testConnection();
+    const connectionSuccessful = await testConnection();
+    
+    if (!connectionSuccessful) {
+      console.error('Failed to connect to Supabase');
+      return false;
+    }
     
     // Insert data using upsert with onConflict for handling duplicates
     const { data, error } = await supabase
@@ -180,6 +194,17 @@ async function saveTeamStatsToSupabase(teamStats) {
         console.log('Single row insert result:', JSON.stringify(singleInsertResult, null, 2));
       }
       
+      // Create a result file even on error
+      fs.writeFileSync('scrape-result.json', JSON.stringify({
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        stats: { 
+          seven_day: teamStats.filter(s => s.timeframe_days === 7).length,
+          fourteen_day: teamStats.filter(s => s.timeframe_days === 14).length
+        }
+      }, null, 2));
+      
       return false;
     } else {
       console.log('Successfully saved team hitting stats to Supabase');
@@ -188,6 +213,18 @@ async function saveTeamStatsToSupabase(teamStats) {
   } catch (err) {
     console.error('Exception saving team stats to Supabase:', err.message);
     if (err.stack) console.error(err.stack);
+    
+    // Create a result file even on exception
+    fs.writeFileSync('scrape-result.json', JSON.stringify({
+      success: false,
+      error: err.message,
+      timestamp: new Date().toISOString(),
+      stats: { 
+        seven_day: teamStats.filter(s => s.timeframe_days === 7).length,
+        fourteen_day: teamStats.filter(s => s.timeframe_days === 14).length
+      }
+    }, null, 2));
+    
     return false;
   }
 }
@@ -197,7 +234,7 @@ async function saveTeamStatsToSupabase(teamStats) {
  */
 export async function updateTeamHittingStats() {
   console.log('⏳ Starting MLB team hitting stats update...');
-  const results = { success: false, stats: { seven_day: 0, fourteen_day: 0 } };
+  const results = { success: false, stats: { seven_day: 0, fourteen_day: 0 }, timestamp: new Date().toISOString() };
   
   try {
     // Scrape 7-day stats
@@ -225,9 +262,13 @@ export async function updateTeamHittingStats() {
     
     results.success = saveSuccess;
     
-    console.log('✅ MLB team hitting stats update completed successfully');
+    if (saveSuccess) {
+      console.log('✅ MLB team hitting stats update completed successfully');
+    } else {
+      console.log('⚠️ MLB team hitting stats update completed with issues');
+    }
     
-    // Write results to file for GitHub Actions
+    // Always write results to file for GitHub Actions
     fs.writeFileSync('scrape-result.json', JSON.stringify(results, null, 2));
     
     return {
@@ -238,10 +279,11 @@ export async function updateTeamHittingStats() {
   } catch (error) {
     console.error('Failed to update MLB team hitting stats:', error);
     
-    // Write error result to file for GitHub Actions
+    // Always write error result to file for GitHub Actions
     const errorResults = { 
       success: false, 
       error: error.message,
+      timestamp: new Date().toISOString(),
       stats: { seven_day: 0, fourteen_day: 0 } 
     };
     fs.writeFileSync('scrape-result.json', JSON.stringify(errorResults, null, 2));

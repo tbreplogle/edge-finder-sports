@@ -15,19 +15,37 @@ jobs:
         with:
           node-version: '18'
       - run: npm install
+      - name: Check environment variables
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::SUPABASE_URL environment variable is not set"
+            exit 1
+          fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY environment variable is not set"
+            exit 1
+          fi
+          echo "Environment variables set correctly"
       - name: Run scraper with verbose logging
         run: node workers/scrapeTeamHittingStats.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DEBUG: 'true'
+      - name: Debug directory contents
+        if: always()
+        run: |
+          echo "Directory contents:"
+          ls -la
+          echo "Working directory: $(pwd)"
       - name: Create GitHub annotation for success/failure
         if: always()
         run: |
           if [ -f "scrape-result.json" ]; then
-            echo "::notice::MLB stats scraping completed successfully. See scrape-result.json for details."
+            echo "scrape-result.json exists with content:"
             cat scrape-result.json
+            echo "::notice::MLB stats scraping completed successfully. See scrape-result.json for details."
           else
-            echo "::error::MLB stats scraping failed. Check logs for details."
+            echo "::error::scrape-result.json file not found. Scraping likely failed."
             exit 1
           fi
