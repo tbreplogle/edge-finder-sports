@@ -52,61 +52,87 @@ export async function scrapeTeamHittingStats() {
     }
     
     // Wait longer to ensure table is fully loaded with data
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
     
     // Extract rows from the table with the improved selector approach
     const rawRows = await page.evaluate(() => {
       const results = [];
-      const rows = document.querySelectorAll('table.bui-table tbody tr');
-      console.log(`Found ${rows.length} rows in the table`);
       
-      rows.forEach(row => {
+      // Get all rows from the table body
+      const rows = Array.from(document.querySelectorAll('table.bui-table tbody tr'));
+      console.log(`Found ${rows.length} total rows in the table`);
+      
+      // Track teams processed for better debugging
+      const teamNames = [];
+      
+      rows.forEach((row, index) => {
         try {
-          const cells = row.querySelectorAll('td');
-          // skip any row with fewer than 18 columns
+          // Check if this is a league header row (usually has fewer cells)
+          const cells = Array.from(row.querySelectorAll('td'));
+          
           if (cells.length < 18) {
-            console.log(`Skipping row with only ${cells.length} cells`);
-            return;
-          }
-          // only real team rows have a link in the first cell
-          const link = cells[0].querySelector('a');
-          if (!link) {
-            console.log('Skipping row with no team link');
+            console.log(`Skipping row ${index} with only ${cells.length} cells (likely a header)`);
             return;
           }
           
+          // Check if first cell has a team link (all team rows should have this)
+          const firstCell = cells[0];
+          const link = firstCell.querySelector('a');
+          
+          if (!link) {
+            console.log(`Skipping row ${index} with no team link in first cell`);
+            return;
+          }
+          
+          const teamName = link.textContent.trim();
+          teamNames.push(teamName);
+          
+          // Extract all the stats fields from the cells
           const teamData = {
-            team_name: link.textContent.trim(),
+            team_name: teamName,
             league: cells[1].textContent.trim(),
-            games_played: parseInt(cells[2].textContent, 10) || 0,
-            at_bats: parseInt(cells[3].textContent, 10) || 0,
-            runs: parseInt(cells[4].textContent, 10) || 0,
-            hits: parseInt(cells[5].textContent, 10) || 0,
-            doubles: parseInt(cells[6].textContent, 10) || 0,
-            triples: parseInt(cells[7].textContent, 10) || 0,
-            home_runs: parseInt(cells[8].textContent, 10) || 0,
-            rbi: parseInt(cells[9].textContent, 10) || 0,
-            bb: parseInt(cells[10].textContent, 10) || 0,
-            so: parseInt(cells[11].textContent, 10) || 0,
-            sb: parseInt(cells[12].textContent, 10) || 0,
-            cs: parseInt(cells[13].textContent, 10) || 0,
-            avg: parseFloat(cells[14].textContent) || 0,
-            obp: parseFloat(cells[15].textContent) || 0,
-            slg: parseFloat(cells[16].textContent) || 0,
-            ops: parseFloat(cells[17].textContent) || 0,
+            games_played: parseInt(cells[2].textContent.trim(), 10) || 0,
+            at_bats: parseInt(cells[3].textContent.trim(), 10) || 0,
+            runs: parseInt(cells[4].textContent.trim(), 10) || 0,
+            hits: parseInt(cells[5].textContent.trim(), 10) || 0,
+            doubles: parseInt(cells[6].textContent.trim(), 10) || 0,
+            triples: parseInt(cells[7].textContent.trim(), 10) || 0,
+            home_runs: parseInt(cells[8].textContent.trim(), 10) || 0,
+            rbi: parseInt(cells[9].textContent.trim(), 10) || 0,
+            bb: parseInt(cells[10].textContent.trim(), 10) || 0,
+            so: parseInt(cells[11].textContent.trim(), 10) || 0,
+            sb: parseInt(cells[12].textContent.trim(), 10) || 0,
+            cs: parseInt(cells[13].textContent.trim(), 10) || 0,
+            avg: parseFloat(cells[14].textContent.trim()) || 0,
+            obp: parseFloat(cells[15].textContent.trim()) || 0,
+            slg: parseFloat(cells[16].textContent.trim()) || 0,
+            ops: parseFloat(cells[17].textContent.trim()) || 0,
           };
-          console.log(`Adding team: ${teamData.team_name}`);
+          
           results.push(teamData);
         } catch (err) {
-          console.log(`Error processing row: ${err.message}`);
+          console.log(`Error processing row ${index}: ${err.message}`);
         }
       });
       
-      console.log(`Returning ${results.length} team results`);
+      console.log(`Found ${teamNames.length} teams: ${teamNames.join(', ')}`);
+      console.log(`Successfully extracted data for ${results.length} teams`);
+      
       return results;
     });
     
-    console.log(`Extracted ${rawRows.length} team rows from the page`);
+    console.log(`Extracted ${rawRows.length} team rows from the page (should be 30)`);
+    
+    if (rawRows.length === 0) {
+      console.error('❌ ERROR: No team rows were extracted! Table structure might have changed.');
+      if (DEBUG) {
+        console.log('Check the debug-html file for the current table structure.');
+      }
+    } else if (rawRows.length < 30) {
+      console.warn(`⚠️ WARNING: Expected 30 teams but only found ${rawRows.length}`);
+    } else {
+      console.log(`✅ Successfully extracted all 30 MLB teams`);
+    }
     
     // Close the browser
     await browser.close();
@@ -121,7 +147,7 @@ export async function scrapeTeamHittingStats() {
     
     console.log(`Successfully scraped ${stats.length} team hitting stats for ${TIMEFRAME_DAYS}-day period`);
     
-    if (DEBUG) {
+    if (DEBUG && stats.length > 0) {
       console.log('Sample data:', JSON.stringify(stats.slice(0, 2), null, 2));
     }
     
@@ -239,7 +265,7 @@ export async function updateTeamHittingStats() {
       throw new Error('Failed to connect to Supabase - aborting scrape job');
     }
     
-    // Scrape team stats (7-day only now)
+    // Scrape team stats (7-day only)
     console.log(`Scraping ${TIMEFRAME_DAYS}-day team stats...`);
     const teamStats = await scrapeTeamHittingStats();
     console.log(`Fetched ${teamStats.length} team stats`);
