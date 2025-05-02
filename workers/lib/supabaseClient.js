@@ -35,7 +35,10 @@ export const supabase = createClient(
 export async function testConnection() {
   try {
     console.log('Testing Supabase connection...');
-    const { data, error } = await supabase.from('mlb_team_hitting_stats').select('count(*)', { count: 'exact' });
+    // Fix: Use proper syntax for count query
+    const { data, error } = await supabase
+      .from('mlb_team_hitting_stats')
+      .select('*', { count: 'exact', head: true });
     
     if (error) {
       console.error('❌ Failed to connect to Supabase:', error.message);
@@ -53,7 +56,7 @@ export async function testConnection() {
     }
     
     console.log('✅ Successfully connected to Supabase!');
-    console.log(`Current row count in mlb_team_hitting_stats: ${data}`);
+    console.log(`Current row count in mlb_team_hitting_stats: ${data?.length || 0}`);
     return true;
   } catch (err) {
     console.error('❌ Error testing Supabase connection:', err.message);
