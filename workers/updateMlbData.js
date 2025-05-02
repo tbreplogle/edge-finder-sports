@@ -1,7 +1,22 @@
 
 import { supabase } from './lib/supabaseClient.js';
 import axios from 'axios';
+import axiosRetry from 'axios-retry';
 import { parse } from 'csv-parse/sync';
+
+// Configure axios with retry logic
+axiosRetry(axios, {
+  retries: 3,
+  retryDelay: retryCount => 2000 * retryCount,
+  retryCondition: error => 
+    axiosRetry.isNetworkOrIdempotentRequestError(error) || 
+    error.code === 'ERR_BAD_RESPONSE' || 
+    error.response?.status === 524,
+  onRetry: (retryCount, error) => {
+    console.log(`Retry attempt #${retryCount} for ${error.config.url}`);
+    console.log(`Reason: ${error.message}`);
+  }
+});
 
 // ✅ Dates
 const today = new Date();
@@ -23,8 +38,10 @@ async function fetchTeamStats() {
     const savantTeamUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${startDate}&hfDateLt=${endDate}`;
     console.log(`Savant URL: ${savantTeamUrl}`);
     
-    // Download CSV
-    const response = await axios.get(savantTeamUrl);
+    // Download CSV with retry mechanism already configured
+    const response = await axios.get(savantTeamUrl, {
+      timeout: 30000 // 30 second timeout
+    });
     const csvData = response.data;
     
     // Parse CSV
@@ -74,7 +91,8 @@ async function fetchMatchups() {
       sportId: 1,
       date: endDate,
       hydrate: 'probablePitcher'
-    }
+    },
+    timeout: 15000 // 15 second timeout
   });
 
   const matchups = [];
@@ -108,7 +126,9 @@ async function fetchPitchers(matchups) {
 
       const url = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${startDate}&game_date_lt=${endDate}&all=true`;
       try {
-        const { data: csv } = await axios.get(url);
+        const { data: csv } = await axios.get(url, {
+          timeout: 15000 // 15 second timeout
+        });
         const rows = parse(csv, { columns: true });
         const ip = rows.reduce((s, r) => s + +r.ip, 0);
         const er = rows.reduce((s, r) => s + +r.er, 0);
