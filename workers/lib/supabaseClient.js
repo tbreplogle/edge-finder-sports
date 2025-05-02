@@ -44,7 +44,7 @@ export async function testConnection() {
       // Always create a report even on failure
       createScrapeReport({
         success: false,
-        error: error.message,
+        error: `Supabase connection error: ${error.message}`,
         timestamp: new Date().toISOString(),
         stats: { seven_day: 0, fourteen_day: 0 }
       });
@@ -62,7 +62,7 @@ export async function testConnection() {
     // Always create a report even on exception
     createScrapeReport({
       success: false,
-      error: err.message,
+      error: `Supabase connection exception: ${err.message}`,
       timestamp: new Date().toISOString(),
       stats: { seven_day: 0, fourteen_day: 0 }
     });
@@ -77,6 +77,10 @@ export function createScrapeReport(data) {
     console.log('Creating scrape report:', JSON.stringify(data, null, 2));
     fs.writeFileSync('scrape-result.json', JSON.stringify(data, null, 2));
     console.log('✅ Scrape report saved to scrape-result.json');
+    
+    // Also write to a log file for permanent record
+    const logData = `${new Date().toISOString()} - ${JSON.stringify(data)}\n`;
+    fs.appendFileSync('scrape-history.log', logData);
   } catch (err) {
     console.error('❌ Error writing scrape report file:', err.message);
     
@@ -86,6 +90,8 @@ export function createScrapeReport(data) {
       console.log('✅ Fallback scrape report saved to scrape-result-fallback.json');
     } catch (fallbackErr) {
       console.error('❌ Critical error: Could not write report file:', fallbackErr.message);
+      // Last resort - output to console so it appears in GitHub Actions logs
+      console.log('SCRAPE_RESULT_JSON:', JSON.stringify(data));
     }
   }
 }

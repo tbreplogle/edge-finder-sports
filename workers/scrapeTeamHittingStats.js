@@ -68,7 +68,7 @@ export async function scrapeTeamHittingStats(days = -7) {
     const stats = [];
     
     // Find the stats table - improved selectors to be more robust
-    const tableRows = $('table tbody tr');
+    let tableRows = $('table tbody tr');
     
     if (tableRows.length === 0) {
       console.warn('Could not find stat table rows on the page');
@@ -278,6 +278,14 @@ export async function updateTeamHittingStats() {
     const connectionCheck = await testConnection();
     
     if (!connectionCheck) {
+      // Create a report file even when connection fails
+      createScrapeReport({
+        success: false,
+        error: 'Failed to connect to Supabase - check your credentials',
+        timestamp: startTime.toISOString(),
+        stats: { seven_day: 0, fourteen_day: 0 }
+      });
+      
       throw new Error('Failed to connect to Supabase - aborting scrape job');
     }
     
@@ -343,12 +351,17 @@ export async function updateTeamHittingStats() {
     };
     createScrapeReport(errorResults);
     
-    throw error;
+    // Don't throw the error, let the process complete but with an error status
+    return {
+      sevenDayStats: [],
+      fourteenDayStats: [],
+      success: false
+    };
   }
 }
 
 // Run if script is executed directly
-if (import.meta.url === import.meta.main) {
+if (import.meta.url.endsWith('scrapeTeamHittingStats.js')) {
   console.log('Running MLB team hitting stats scraper as standalone script');
   console.log('Current directory:', process.cwd());
   console.log('Node.js version:', process.version);
@@ -358,10 +371,19 @@ if (import.meta.url === import.meta.main) {
     .then(stats => {
       console.log('Script completed successfully!');
       console.log(JSON.stringify(stats, null, 2));
-      process.exit(0);
+      process.exit(stats.success ? 0 : 1);
     })
     .catch(error => {
       console.error('Error in updateTeamHittingStats:', error);
+      
+      // Create a scrape report here as a last resort
+      createScrapeReport({
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        stats: { seven_day: 0, fourteen_day: 0 }
+      });
+      
       process.exit(1);
     });
 }

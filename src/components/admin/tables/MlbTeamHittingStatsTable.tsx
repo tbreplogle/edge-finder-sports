@@ -12,7 +12,8 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tables } from "@/integrations/supabase/types";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 type TeamHittingStats = Tables<"mlb_team_hitting_stats">;
 
@@ -21,19 +22,22 @@ interface MlbTeamHittingStatsTableProps {
   isLoading?: boolean;
   lastUpdated?: string;
   onRefresh?: () => void;
+  error?: string;
 }
 
 export function MlbTeamHittingStatsTable({ 
   stats, 
   isLoading = false, 
   lastUpdated,
-  onRefresh 
+  onRefresh,
+  error 
 }: MlbTeamHittingStatsTableProps) {
   const [timeframe, setTimeframe] = useState<"7" | "14">("7");
   
   // Filter stats by timeframe
   const filteredStats = stats.filter(stat => stat.timeframe_days === parseInt(timeframe, 10));
   
+  // Show a loading state
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -53,6 +57,36 @@ export function MlbTeamHittingStatsTable({
     );
   }
   
+  // Show error if provided
+  if (error) {
+    return (
+      <Alert className="bg-red-50 border-red-200">
+        <AlertCircle className="h-4 w-4 text-red-500" />
+        <AlertTitle>Error Loading Team Hitting Data</AlertTitle>
+        <AlertDescription className="space-y-2">
+          <p>{error}</p>
+          <div className="pt-2">
+            {onRefresh && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  toast.info("Retrying data fetch...");
+                  onRefresh();
+                }}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Retry
+              </Button>
+            )}
+          </div>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  
+  // Show a message when no data is available
   if (!stats || stats.length === 0) {
     return (
       <Alert className="bg-amber-50 border-amber-200">
@@ -66,12 +100,18 @@ export function MlbTeamHittingStatsTable({
             <li>The scraper encountered errors when retrieving data</li>
             <li>The connection to Supabase failed during data insertion</li>
           </ul>
+          <p className="pt-2 text-sm">
+            Check the GitHub Actions workflow logs for more details.
+          </p>
           <div className="pt-2">
             {onRefresh && (
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={onRefresh}
+                onClick={() => {
+                  toast.info("Refreshing data...");
+                  onRefresh();
+                }}
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -98,7 +138,10 @@ export function MlbTeamHittingStatsTable({
             <Button 
               variant="outline" 
               size="sm"
-              onClick={onRefresh}
+              onClick={() => {
+                toast.info("Refreshing data...");
+                onRefresh();
+              }}
               className="mr-2"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -125,12 +168,13 @@ export function MlbTeamHittingStatsTable({
               <TableHead className="text-right">OBP</TableHead>
               <TableHead className="text-right">SLG</TableHead>
               <TableHead className="text-right">OPS</TableHead>
+              <TableHead className="text-right">Runs</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredStats.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
                   No data available for {timeframe}-day timeframe
                 </TableCell>
               </TableRow>
@@ -144,6 +188,7 @@ export function MlbTeamHittingStatsTable({
                   <TableCell className="text-right">{stat.obp?.toFixed(3)}</TableCell>
                   <TableCell className="text-right">{stat.slg?.toFixed(3)}</TableCell>
                   <TableCell className="text-right">{stat.ops?.toFixed(3)}</TableCell>
+                  <TableCell className="text-right">{stat.runs}</TableCell>
                 </TableRow>
               ))
             )}
