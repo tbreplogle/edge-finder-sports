@@ -198,14 +198,15 @@ export async function scrapeTeamHittingStats() {
     const gameDate = new Date().toISOString().split('T')[0];
     const stats = rawRows.map(r => {
       // Get proper team name and abbreviation
-      const teamInfo = mapTeamNameAndAbbreviation(r.team_name);
+      const teamInfo = mapTeamInfo(r.team_name);
       
       return {
         ...r,
         timeframe_days: TIMEFRAME_DAYS,
         game_date: gameDate,
         actual_team_name: teamInfo.actual_team_name,
-        team_abbr: teamInfo.team_abbr
+        team_abbr: teamInfo.team_abbr,
+        team_id: teamInfo.team_id
       };
     });
     
