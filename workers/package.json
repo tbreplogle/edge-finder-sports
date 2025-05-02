@@ -3,6 +3,7 @@
   "name": "prediction-workers",
   "version": "1.0.0",
   "description": "Workers for importing model predictions",
+  "type": "module",
   "main": "importCsv.js",
   "dependencies": {
     "csv-parse": "^5.5.5",
