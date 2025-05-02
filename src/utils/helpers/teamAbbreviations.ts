@@ -35,8 +35,8 @@ export function getTeamAbbreviation(teamName: string): string {
     'Toronto Blue Jays': 'TOR',
     'Washington Nationals': 'WSH',
     
-    // Special case for the duplicate name "ATHLETICATHLETIC"
-    'ATHLETICATHLETIC': 'ATH',
+    // Special case for the duplicate name "ATHLETICSATHLETICS"
+    'ATHLETICSATHLETICS': 'ATH',
     
     // NFL
     'Kansas City Chiefs': 'KC',
@@ -60,7 +60,7 @@ export function getTeamAbbreviation(teamName: string): string {
   };
   
   // Check for specific edge case first
-  if (teamName.includes('ATHLETIC')) {
+  if (teamName.includes('ATHLETICS')) {
     return 'ATH';
   }
   
