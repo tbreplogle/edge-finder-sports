@@ -116,6 +116,82 @@ async function fetchTeamStats() {
   }
 }
 
+// New function to fetch detailed team hitting stats
+async function fetchTeamHittingStats() {
+  try {
+    console.log('Fetching detailed team hitting stats...');
+    
+    const hittingStats = [];
+    
+    // Define the timeframe windows we want to collect (7-day and 14-day)
+    const timeframes = [
+      { days: 7, label: '7-day' },
+      { days: 14, label: '14-day' }
+    ];
+    
+    for (const timeframe of timeframes) {
+      // Calculate start date for this timeframe
+      const timeframeStart = new Date(today);
+      timeframeStart.setDate(today.getDate() - timeframe.days);
+      const fromDate = timeframeStart.toISOString().slice(0, 10);
+      const toDate = today.toISOString().slice(0, 10);
+      
+      console.log(`Fetching ${timeframe.label} hitting stats from ${fromDate} to ${toDate}`);
+      
+      // Build URL for team hitting stats
+      const url = `${SAVANT_CSV}?all=true&type=details&player_type=team&hfGT=R%7C&hfDateGt=${fromDate}&hfDateLt=${toDate}&group_by=name`;
+      
+      try {
+        const response = await axios.get(url, {
+          timeout: 60000 // 60 second timeout
+        });
+        
+        const rows = parse(response.data, { columns: true });
+        console.log(`Fetched ${rows.length} team hitting rows for ${timeframe.label}`);
+        
+        // Process each team's data
+        for (const row of rows) {
+          // Skip if missing essential data
+          if (!row.player_name) continue;
+          
+          hittingStats.push({
+            team_name: row.player_name,
+            timeframe_days: timeframe.days,
+            game_date: toDate,
+            games_played: parseInt(row.g || 0),
+            at_bats: parseInt(row.ab || 0),
+            runs: parseInt(row.r || 0),
+            hits: parseInt(row.h || 0),
+            doubles: parseInt(row['2b'] || 0),
+            triples: parseInt(row['3b'] || 0),
+            home_runs: parseInt(row.hr || 0),
+            rbi: parseInt(row.rbi || 0),
+            bb: parseInt(row.bb || 0),
+            so: parseInt(row.so || 0),
+            sb: parseInt(row.sb || 0),
+            cs: parseInt(row.cs || 0),
+            avg: parseFloat(row.ba || 0),
+            obp: parseFloat(row.obp || 0),
+            slg: parseFloat(row.slg || 0),
+            ops: parseFloat(row.ops || 0)
+          });
+        }
+      } catch (error) {
+        console.warn(`Error fetching ${timeframe.label} hitting stats: ${error.message}`);
+      }
+      
+      // Delay between requests
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    console.log(`Processed ${hittingStats.length} team hitting stat entries`);
+    return hittingStats;
+  } catch (error) {
+    console.error('Error fetching team hitting stats:', error.message);
+    throw error;
+  }
+}
+
 // 2. Pull matchups
 async function fetchMatchups() {
   const { data } = await axios.get(`${MLB_API}/schedule`, {
@@ -237,9 +313,14 @@ async function run() {
     const pitchers = await fetchPitchers(matchups);
     console.log(`Fetched ${pitchers.length} pitcher stats`);
 
+    // Fetch detailed team hitting stats
+    const teamHittingStats = await fetchTeamHittingStats();
+    console.log(`Fetched ${teamHittingStats.length} team hitting stat entries`);
+
     await saveToSupabase('team_stats', teams, 'team_abbr');
     await saveToSupabase('mlb_matchups', matchups, 'game_id');
     await saveToSupabase('pitcher_stats', pitchers, 'game_id,side');
+    await saveToSupabase('mlb_team_hitting_stats', teamHittingStats, 'team_name,timeframe_days,game_date');
     
     console.log('✅ MLB data update completed successfully.');
   } catch (error) {

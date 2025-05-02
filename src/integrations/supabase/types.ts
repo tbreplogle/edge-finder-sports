@@ -114,6 +114,78 @@ export type Database = {
         }
         Relationships: []
       }
+      mlb_team_hitting_stats: {
+        Row: {
+          at_bats: number | null
+          avg: number | null
+          bb: number | null
+          created_at: string | null
+          cs: number | null
+          doubles: number | null
+          game_date: string
+          games_played: number | null
+          hits: number | null
+          home_runs: number | null
+          id: string
+          obp: number | null
+          ops: number | null
+          rbi: number | null
+          runs: number | null
+          sb: number | null
+          slg: number | null
+          so: number | null
+          team_name: string
+          timeframe_days: number
+          triples: number | null
+        }
+        Insert: {
+          at_bats?: number | null
+          avg?: number | null
+          bb?: number | null
+          created_at?: string | null
+          cs?: number | null
+          doubles?: number | null
+          game_date: string
+          games_played?: number | null
+          hits?: number | null
+          home_runs?: number | null
+          id?: string
+          obp?: number | null
+          ops?: number | null
+          rbi?: number | null
+          runs?: number | null
+          sb?: number | null
+          slg?: number | null
+          so?: number | null
+          team_name: string
+          timeframe_days: number
+          triples?: number | null
+        }
+        Update: {
+          at_bats?: number | null
+          avg?: number | null
+          bb?: number | null
+          created_at?: string | null
+          cs?: number | null
+          doubles?: number | null
+          game_date?: string
+          games_played?: number | null
+          hits?: number | null
+          home_runs?: number | null
+          id?: string
+          obp?: number | null
+          ops?: number | null
+          rbi?: number | null
+          runs?: number | null
+          sb?: number | null
+          slg?: number | null
+          so?: number | null
+          team_name?: string
+          timeframe_days?: number
+          triples?: number | null
+        }
+        Relationships: []
+      }
       pitcher_stats: {
         Row: {
           era_plus: number | null
