@@ -127,6 +127,7 @@ export type Database = {
           hits: number | null
           home_runs: number | null
           id: string
+          league: string | null
           obp: number | null
           ops: number | null
           rbi: number | null
@@ -150,6 +151,7 @@ export type Database = {
           hits?: number | null
           home_runs?: number | null
           id?: string
+          league?: string | null
           obp?: number | null
           ops?: number | null
           rbi?: number | null
@@ -173,6 +175,7 @@ export type Database = {
           hits?: number | null
           home_runs?: number | null
           id?: string
+          league?: string | null
           obp?: number | null
           ops?: number | null
           rbi?: number | null
