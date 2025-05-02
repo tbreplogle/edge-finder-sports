@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import axiosRetry from 'axios-retry';
 import fs from 'fs';
-import { supabase } from './lib/supabaseClient.js';
+import { supabase, testConnection } from './lib/supabaseClient.js';
 
 // Enable debug mode when environment variable is set
 const DEBUG = process.env.DEBUG === 'true';
@@ -51,6 +51,9 @@ export async function scrapeTeamHittingStats(days = -7) {
       // Save a sample of the HTML for debugging
       const sampleHtml = html.substring(0, 500) + '... [truncated]';
       console.log(`HTML sample: ${sampleHtml}`);
+      
+      // Save full HTML for debugging
+      fs.writeFileSync(`debug-html-${Math.abs(days)}-day.txt`, html);
     }
     
     // Load HTML into cheerio
@@ -58,16 +61,18 @@ export async function scrapeTeamHittingStats(days = -7) {
     const stats = [];
     
     // Find the stats table
-    // The table is typically in a section with class containing 'StatsTable'
     const tableRows = $('table tbody tr');
     
     if (tableRows.length === 0) {
       console.warn('Could not find stat table rows on the page');
       
       if (DEBUG) {
-        // Save the full HTML for debugging when no table rows are found
-        fs.writeFileSync('debug-html.txt', html);
-        console.log('Saved HTML to debug-html.txt for analysis');
+        // Save selectors for debugging
+        const selectors = ['table', 'tbody', 'tr'].map(sel => ({
+          selector: sel,
+          count: $(sel).length
+        }));
+        console.log('Selector counts:', JSON.stringify(selectors, null, 2));
       }
       
       return [];
@@ -137,31 +142,21 @@ export async function scrapeTeamHittingStats(days = -7) {
 /**
  * Saves team hitting stats to Supabase
  * @param {object[]} teamStats - Array of team hitting stats
+ * @returns {Promise<boolean>} Success status
  */
 async function saveTeamStatsToSupabase(teamStats) {
   if (teamStats.length === 0) {
     console.log('No team stats to save');
-    return;
+    return false;
   }
   
   console.log(`Saving ${teamStats.length} team hitting stats to Supabase`);
   
   try {
     // Test Supabase connection
-    if (DEBUG) {
-      try {
-        const { data: testData, error: testError } = await supabase.from('mlb_team_hitting_stats').select('count(*)', { count: 'exact' });
-        if (testError) {
-          console.error('Test query failed:', testError);
-        } else {
-          console.log('Supabase connection test succeeded. Current row count:', testData);
-        }
-      } catch (testErr) {
-        console.error('Error testing Supabase connection:', testErr.message);
-      }
-    }
+    await testConnection();
     
-    // Insert data
+    // Insert data using upsert with onConflict for handling duplicates
     const { data, error } = await supabase
       .from('mlb_team_hitting_stats')
       .upsert(teamStats, {
@@ -175,13 +170,25 @@ async function saveTeamStatsToSupabase(teamStats) {
       if (DEBUG) {
         console.error('Error details:', JSON.stringify(error, null, 2));
         console.log('Sample of attempted insert:', JSON.stringify(teamStats[0], null, 2));
+        
+        // Try a single row insert to diagnose issues
+        console.log('Attempting single row insert for diagnosis...');
+        const singleInsertResult = await supabase
+          .from('mlb_team_hitting_stats')
+          .insert(teamStats[0]);
+          
+        console.log('Single row insert result:', JSON.stringify(singleInsertResult, null, 2));
       }
+      
+      return false;
     } else {
       console.log('Successfully saved team hitting stats to Supabase');
+      return true;
     }
   } catch (err) {
     console.error('Exception saving team stats to Supabase:', err.message);
     if (err.stack) console.error(err.stack);
+    return false;
   }
 }
 
@@ -204,29 +211,41 @@ export async function updateTeamHittingStats() {
     results.stats.fourteen_day = fourteenDayStats.length;
     
     // Save stats to Supabase
+    let saveSuccess = true;
+    
     if (sevenDayStats.length > 0) {
-      await saveTeamStatsToSupabase(sevenDayStats);
+      const sevenDaySuccess = await saveTeamStatsToSupabase(sevenDayStats);
+      saveSuccess = saveSuccess && sevenDaySuccess;
     }
     
     if (fourteenDayStats.length > 0) {
-      await saveTeamStatsToSupabase(fourteenDayStats);
+      const fourteenDaySuccess = await saveTeamStatsToSupabase(fourteenDayStats);
+      saveSuccess = saveSuccess && fourteenDaySuccess;
     }
+    
+    results.success = saveSuccess;
     
     console.log('✅ MLB team hitting stats update completed successfully');
-    results.success = true;
     
     // Write results to file for GitHub Actions
-    if (DEBUG) {
-      fs.writeFileSync('scrape-result.json', JSON.stringify(results, null, 2));
-    }
+    fs.writeFileSync('scrape-result.json', JSON.stringify(results, null, 2));
     
-    // Return the stats as JSON for debugging if run directly
     return {
       sevenDayStats,
-      fourteenDayStats
+      fourteenDayStats,
+      success: saveSuccess
     };
   } catch (error) {
     console.error('Failed to update MLB team hitting stats:', error);
+    
+    // Write error result to file for GitHub Actions
+    const errorResults = { 
+      success: false, 
+      error: error.message,
+      stats: { seven_day: 0, fourteen_day: 0 } 
+    };
+    fs.writeFileSync('scrape-result.json', JSON.stringify(errorResults, null, 2));
+    
     throw error;
   }
 }

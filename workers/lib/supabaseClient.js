@@ -29,7 +29,7 @@ export async function testConnection() {
       console.error('Failed to connect to Supabase:', error);
       return false;
     }
-    console.log('Successfully connected to Supabase');
+    console.log('Successfully connected to Supabase. Current row count:', data);
     return true;
   } catch (err) {
     console.error('Error testing Supabase connection:', err.message);

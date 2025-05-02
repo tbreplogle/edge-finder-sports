@@ -26,6 +26,8 @@ jobs:
         run: |
           if [ -f "scrape-result.json" ]; then
             echo "::notice::MLB stats scraping completed successfully. See scrape-result.json for details."
+            cat scrape-result.json
           else
             echo "::error::MLB stats scraping failed. Check logs for details."
+            exit 1
           fi
