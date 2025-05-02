@@ -4,13 +4,14 @@ import axios from 'axios';
 import axiosRetry from 'axios-retry';
 import { parse } from 'csv-parse/sync';
 
-// Configure axios with retry logic
+// Configure axios with retry logic with improved settings
 axiosRetry(axios, {
   retries: 3,
-  retryDelay: retryCount => 2000 * retryCount,
+  retryDelay: retryCount => 3000 * retryCount,
   retryCondition: error => 
     axiosRetry.isNetworkOrIdempotentRequestError(error) || 
     error.code === 'ERR_BAD_RESPONSE' || 
+    error.code === 'ECONNABORTED' ||
     error.response?.status === 524,
   onRetry: (retryCount, error) => {
     console.log(`Retry attempt #${retryCount} for ${error.config.url}`);
@@ -22,7 +23,12 @@ axiosRetry(axios, {
 const today = new Date();
 const start = new Date(today);
 start.setDate(today.getDate() - 14);
+// Create mid-point date (7 days ago)
+const mid = new Date(today);
+mid.setDate(today.getDate() - 7);
+
 const startDate = start.toISOString().slice(0, 10);
+const midDate = mid.toISOString().slice(0, 10);
 const endDate = today.toISOString().slice(0, 10);
 
 // ✅ API URLs
@@ -34,19 +40,29 @@ async function fetchTeamStats() {
   try {
     console.log('Fetching team stats from Baseball Savant...');
     
-    // Construct Baseball Savant URL for team stats
-    const savantTeamUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${startDate}&hfDateLt=${endDate}`;
-    console.log(`Savant URL: ${savantTeamUrl}`);
+    // Construct Baseball Savant URLs for team stats (split into two 7-day windows)
+    const firstWeekUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${startDate}&hfDateLt=${midDate}`;
+    const secondWeekUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${midDate}&hfDateLt=${endDate}`;
     
-    // Download CSV with retry mechanism already configured
-    const response = await axios.get(savantTeamUrl, {
-      timeout: 30000 // 30 second timeout
+    console.log(`First week URL: ${firstWeekUrl}`);
+    console.log(`Second week URL: ${secondWeekUrl}`);
+    
+    // Download CSVs with retry mechanism and longer timeout
+    const firstWeekResponse = await axios.get(firstWeekUrl, {
+      timeout: 60000 // 60 second timeout
     });
-    const csvData = response.data;
     
-    // Parse CSV
-    const rows = parse(csvData, { columns: true });
-    console.log(`Parsed ${rows.length} rows of team data`);
+    const secondWeekResponse = await axios.get(secondWeekUrl, {
+      timeout: 60000 // 60 second timeout
+    });
+    
+    // Parse CSVs
+    const firstWeekRows = parse(firstWeekResponse.data, { columns: true });
+    const secondWeekRows = parse(secondWeekResponse.data, { columns: true });
+    
+    // Combine results
+    const rows = [...firstWeekRows, ...secondWeekRows];
+    console.log(`Parsed ${rows.length} rows of team data (${firstWeekRows.length} from first week, ${secondWeekRows.length} from second week)`);
     
     // Process team stats
     const teamMap = {};
@@ -92,7 +108,7 @@ async function fetchMatchups() {
       date: endDate,
       hydrate: 'probablePitcher'
     },
-    timeout: 15000 // 15 second timeout
+    timeout: 30000 // 30 second timeout
   });
 
   const matchups = [];
@@ -124,12 +140,42 @@ async function fetchPitchers(matchups) {
       const pid = m[`${side}_pitcher_id`]; // Now properly extracted from matchups
       if (!pid) continue;
 
-      const url = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${startDate}&game_date_lt=${endDate}&all=true`;
+      // Split pitcher date range into two weeks as well
+      const firstWeekUrl = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${startDate}&game_date_lt=${midDate}&all=true`;
+      const secondWeekUrl = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${midDate}&game_date_lt=${endDate}&all=true`;
+      
       try {
-        const { data: csv } = await axios.get(url, {
-          timeout: 15000 // 15 second timeout
-        });
-        const rows = parse(csv, { columns: true });
+        let rows = [];
+        
+        // First week data
+        try {
+          const { data: firstWeekCsv } = await axios.get(firstWeekUrl, {
+            timeout: 30000 // 30 second timeout
+          });
+          const firstWeekRows = parse(firstWeekCsv, { columns: true });
+          rows = [...rows, ...firstWeekRows];
+          console.log(`Fetched first week data for pitcher ${pid}: ${firstWeekRows.length} rows`);
+        } catch (err) {
+          console.warn(`Error fetching first week data for pitcher ${pid}:`, err.message);
+        }
+        
+        // Second week data
+        try {
+          const { data: secondWeekCsv } = await axios.get(secondWeekUrl, {
+            timeout: 30000 // 30 second timeout
+          });
+          const secondWeekRows = parse(secondWeekCsv, { columns: true });
+          rows = [...rows, ...secondWeekRows];
+          console.log(`Fetched second week data for pitcher ${pid}: ${secondWeekRows.length} rows`);
+        } catch (err) {
+          console.warn(`Error fetching second week data for pitcher ${pid}:`, err.message);
+        }
+        
+        if (rows.length === 0) {
+          console.warn(`No data found for pitcher ${pid}`);
+          continue;
+        }
+        
         const ip = rows.reduce((s, r) => s + +r.ip, 0);
         const er = rows.reduce((s, r) => s + +r.er, 0);
         const h = rows.reduce((s, r) => s + +r.h, 0);
