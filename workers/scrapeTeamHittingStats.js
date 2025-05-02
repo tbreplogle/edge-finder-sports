@@ -51,62 +51,83 @@ export async function scrapeTeamHittingStats() {
       console.log(`Debug screenshot and HTML saved for ${TIMEFRAME_DAYS}-day stats`);
     }
     
-    // Extract rows from the table
-    const rawRows = await page.$$eval('table.bui-table tbody tr', (trs) => {
-      return trs.map(tr => {
-        const cells = Array.from(tr.querySelectorAll('td'));
-        
-        // Skip rows with insufficient data
-        if (cells.length < 13) return null;
-        
-        // Extract team name properly from the first cell
-        // First try to get the team name from the tooltip aria-label
-        let teamNameElement = cells[0].querySelector('span[aria-label]');
-        let teamName = teamNameElement ? teamNameElement.getAttribute('aria-label') : null;
-        
-        // If not found in aria-label, try to get the text directly
-        if (!teamName) {
-          teamName = cells[0].textContent.trim();
+    // Extract rows from the table with improved selectors and error handling
+    const rawRows = await page.evaluate(() => {
+      const results = [];
+      const rows = document.querySelectorAll('table.bui-table tbody tr');
+      
+      for (const row of rows) {
+        try {
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 13) continue;
           
-          // Filter out "American League" or "National League" entries
-          if (teamName === 'American League' || teamName === 'National League' || 
-              teamName === 'AL' || teamName === 'NL') {
-            return null;
+          // Get the team name, handling various HTML structures
+          let teamName = '';
+          const nameCell = cells[0];
+          
+          // Try to get team name from aria-label first
+          const teamNameSpan = nameCell.querySelector('span[aria-label]');
+          if (teamNameSpan && teamNameSpan.getAttribute('aria-label')) {
+            teamName = teamNameSpan.getAttribute('aria-label');
+          } else {
+            // Fall back to text content
+            teamName = nameCell.textContent.trim();
           }
+          
+          // Skip league headers
+          if (['American League', 'National League', 'AL', 'NL'].includes(teamName)) {
+            continue;
+          }
+          
+          // Parse numbers with fallbacks to zero
+          const parseIntSafe = (cell) => {
+            try {
+              const text = cell.textContent.trim().replace(/,/g, '');
+              const value = parseInt(text, 10);
+              return isNaN(value) ? 0 : value;
+            } catch (e) {
+              return 0;
+            }
+          };
+          
+          const parseFloatSafe = (cell) => {
+            try {
+              const text = cell.textContent.trim();
+              const value = parseFloat(text);
+              return isNaN(value) ? 0.0 : value;
+            } catch (e) {
+              return 0.0;
+            }
+          };
+          
+          // Build the team stats object
+          const teamStats = {
+            team_name: teamName,
+            games_played: parseIntSafe(cells[1]),
+            at_bats: parseIntSafe(cells[2]),
+            runs: parseIntSafe(cells[3]),
+            hits: parseIntSafe(cells[4]),
+            doubles: parseIntSafe(cells[5]),
+            triples: parseIntSafe(cells[6]),
+            home_runs: parseIntSafe(cells[7]),
+            rbi: parseIntSafe(cells[8]),
+            bb: parseIntSafe(cells[9]),
+            so: parseIntSafe(cells[10]),
+            sb: parseIntSafe(cells[11]),
+            cs: parseIntSafe(cells[12]),
+            avg: parseFloatSafe(cells[13]),
+            obp: parseFloatSafe(cells[14]),
+            slg: parseFloatSafe(cells[15]),
+            ops: parseFloatSafe(cells[16])
+          };
+          
+          results.push(teamStats);
+        } catch (err) {
+          console.error("Error parsing row:", err);
         }
-        
-        // Helper function to convert null/NaN values to 0
-        const parseIntSafe = (value) => {
-          const parsed = parseInt(value.replace(/,/g, ''), 10);
-          return isNaN(parsed) ? 0 : parsed;
-        };
-        
-        // Helper function to convert null/NaN values to 0.0 for floats
-        const parseFloatSafe = (value) => {
-          const parsed = parseFloat(value);
-          return isNaN(parsed) ? 0.0 : parsed;
-        };
-        
-        return {
-          team_name: teamName,
-          games_played: parseIntSafe(cells[1].textContent.trim()),
-          at_bats: parseIntSafe(cells[2].textContent.trim()),
-          runs: parseIntSafe(cells[3].textContent.trim()),
-          hits: parseIntSafe(cells[4].textContent.trim()),
-          doubles: parseIntSafe(cells[5].textContent.trim()),
-          triples: parseIntSafe(cells[6].textContent.trim()),
-          home_runs: parseIntSafe(cells[7].textContent.trim()),
-          rbi: parseIntSafe(cells[8].textContent.trim()),
-          bb: parseIntSafe(cells[9].textContent.trim()),
-          so: parseIntSafe(cells[10].textContent.trim()),
-          sb: parseIntSafe(cells[11].textContent.trim()),
-          cs: parseIntSafe(cells[12].textContent.trim()),
-          avg: parseFloatSafe(cells[13].textContent.trim()),
-          obp: parseFloatSafe(cells[14].textContent.trim()),
-          slg: parseFloatSafe(cells[15].textContent.trim()),
-          ops: parseFloatSafe(cells[16].textContent.trim())
-        };
-      }).filter(item => item !== null); // Remove null entries
+      }
+      
+      return results;
     });
     
     // Close the browser
