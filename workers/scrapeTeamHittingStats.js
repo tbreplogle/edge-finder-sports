@@ -1,3 +1,4 @@
+
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
@@ -50,44 +51,62 @@ export async function scrapeTeamHittingStats() {
       console.log(`Debug screenshot and HTML saved for ${TIMEFRAME_DAYS}-day stats`);
     }
     
+    // Wait longer to ensure table is fully loaded with data
+    await page.waitForTimeout(3000);
+    
     // Extract rows from the table with the improved selector approach
-    // wait for the table to load
-    await page.waitForSelector('table.bui-table tbody tr');
-
     const rawRows = await page.evaluate(() => {
       const results = [];
-      document
-        .querySelectorAll('table.bui-table tbody tr')
-        .forEach(row => {
+      const rows = document.querySelectorAll('table.bui-table tbody tr');
+      console.log(`Found ${rows.length} rows in the table`);
+      
+      rows.forEach(row => {
+        try {
           const cells = row.querySelectorAll('td');
           // skip any row with fewer than 18 columns
-          if (cells.length < 18) return;
+          if (cells.length < 18) {
+            console.log(`Skipping row with only ${cells.length} cells`);
+            return;
+          }
           // only real team rows have a link in the first cell
           const link = cells[0].querySelector('a');
-          if (!link) return;
-          results.push({
-            team_name:    link.textContent.trim(),
-            league:       cells[1].textContent.trim(),
+          if (!link) {
+            console.log('Skipping row with no team link');
+            return;
+          }
+          
+          const teamData = {
+            team_name: link.textContent.trim(),
+            league: cells[1].textContent.trim(),
             games_played: parseInt(cells[2].textContent, 10) || 0,
-            at_bats:      parseInt(cells[3].textContent, 10) || 0,
-            runs:         parseInt(cells[4].textContent, 10) || 0,
-            hits:         parseInt(cells[5].textContent, 10) || 0,
-            doubles:      parseInt(cells[6].textContent, 10) || 0,
-            triples:      parseInt(cells[7].textContent, 10) || 0,
-            home_runs:    parseInt(cells[8].textContent, 10) || 0,
-            rbi:          parseInt(cells[9].textContent, 10) || 0,
-            bb:           parseInt(cells[10].textContent, 10) || 0,
-            so:           parseInt(cells[11].textContent, 10) || 0,
-            sb:           parseInt(cells[12].textContent, 10) || 0,
-            cs:           parseInt(cells[13].textContent, 10) || 0,
-            avg:          parseFloat(cells[14].textContent) || 0,
-            obp:          parseFloat(cells[15].textContent) || 0,
-            slg:          parseFloat(cells[16].textContent) || 0,
-            ops:          parseFloat(cells[17].textContent) || 0,
-          });
-        });
+            at_bats: parseInt(cells[3].textContent, 10) || 0,
+            runs: parseInt(cells[4].textContent, 10) || 0,
+            hits: parseInt(cells[5].textContent, 10) || 0,
+            doubles: parseInt(cells[6].textContent, 10) || 0,
+            triples: parseInt(cells[7].textContent, 10) || 0,
+            home_runs: parseInt(cells[8].textContent, 10) || 0,
+            rbi: parseInt(cells[9].textContent, 10) || 0,
+            bb: parseInt(cells[10].textContent, 10) || 0,
+            so: parseInt(cells[11].textContent, 10) || 0,
+            sb: parseInt(cells[12].textContent, 10) || 0,
+            cs: parseInt(cells[13].textContent, 10) || 0,
+            avg: parseFloat(cells[14].textContent) || 0,
+            obp: parseFloat(cells[15].textContent) || 0,
+            slg: parseFloat(cells[16].textContent) || 0,
+            ops: parseFloat(cells[17].textContent) || 0,
+          };
+          console.log(`Adding team: ${teamData.team_name}`);
+          results.push(teamData);
+        } catch (err) {
+          console.log(`Error processing row: ${err.message}`);
+        }
+      });
+      
+      console.log(`Returning ${results.length} team results`);
       return results;
     });
+    
+    console.log(`Extracted ${rawRows.length} team rows from the page`);
     
     // Close the browser
     await browser.close();
