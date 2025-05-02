@@ -23,13 +23,26 @@ axiosRetry(axios, {
 const today = new Date();
 const start = new Date(today);
 start.setDate(today.getDate() - 14);
-// Create mid-point date (7 days ago)
-const mid = new Date(today);
-mid.setDate(today.getDate() - 7);
 
-const startDate = start.toISOString().slice(0, 10);
-const midDate = mid.toISOString().slice(0, 10);
-const endDate = today.toISOString().slice(0, 10);
+// Create date windows for smaller chunks (roughly 3-4 days each)
+const dateWindows = [];
+const totalDays = 14;
+const chunkSize = 3; // 3-4 days per chunk
+
+for (let i = 0; i < totalDays; i += chunkSize) {
+  const windowStart = new Date(start);
+  windowStart.setDate(start.getDate() + i);
+  
+  const windowEnd = new Date(start);
+  windowEnd.setDate(start.getDate() + Math.min(i + chunkSize, totalDays));
+  
+  dateWindows.push({
+    from: windowStart.toISOString().slice(0, 10),
+    to: windowEnd.toISOString().slice(0, 10)
+  });
+}
+
+console.log('Date windows:', dateWindows);
 
 // ✅ API URLs
 const MLB_API = 'https://statsapi.mlb.com/api/v1';
@@ -40,33 +53,36 @@ async function fetchTeamStats() {
   try {
     console.log('Fetching team stats from Baseball Savant...');
     
-    // Construct Baseball Savant URLs for team stats (split into two 7-day windows)
-    const firstWeekUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${startDate}&hfDateLt=${midDate}`;
-    const secondWeekUrl = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${midDate}&hfDateLt=${endDate}`;
+    const teamData = [];
     
-    console.log(`First week URL: ${firstWeekUrl}`);
-    console.log(`Second week URL: ${secondWeekUrl}`);
+    // Fetch data from each smaller time window
+    for (const window of dateWindows) {
+      const url = `${SAVANT_CSV}?all=true&player_type=team&hfGT=R%7C&hfDateGt=${window.from}&hfDateLt=${window.to}`;
+      console.log(`Fetching team stats for window ${window.from} to ${window.to}...`);
+      console.log(`URL: ${url}`);
+      
+      try {
+        const response = await axios.get(url, {
+          timeout: 60000 // 60 second timeout
+        });
+        
+        const rows = parse(response.data, { columns: true });
+        teamData.push(...rows);
+        console.log(`Fetched ${rows.length} rows from ${window.from} to ${window.to}`);
+      } catch (error) {
+        console.warn(`Error fetching window ${window.from} to ${window.to}: ${error.message}`);
+        // Continue with other windows even if one fails
+      }
+      
+      // Small delay between requests to avoid overwhelming the server
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
     
-    // Download CSVs with retry mechanism and longer timeout
-    const firstWeekResponse = await axios.get(firstWeekUrl, {
-      timeout: 60000 // 60 second timeout
-    });
-    
-    const secondWeekResponse = await axios.get(secondWeekUrl, {
-      timeout: 60000 // 60 second timeout
-    });
-    
-    // Parse CSVs
-    const firstWeekRows = parse(firstWeekResponse.data, { columns: true });
-    const secondWeekRows = parse(secondWeekResponse.data, { columns: true });
-    
-    // Combine results
-    const rows = [...firstWeekRows, ...secondWeekRows];
-    console.log(`Parsed ${rows.length} rows of team data (${firstWeekRows.length} from first week, ${secondWeekRows.length} from second week)`);
+    console.log(`Total team data rows: ${teamData.length}`);
     
     // Process team stats
     const teamMap = {};
-    for (const row of rows) {
+    for (const row of teamData) {
       const team = row.team;
       
       if (!teamMap[team]) {
@@ -105,7 +121,7 @@ async function fetchMatchups() {
   const { data } = await axios.get(`${MLB_API}/schedule`, {
     params: {
       sportId: 1,
-      date: endDate,
+      date: today.toISOString().slice(0, 10),
       hydrate: 'probablePitcher'
     },
     timeout: 30000 // 30 second timeout
@@ -119,7 +135,7 @@ async function fetchMatchups() {
       
       matchups.push({
         game_id: g.gamePk.toString(),
-        game_date: endDate,
+        game_date: today.toISOString().slice(0, 10),
         home_team: g.teams.home.team.abbreviation,
         away_team: g.teams.away.team.abbreviation,
         home_pitcher_id,
@@ -137,63 +153,53 @@ async function fetchPitchers(matchups) {
   for (const m of matchups) {
     for (const side of ['home', 'away']) {
       const team = m[`${side}_team`];
-      const pid = m[`${side}_pitcher_id`]; // Now properly extracted from matchups
+      const pid = m[`${side}_pitcher_id`]; 
       if (!pid) continue;
 
-      // Split pitcher date range into two weeks as well
-      const firstWeekUrl = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${startDate}&game_date_lt=${midDate}&all=true`;
-      const secondWeekUrl = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${midDate}&game_date_lt=${endDate}&all=true`;
+      let pitcherData = [];
       
-      try {
-        let rows = [];
+      // Fetch data for each date window
+      for (const window of dateWindows) {
+        const url = `${SAVANT_CSV}?player_type=pitcher&player_id=${pid}&game_date_gt=${window.from}&game_date_lt=${window.to}&all=true`;
         
-        // First week data
         try {
-          const { data: firstWeekCsv } = await axios.get(firstWeekUrl, {
+          console.log(`Fetching pitcher ${pid} data for window ${window.from} to ${window.to}`);
+          const { data: csvData } = await axios.get(url, {
             timeout: 30000 // 30 second timeout
           });
-          const firstWeekRows = parse(firstWeekCsv, { columns: true });
-          rows = [...rows, ...firstWeekRows];
-          console.log(`Fetched first week data for pitcher ${pid}: ${firstWeekRows.length} rows`);
+          
+          const rows = parse(csvData, { columns: true });
+          pitcherData.push(...rows);
+          console.log(`Fetched ${rows.length} rows for pitcher ${pid} from ${window.from} to ${window.to}`);
+          
+          // Small delay between requests
+          await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (err) {
-          console.warn(`Error fetching first week data for pitcher ${pid}:`, err.message);
+          console.warn(`Error fetching pitcher ${pid} for window ${window.from} to ${window.to}:`, err.message);
+          // Continue with other windows
         }
-        
-        // Second week data
-        try {
-          const { data: secondWeekCsv } = await axios.get(secondWeekUrl, {
-            timeout: 30000 // 30 second timeout
-          });
-          const secondWeekRows = parse(secondWeekCsv, { columns: true });
-          rows = [...rows, ...secondWeekRows];
-          console.log(`Fetched second week data for pitcher ${pid}: ${secondWeekRows.length} rows`);
-        } catch (err) {
-          console.warn(`Error fetching second week data for pitcher ${pid}:`, err.message);
-        }
-        
-        if (rows.length === 0) {
-          console.warn(`No data found for pitcher ${pid}`);
-          continue;
-        }
-        
-        const ip = rows.reduce((s, r) => s + +r.ip, 0);
-        const er = rows.reduce((s, r) => s + +r.er, 0);
-        const h = rows.reduce((s, r) => s + +r.h, 0);
-        const bb = rows.reduce((s, r) => s + +r.bb, 0);
-        const era = ip ? (er * 9) / ip : 0;
-        const whip = ip ? (h + bb) / ip : 0;
-        const eraPlus = era ? (100 * 4.00) / era : 100;
-
-        pitchers.push({
-          game_id: m.game_id,
-          team_abbr: team,
-          era_plus: Math.round(eraPlus),
-          whip: +whip.toFixed(2),
-          side
-        });
-      } catch (err) {
-        console.error(`Pitcher error for ${pid}:`, err.message);
       }
+      
+      if (pitcherData.length === 0) {
+        console.warn(`No data found for pitcher ${pid}`);
+        continue;
+      }
+      
+      const ip = pitcherData.reduce((s, r) => s + +r.ip, 0);
+      const er = pitcherData.reduce((s, r) => s + +r.er, 0);
+      const h = pitcherData.reduce((s, r) => s + +r.h, 0);
+      const bb = pitcherData.reduce((s, r) => s + +r.bb, 0);
+      const era = ip ? (er * 9) / ip : 0;
+      const whip = ip ? (h + bb) / ip : 0;
+      const eraPlus = era ? (100 * 4.00) / era : 100;
+
+      pitchers.push({
+        game_id: m.game_id,
+        team_abbr: team,
+        era_plus: Math.round(eraPlus),
+        whip: +whip.toFixed(2),
+        side
+      });
     }
   }
 
