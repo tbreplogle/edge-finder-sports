@@ -20,18 +20,27 @@ serve(async (req) => {
     const dateStr = today.toISOString().split('T')[0];
 
     // Fetch the latest MLB predictions
-    const { data: predictions, error } = await supabase
+    const { data: predictions, error: predictionsError } = await supabase
       .from('predictions')
       .select('*')
       .eq('sport', 'MLB')
       .gte('game_date', dateStr)
       .order('updated_at', { ascending: false });
 
-    if (error) throw error;
+    if (predictionsError) throw predictionsError;
+    
+    // Fetch the team hitting stats (including team_id)
+    const { data: teamHittingStats, error: teamHittingError } = await supabase
+      .from('mlb_team_hitting_stats')
+      .select('*')
+      .order('team_name', { ascending: true });
+      
+    if (teamHittingError) throw teamHittingError;
 
     return new Response(
       JSON.stringify({ 
         predictions,
+        teamHittingStats,
         timestamp: new Date().toISOString(),
       }),
       { 

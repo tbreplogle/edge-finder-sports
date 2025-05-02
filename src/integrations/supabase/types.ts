@@ -119,7 +119,6 @@ export type Database = {
           actual_team_name: string | null
           at_bats: number | null
           avg: number | null
-          batting_average: number | null
           bb: number | null
           created_at: string | null
           cs: number | null
@@ -138,6 +137,7 @@ export type Database = {
           slg: number | null
           so: number | null
           team_abbr: string | null
+          team_id: number | null
           team_name: string
           timeframe_days: number
           triples: number | null
@@ -146,7 +146,6 @@ export type Database = {
           actual_team_name?: string | null
           at_bats?: number | null
           avg?: number | null
-          batting_average?: number | null
           bb?: number | null
           created_at?: string | null
           cs?: number | null
@@ -165,6 +164,7 @@ export type Database = {
           slg?: number | null
           so?: number | null
           team_abbr?: string | null
+          team_id?: number | null
           team_name: string
           timeframe_days: number
           triples?: number | null
@@ -173,7 +173,6 @@ export type Database = {
           actual_team_name?: string | null
           at_bats?: number | null
           avg?: number | null
-          batting_average?: number | null
           bb?: number | null
           created_at?: string | null
           cs?: number | null
@@ -192,11 +191,20 @@ export type Database = {
           slg?: number | null
           so?: number | null
           team_abbr?: string | null
+          team_id?: number | null
           team_name?: string
           timeframe_days?: number
           triples?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_mlb_stats_team"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+        ]
       }
       pitcher_stats: {
         Row: {
@@ -276,6 +284,24 @@ export type Database = {
           predicted_total?: number | null
           sport?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      teams_mlb: {
+        Row: {
+          actual_team_name: string
+          team_abbr: string
+          team_id: number
+        }
+        Insert: {
+          actual_team_name: string
+          team_abbr: string
+          team_id?: number
+        }
+        Update: {
+          actual_team_name?: string
+          team_abbr?: string
+          team_id?: number
         }
         Relationships: []
       }

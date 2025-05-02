@@ -1,3 +1,4 @@
+
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
@@ -10,49 +11,49 @@ const DEBUG = process.env.DEBUG === 'true';
 const TIMEFRAME_DAYS = 7;
 
 /**
- * Maps a raw team name to its proper name and abbreviation
+ * Maps a raw team name to its proper name, abbreviation, and ID
  * @param {string} teamName The raw team name from MLB stats
- * @returns {object} Object containing actual_team_name and team_abbr
+ * @returns {object} Object containing actual_team_name, team_abbr, and team_id
  */
-function mapTeamNameAndAbbreviation(teamName) {
+function mapTeamInfo(teamName) {
+  // Team ID mapping based on the image provided
+  const teamMap = {
+    'Seattle Mariners': { actual_team_name: 'Seattle Mariners', team_abbr: 'SEA', team_id: 1 },
+    'Cleveland Guardians': { actual_team_name: 'Cleveland Guardians', team_abbr: 'CLE', team_id: 2 },
+    'Pittsburgh Pirates': { actual_team_name: 'Pittsburgh Pirates', team_abbr: 'PIT', team_id: 3 },
+    'Los Angeles Angels': { actual_team_name: 'Los Angeles Angels', team_abbr: 'LAA', team_id: 4 },
+    'Toronto Blue Jays': { actual_team_name: 'Toronto Blue Jays', team_abbr: 'TOR', team_id: 5 },
+    'Miami Marlins': { actual_team_name: 'Miami Marlins', team_abbr: 'MIA', team_id: 6 },
+    'Oakland Athletics': { actual_team_name: 'Oakland Athletics', team_abbr: 'OAK', team_id: 7 },
+    'New York Yankees': { actual_team_name: 'New York Yankees', team_abbr: 'NYY', team_id: 8 },
+    'Tampa Bay Rays': { actual_team_name: 'Tampa Bay Rays', team_abbr: 'TBR', team_id: 9 },
+    'Minnesota Twins': { actual_team_name: 'Minnesota Twins', team_abbr: 'MIN', team_id: 10 },
+    'Kansas City Royals': { actual_team_name: 'Kansas City Royals', team_abbr: 'KCR', team_id: 11 },
+    'San Francisco Giants': { actual_team_name: 'San Francisco Giants', team_abbr: 'SFG', team_id: 12 },
+    'Arizona Diamondbacks': { actual_team_name: 'Arizona Diamondbacks', team_abbr: 'ARI', team_id: 13 },
+    'Milwaukee Brewers': { actual_team_name: 'Milwaukee Brewers', team_abbr: 'MIL', team_id: 14 },
+    'Chicago White Sox': { actual_team_name: 'Chicago White Sox', team_abbr: 'CWS', team_id: 15 },
+    'Chicago Cubs': { actual_team_name: 'Chicago Cubs', team_abbr: 'CHC', team_id: 16 },
+    'Atlanta Braves': { actual_team_name: 'Atlanta Braves', team_abbr: 'ATL', team_id: 17 },
+    'San Diego Padres': { actual_team_name: 'San Diego Padres', team_abbr: 'SDP', team_id: 18 },
+    'Houston Astros': { actual_team_name: 'Houston Astros', team_abbr: 'HOU', team_id: 19 },
+    'New York Mets': { actual_team_name: 'New York Mets', team_abbr: 'NYM', team_id: 20 },
+    'Los Angeles Dodgers': { actual_team_name: 'Los Angeles Dodgers', team_abbr: 'LAD', team_id: 21 },
+    'Colorado Rockies': { actual_team_name: 'Colorado Rockies', team_abbr: 'COL', team_id: 22 },
+    'Cincinnati Reds': { actual_team_name: 'Cincinnati Reds', team_abbr: 'CIN', team_id: 23 },
+    'Washington Nationals': { actual_team_name: 'Washington Nationals', team_abbr: 'WSH', team_id: 24 },
+    'Detroit Tigers': { actual_team_name: 'Detroit Tigers', team_abbr: 'DET', team_id: 25 },
+    'Philadelphia Phillies': { actual_team_name: 'Philadelphia Phillies', team_abbr: 'PHI', team_id: 26 },
+    'St. Louis Cardinals': { actual_team_name: 'St. Louis Cardinals', team_abbr: 'STL', team_id: 27 },
+    'Texas Rangers': { actual_team_name: 'Texas Rangers', team_abbr: 'TEX', team_id: 28 },
+    'Boston Red Sox': { actual_team_name: 'Boston Red Sox', team_abbr: 'BOS', team_id: 29 },
+    'Baltimore Orioles': { actual_team_name: 'Baltimore Orioles', team_abbr: 'BAL', team_id: 30 }
+  };
+
   // Special case for Athletics with duplicate name (case-insensitive)
   if (teamName.toUpperCase().includes('ATHLETICS') || teamName.includes('Oakland')) {
-    return { actual_team_name: 'Oakland Athletics', team_abbr: 'ATH' };
+    return teamMap['Oakland Athletics'];
   }
-
-  // Define the mapping for team names and abbreviations
-  const teamMap = {
-    'Seattle Mariners': { actual_team_name: 'Seattle Mariners', team_abbr: 'SEA' },
-    'Cleveland Guardians': { actual_team_name: 'Cleveland Guardians', team_abbr: 'CLE' },
-    'Pittsburgh Pirates': { actual_team_name: 'Pittsburgh Pirates', team_abbr: 'PIT' },
-    'Los Angeles Angels': { actual_team_name: 'Los Angeles Angels', team_abbr: 'LAA' },
-    'Toronto Blue Jays': { actual_team_name: 'Toronto Blue Jays', team_abbr: 'TOR' },
-    'Miami Marlins': { actual_team_name: 'Miami Marlins', team_abbr: 'MIA' },
-    'Oakland Athletics': { actual_team_name: 'Oakland Athletics', team_abbr: 'ATH' },
-    'New York Yankees': { actual_team_name: 'New York Yankees', team_abbr: 'NYY' },
-    'Tampa Bay Rays': { actual_team_name: 'Tampa Bay Rays', team_abbr: 'TBR' },
-    'Minnesota Twins': { actual_team_name: 'Minnesota Twins', team_abbr: 'MIN' },
-    'Kansas City Royals': { actual_team_name: 'Kansas City Royals', team_abbr: 'KCR' },
-    'San Francisco Giants': { actual_team_name: 'San Francisco Giants', team_abbr: 'SFG' },
-    'Arizona Diamondbacks': { actual_team_name: 'Arizona Diamondbacks', team_abbr: 'ARI' },
-    'Milwaukee Brewers': { actual_team_name: 'Milwaukee Brewers', team_abbr: 'MIL' },
-    'Chicago White Sox': { actual_team_name: 'Chicago White Sox', team_abbr: 'CWS' },
-    'Chicago Cubs': { actual_team_name: 'Chicago Cubs', team_abbr: 'CHC' },
-    'Atlanta Braves': { actual_team_name: 'Atlanta Braves', team_abbr: 'ATL' },
-    'San Diego Padres': { actual_team_name: 'San Diego Padres', team_abbr: 'SDP' },
-    'Houston Astros': { actual_team_name: 'Houston Astros', team_abbr: 'HOU' },
-    'New York Mets': { actual_team_name: 'New York Mets', team_abbr: 'NYM' },
-    'Los Angeles Dodgers': { actual_team_name: 'Los Angeles Dodgers', team_abbr: 'LAD' },
-    'Colorado Rockies': { actual_team_name: 'Colorado Rockies', team_abbr: 'COL' },
-    'Cincinnati Reds': { actual_team_name: 'Cincinnati Reds', team_abbr: 'CIN' },
-    'Washington Nationals': { actual_team_name: 'Washington Nationals', team_abbr: 'WSH' },
-    'Detroit Tigers': { actual_team_name: 'Detroit Tigers', team_abbr: 'DET' },
-    'Philadelphia Phillies': { actual_team_name: 'Philadelphia Phillies', team_abbr: 'PHI' },
-    'St. Louis Cardinals': { actual_team_name: 'St. Louis Cardinals', team_abbr: 'STL' },
-    'Texas Rangers': { actual_team_name: 'Texas Rangers', team_abbr: 'TEX' },
-    'Boston Red Sox': { actual_team_name: 'Boston Red Sox', team_abbr: 'BOS' },
-    'Baltimore Orioles': { actual_team_name: 'Baltimore Orioles', team_abbr: 'BAL' }
-  };
 
   // Look for the team name in our mapping (handling variations with ILIKE logic)
   for (const [key, value] of Object.entries(teamMap)) {
@@ -62,7 +63,7 @@ function mapTeamNameAndAbbreviation(teamName) {
   }
 
   // Default return if no match found
-  return { actual_team_name: null, team_abbr: null };
+  return { actual_team_name: null, team_abbr: null, team_id: null };
 }
 
 /**
@@ -240,81 +241,118 @@ async function runTeamStatsMigration() {
     const migrationSQL = `
     BEGIN;
 
-    -- 1) Add two new columns: actual_team_name and team_abbr if they don't exist
+    -- 1) Add team_id column if it doesn't exist
     ALTER TABLE mlb_team_hitting_stats
       ADD COLUMN IF NOT EXISTS actual_team_name TEXT,
-      ADD COLUMN IF NOT EXISTS team_abbr CHAR(3);
+      ADD COLUMN IF NOT EXISTS team_abbr CHAR(3),
+      ADD COLUMN IF NOT EXISTS team_id INTEGER;
 
     -- 2) Update any records that might not have been properly mapped previously
     UPDATE mlb_team_hitting_stats
     SET
       actual_team_name = CASE
-        WHEN team_name ILIKE 'Seattle Mariners%'       THEN 'Seattle Mariners'
-        WHEN team_name ILIKE 'Cleveland Guardians%'    THEN 'Cleveland Guardians'
-        WHEN team_name ILIKE 'Pittsburgh Pirates%'     THEN 'Pittsburgh Pirates'
-        WHEN team_name ILIKE 'Los Angeles Angels%'     THEN 'Los Angeles Angels'
-        WHEN team_name ILIKE 'Toronto Blue Jays%'      THEN 'Toronto Blue Jays'
-        WHEN team_name ILIKE 'Miami Marlins%'          THEN 'Miami Marlins'
-        WHEN team_name ILIKE 'Oakland Athletics%'      THEN 'Oakland Athletics'
-        WHEN team_name ILIKE 'New York Yankees%'       THEN 'New York Yankees'
-        WHEN team_name ILIKE 'Tampa Bay Rays%'         THEN 'Tampa Bay Rays'
-        WHEN team_name ILIKE 'Minnesota Twins%'        THEN 'Minnesota Twins'
-        WHEN team_name ILIKE 'Kansas City Royals%'     THEN 'Kansas City Royals'
-        WHEN team_name ILIKE 'San Francisco Giants%'   THEN 'San Francisco Giants'
-        WHEN team_name ILIKE 'Arizona Diamondbacks%'   THEN 'Arizona Diamondbacks'
-        WHEN team_name ILIKE 'Milwaukee Brewers%'      THEN 'Milwaukee Brewers'
-        WHEN team_name ILIKE 'Chicago White Sox%'      THEN 'Chicago White Sox'
-        WHEN team_name ILIKE 'Chicago Cubs%'           THEN 'Chicago Cubs'
-        WHEN team_name ILIKE 'Atlanta Braves%'         THEN 'Atlanta Braves'
-        WHEN team_name ILIKE 'San Diego Padres%'       THEN 'San Diego Padres'
-        WHEN team_name ILIKE 'Houston Astros%'         THEN 'Houston Astros'
-        WHEN team_name ILIKE 'New York Mets%'         THEN 'New York Mets'
-        WHEN team_name ILIKE 'Los Angeles Dodgers%'    THEN 'Los Angeles Dodgers'
-        WHEN team_name ILIKE 'Colorado Rockies%'       THEN 'Colorado Rockies'
-        WHEN team_name ILIKE 'Cincinnati Reds%'        THEN 'Cincinnati Reds'
-        WHEN team_name ILIKE 'Washington Nationals%'   THEN 'Washington Nationals'
-        WHEN team_name ILIKE 'Detroit Tigers%'         THEN 'Detroit Tigers'
-        WHEN team_name ILIKE 'Philadelphia Phillies%'  THEN 'Philadelphia Phillies'
-        WHEN team_name ILIKE 'St. Louis Cardinals%'    THEN 'St. Louis Cardinals'
-        WHEN team_name ILIKE 'Texas Rangers%'          THEN 'Texas Rangers'
-        WHEN team_name ILIKE 'Boston Red Sox%'         THEN 'Boston Red Sox'
-        WHEN team_name ILIKE 'Baltimore Orioles%'      THEN 'Baltimore Orioles'
+        WHEN team_name ILIKE '%Seattle Mariners%'       THEN 'Seattle Mariners'
+        WHEN team_name ILIKE '%Cleveland Guardians%'    THEN 'Cleveland Guardians'
+        WHEN team_name ILIKE '%Pittsburgh Pirates%'     THEN 'Pittsburgh Pirates'
+        WHEN team_name ILIKE '%Los Angeles Angels%'     THEN 'Los Angeles Angels'
+        WHEN team_name ILIKE '%Toronto Blue Jays%'      THEN 'Toronto Blue Jays'
+        WHEN team_name ILIKE '%Miami Marlins%'          THEN 'Miami Marlins'
+        WHEN team_name ILIKE '%Oakland Athletics%'      THEN 'Oakland Athletics'
+        WHEN team_name ILIKE '%Athletics%'              THEN 'Oakland Athletics'
+        WHEN team_name ILIKE '%New York Yankees%'       THEN 'New York Yankees'
+        WHEN team_name ILIKE '%Tampa Bay Rays%'         THEN 'Tampa Bay Rays'
+        WHEN team_name ILIKE '%Minnesota Twins%'        THEN 'Minnesota Twins'
+        WHEN team_name ILIKE '%Kansas City Royals%'     THEN 'Kansas City Royals'
+        WHEN team_name ILIKE '%San Francisco Giants%'   THEN 'San Francisco Giants'
+        WHEN team_name ILIKE '%Arizona Diamondbacks%'   THEN 'Arizona Diamondbacks'
+        WHEN team_name ILIKE '%Milwaukee Brewers%'      THEN 'Milwaukee Brewers'
+        WHEN team_name ILIKE '%Chicago White Sox%'      THEN 'Chicago White Sox'
+        WHEN team_name ILIKE '%Chicago Cubs%'           THEN 'Chicago Cubs'
+        WHEN team_name ILIKE '%Atlanta Braves%'         THEN 'Atlanta Braves'
+        WHEN team_name ILIKE '%San Diego Padres%'       THEN 'San Diego Padres'
+        WHEN team_name ILIKE '%Houston Astros%'         THEN 'Houston Astros'
+        WHEN team_name ILIKE '%New York Mets%'         THEN 'New York Mets'
+        WHEN team_name ILIKE '%Los Angeles Dodgers%'    THEN 'Los Angeles Dodgers'
+        WHEN team_name ILIKE '%Colorado Rockies%'       THEN 'Colorado Rockies'
+        WHEN team_name ILIKE '%Cincinnati Reds%'        THEN 'Cincinnati Reds'
+        WHEN team_name ILIKE '%Washington Nationals%'   THEN 'Washington Nationals'
+        WHEN team_name ILIKE '%Detroit Tigers%'         THEN 'Detroit Tigers'
+        WHEN team_name ILIKE '%Philadelphia Phillies%'  THEN 'Philadelphia Phillies'
+        WHEN team_name ILIKE '%St. Louis Cardinals%'    THEN 'St. Louis Cardinals'
+        WHEN team_name ILIKE '%Texas Rangers%'          THEN 'Texas Rangers'
+        WHEN team_name ILIKE '%Boston Red Sox%'         THEN 'Boston Red Sox'
+        WHEN team_name ILIKE '%Baltimore Orioles%'      THEN 'Baltimore Orioles'
         ELSE actual_team_name
       END,
       team_abbr = CASE
-        WHEN team_name ILIKE 'Seattle Mariners%'       THEN 'SEA'
-        WHEN team_name ILIKE 'Cleveland Guardians%'    THEN 'CLE'
-        WHEN team_name ILIKE 'Pittsburgh Pirates%'     THEN 'PIT'
-        WHEN team_name ILIKE 'Los Angeles Angels%'     THEN 'LAA'
-        WHEN team_name ILIKE 'Toronto Blue Jays%'      THEN 'TOR'
-        WHEN team_name ILIKE 'Miami Marlins%'          THEN 'MIA'
-        WHEN team_name ILIKE 'Oakland Athletics%'      THEN 'OAK'
-        WHEN team_name ILIKE 'New York Yankees%'       THEN 'NYY'
-        WHEN team_name ILIKE 'Tampa Bay Rays%'         THEN 'TBR'
-        WHEN team_name ILIKE 'Minnesota Twins%'        THEN 'MIN'
-        WHEN team_name ILIKE 'Kansas City Royals%'     THEN 'KCR'
-        WHEN team_name ILIKE 'San Francisco Giants%'   THEN 'SFG'
-        WHEN team_name ILIKE 'Arizona Diamondbacks%'   THEN 'ARI'
-        WHEN team_name ILIKE 'Milwaukee Brewers%'      THEN 'MIL'
-        WHEN team_name ILIKE 'Chicago White Sox%'      THEN 'CWS'
-        WHEN team_name ILIKE 'Chicago Cubs%'           THEN 'CHC'
-        WHEN team_name ILIKE 'Atlanta Braves%'         THEN 'ATL'
-        WHEN team_name ILIKE 'San Diego Padres%'       THEN 'SDP'
-        WHEN team_name ILIKE 'Houston Astros%'         THEN 'HOU'
-        WHEN team_name ILIKE 'New York Mets%'         THEN 'NYM'
-        WHEN team_name ILIKE 'Los Angeles Dodgers%'    THEN 'LAD'
-        WHEN team_name ILIKE 'Colorado Rockies%'       THEN 'COL'
-        WHEN team_name ILIKE 'Cincinnati Reds%'        THEN 'CIN'
-        WHEN team_name ILIKE 'Washington Nationals%'   THEN 'WSH'
-        WHEN team_name ILIKE 'Detroit Tigers%'         THEN 'DET'
-        WHEN team_name ILIKE 'Philadelphia Phillies%'  THEN 'PHI'
-        WHEN team_name ILIKE 'St. Louis Cardinals%'    THEN 'STL'
-        WHEN team_name ILIKE 'Texas Rangers%'          THEN 'TEX'
-        WHEN team_name ILIKE 'Boston Red Sox%'         THEN 'BOS'
-        WHEN team_name ILIKE 'Baltimore Orioles%'      THEN 'BAL'
+        WHEN team_name ILIKE '%Seattle Mariners%'       THEN 'SEA'
+        WHEN team_name ILIKE '%Cleveland Guardians%'    THEN 'CLE'
+        WHEN team_name ILIKE '%Pittsburgh Pirates%'     THEN 'PIT'
+        WHEN team_name ILIKE '%Los Angeles Angels%'     THEN 'LAA'
+        WHEN team_name ILIKE '%Toronto Blue Jays%'      THEN 'TOR'
+        WHEN team_name ILIKE '%Miami Marlins%'          THEN 'MIA'
+        WHEN team_name ILIKE '%Oakland Athletics%'      THEN 'OAK'
+        WHEN team_name ILIKE '%Athletics%'              THEN 'OAK'
+        WHEN team_name ILIKE '%New York Yankees%'       THEN 'NYY'
+        WHEN team_name ILIKE '%Tampa Bay Rays%'         THEN 'TBR'
+        WHEN team_name ILIKE '%Minnesota Twins%'        THEN 'MIN'
+        WHEN team_name ILIKE '%Kansas City Royals%'     THEN 'KCR'
+        WHEN team_name ILIKE '%San Francisco Giants%'   THEN 'SFG'
+        WHEN team_name ILIKE '%Arizona Diamondbacks%'   THEN 'ARI'
+        WHEN team_name ILIKE '%Milwaukee Brewers%'      THEN 'MIL'
+        WHEN team_name ILIKE '%Chicago White Sox%'      THEN 'CWS'
+        WHEN team_name ILIKE '%Chicago Cubs%'           THEN 'CHC'
+        WHEN team_name ILIKE '%Atlanta Braves%'         THEN 'ATL'
+        WHEN team_name ILIKE '%San Diego Padres%'       THEN 'SDP'
+        WHEN team_name ILIKE '%Houston Astros%'         THEN 'HOU'
+        WHEN team_name ILIKE '%New York Mets%'         THEN 'NYM'
+        WHEN team_name ILIKE '%Los Angeles Dodgers%'    THEN 'LAD'
+        WHEN team_name ILIKE '%Colorado Rockies%'       THEN 'COL'
+        WHEN team_name ILIKE '%Cincinnati Reds%'        THEN 'CIN'
+        WHEN team_name ILIKE '%Washington Nationals%'   THEN 'WSH'
+        WHEN team_name ILIKE '%Detroit Tigers%'         THEN 'DET'
+        WHEN team_name ILIKE '%Philadelphia Phillies%'  THEN 'PHI'
+        WHEN team_name ILIKE '%St. Louis Cardinals%'    THEN 'STL'
+        WHEN team_name ILIKE '%Texas Rangers%'          THEN 'TEX'
+        WHEN team_name ILIKE '%Boston Red Sox%'         THEN 'BOS'
+        WHEN team_name ILIKE '%Baltimore Orioles%'      THEN 'BAL'
         ELSE team_abbr
+      END,
+      team_id = CASE
+        WHEN team_name ILIKE '%Seattle Mariners%'       THEN 1
+        WHEN team_name ILIKE '%Cleveland Guardians%'    THEN 2
+        WHEN team_name ILIKE '%Pittsburgh Pirates%'     THEN 3
+        WHEN team_name ILIKE '%Los Angeles Angels%'     THEN 4
+        WHEN team_name ILIKE '%Toronto Blue Jays%'      THEN 5
+        WHEN team_name ILIKE '%Miami Marlins%'          THEN 6
+        WHEN team_name ILIKE '%Oakland Athletics%'      THEN 7
+        WHEN team_name ILIKE '%Athletics%'              THEN 7
+        WHEN team_name ILIKE '%New York Yankees%'       THEN 8
+        WHEN team_name ILIKE '%Tampa Bay Rays%'         THEN 9
+        WHEN team_name ILIKE '%Minnesota Twins%'        THEN 10
+        WHEN team_name ILIKE '%Kansas City Royals%'     THEN 11
+        WHEN team_name ILIKE '%San Francisco Giants%'   THEN 12
+        WHEN team_name ILIKE '%Arizona Diamondbacks%'   THEN 13
+        WHEN team_name ILIKE '%Milwaukee Brewers%'      THEN 14
+        WHEN team_name ILIKE '%Chicago White Sox%'      THEN 15
+        WHEN team_name ILIKE '%Chicago Cubs%'           THEN 16
+        WHEN team_name ILIKE '%Atlanta Braves%'         THEN 17
+        WHEN team_name ILIKE '%San Diego Padres%'       THEN 18
+        WHEN team_name ILIKE '%Houston Astros%'         THEN 19
+        WHEN team_name ILIKE '%New York Mets%'         THEN 20
+        WHEN team_name ILIKE '%Los Angeles Dodgers%'    THEN 21
+        WHEN team_name ILIKE '%Colorado Rockies%'       THEN 22
+        WHEN team_name ILIKE '%Cincinnati Reds%'        THEN 23
+        WHEN team_name ILIKE '%Washington Nationals%'   THEN 24
+        WHEN team_name ILIKE '%Detroit Tigers%'         THEN 25
+        WHEN team_name ILIKE '%Philadelphia Phillies%'  THEN 26
+        WHEN team_name ILIKE '%St. Louis Cardinals%'    THEN 27
+        WHEN team_name ILIKE '%Texas Rangers%'          THEN 28
+        WHEN team_name ILIKE '%Boston Red Sox%'         THEN 29
+        WHEN team_name ILIKE '%Baltimore Orioles%'      THEN 30
+        ELSE team_id
       END
-    WHERE actual_team_name IS NULL OR team_abbr IS NULL;
+    WHERE actual_team_name IS NULL OR team_abbr IS NULL OR team_id IS NULL;
 
     COMMIT;
     `;
@@ -357,16 +395,24 @@ async function saveTeamStatsToSupabase(teamStats) {
       return false;
     }
     
-    // No need to calculate batting_average - the MLB stats already include avg field
-    // We'll use the stats as they come from the scrape function
+    // Add team_id to each team stat based on team name lookup
+    const enhancedTeamStats = teamStats.map(stat => {
+      const teamInfo = mapTeamInfo(stat.team_name);
+      return {
+        ...stat,
+        team_id: teamInfo.team_id,
+        team_abbr: teamInfo.team_abbr || stat.team_abbr,
+        actual_team_name: teamInfo.actual_team_name || stat.actual_team_name
+      };
+    });
     
     if (DEBUG) {
-      console.log('Sample team data:', teamStats[0]);
+      console.log('Sample team data with team_id:', enhancedTeamStats[0]);
     }
     
     // Extract timeframe and game date for filtering
-    const timeframe = teamStats[0].timeframe_days;
-    const gameDate = teamStats[0].game_date;
+    const timeframe = enhancedTeamStats[0].timeframe_days;
+    const gameDate = enhancedTeamStats[0].game_date;
     
     // Step 1: Delete existing records for the same timeframe and game date
     console.log(`Deleting existing records for timeframe: ${timeframe} days and date: ${gameDate}...`);
@@ -386,19 +432,19 @@ async function saveTeamStatsToSupabase(teamStats) {
     // Step 2: Insert new records
     console.log('Inserting new team stats records...');
     // Log the first record we're trying to insert for debugging
-    console.log('First record to insert:', JSON.stringify(teamStats[0], null, 2));
+    console.log('First record to insert:', JSON.stringify(enhancedTeamStats[0], null, 2));
     
     // Insert data (no need for upsert since we've already deleted existing records)
     const { data, error } = await supabase
       .from('mlb_team_hitting_stats')
-      .insert(teamStats);
+      .insert(enhancedTeamStats);
     
     if (error) {
       console.error('Error saving team stats to Supabase:', error);
       
       if (DEBUG) {
         console.error('Error details:', JSON.stringify(error, null, 2));
-        console.log('Sample of attempted insert:', JSON.stringify(teamStats[0], null, 2));
+        console.log('Sample of attempted insert:', JSON.stringify(enhancedTeamStats[0], null, 2));
       }
       
       // Always create a report even on error
@@ -406,7 +452,7 @@ async function saveTeamStatsToSupabase(teamStats) {
         success: false,
         error: error.message,
         timestamp: new Date().toISOString(),
-        stats: { seven_day: teamStats.length }
+        stats: { seven_day: enhancedTeamStats.length }
       });
       
       return false;
