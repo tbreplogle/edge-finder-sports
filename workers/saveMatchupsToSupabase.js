@@ -8,21 +8,37 @@ import { getAllMatchupDetails } from './scrapeMatchupDetails.js';
  * @returns {object} The transformed data ready for insertion
  */
 function transformMatchupForDb(matchup) {
-  // Extract ERA and WHIP for home and away bullpens
+  // Extract all bullpen stats for home and away teams
   const homeBullpenStats = matchup.bullpens[matchup.homeTeam] || {};
   const awayBullpenStats = matchup.bullpens[matchup.awayTeam] || {};
   
   return {
-    game_id: matchup.matchupId,
+    matchup_id: matchup.matchupId,
     game_date: new Date().toISOString().slice(0, 10), // Today's date
     home_team: matchup.homeTeam,
     away_team: matchup.awayTeam,
     home_pitcher: matchup.homePitcher,
     away_pitcher: matchup.awayPitcher,
-    home_bullpen_era: parseFloat(homeBullpenStats.ERA) || null,
-    home_bullpen_whip: parseFloat(homeBullpenStats.WHIP) || null,
-    away_bullpen_era: parseFloat(awayBullpenStats.ERA) || null,
-    away_bullpen_whip: parseFloat(awayBullpenStats.WHIP) || null
+    
+    // Home bullpen stats with proper type conversion
+    bullpen_home_era: parseFloat(homeBullpenStats.ERA) || null,
+    bullpen_home_whip: parseFloat(homeBullpenStats.WHIP) || null,
+    bullpen_home_avg: parseFloat(homeBullpenStats.AVG) || null,
+    bullpen_home_obp: parseFloat(homeBullpenStats.OBP) || null,
+    bullpen_home_ip: parseFloat(homeBullpenStats.IP) || null,
+    bullpen_home_hr: parseInt(homeBullpenStats.HR) || null,
+    bullpen_home_bb: parseInt(homeBullpenStats.BB) || null,
+    bullpen_home_k: parseInt(homeBullpenStats.K) || null,
+    
+    // Away bullpen stats with proper type conversion
+    bullpen_away_era: parseFloat(awayBullpenStats.ERA) || null,
+    bullpen_away_whip: parseFloat(awayBullpenStats.WHIP) || null,
+    bullpen_away_avg: parseFloat(awayBullpenStats.AVG) || null,
+    bullpen_away_obp: parseFloat(awayBullpenStats.OBP) || null,
+    bullpen_away_ip: parseFloat(awayBullpenStats.IP) || null,
+    bullpen_away_hr: parseInt(awayBullpenStats.HR) || null,
+    bullpen_away_bb: parseInt(awayBullpenStats.BB) || null,
+    bullpen_away_k: parseInt(awayBullpenStats.K) || null
   };
 }
 
@@ -47,11 +63,11 @@ export async function saveMatchupsToSupabase() {
     // Transform data for database
     const transformedMatchups = matchups.map(transformMatchupForDb);
     
-    // Save to Supabase
+    // Save to Supabase - note the table name change
     const { data, error } = await supabase
-      .from('mlb_matchups')
+      .from('mlb_matchup_details')
       .upsert(transformedMatchups, {
-        onConflict: 'game_id',
+        onConflict: 'matchup_id',
         ignoreDuplicates: false
       });
     
