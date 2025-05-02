@@ -286,7 +286,7 @@ async function saveTeamStatsToSupabase(teamStats) {
   console.log(`Saving ${teamStats.length} team hitting stats to Supabase`);
   
   try {
-    // Test Supabase connection before attempting insert
+    // Test Supabase connection before attempting operations
     const connectionSuccessful = await testConnection();
     
     if (!connectionSuccessful) {
@@ -294,16 +294,34 @@ async function saveTeamStatsToSupabase(teamStats) {
       return false;
     }
     
+    // Extract timeframe and game date for filtering
+    const timeframe = teamStats[0].timeframe_days;
+    const gameDate = teamStats[0].game_date;
+    
+    // Step 1: Delete existing records for the same timeframe and game date
+    console.log(`Deleting existing records for timeframe: ${timeframe} days and date: ${gameDate}...`);
+    const { error: deleteError } = await supabase
+      .from('mlb_team_hitting_stats')
+      .delete()
+      .eq('timeframe_days', timeframe)
+      .eq('game_date', gameDate);
+      
+    if (deleteError) {
+      console.error('Error deleting existing team stats:', deleteError);
+      return false;
+    }
+    
+    console.log('✅ Successfully deleted existing records');
+    
+    // Step 2: Insert new records
+    console.log('Inserting new team stats records...');
     // Log the first record we're trying to insert for debugging
     console.log('First record to insert:', JSON.stringify(teamStats[0], null, 2));
     
-    // Insert data using upsert with onConflict for handling duplicates
+    // Insert data (no need for upsert since we've already deleted existing records)
     const { data, error } = await supabase
       .from('mlb_team_hitting_stats')
-      .upsert(teamStats, {
-        onConflict: 'team_name,timeframe_days,game_date',
-        ignoreDuplicates: false
-      });
+      .insert(teamStats);
     
     if (error) {
       console.error('Error saving team stats to Supabase:', error);

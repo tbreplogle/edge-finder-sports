@@ -276,30 +276,6 @@ export type Database = {
         }
         Relationships: []
       }
-      team_stats: {
-        Row: {
-          ba: number | null
-          hr: number | null
-          hra: number | null
-          team_abbr: string
-          updated_at: string | null
-        }
-        Insert: {
-          ba?: number | null
-          hr?: number | null
-          hra?: number | null
-          team_abbr: string
-          updated_at?: string | null
-        }
-        Update: {
-          ba?: number | null
-          hr?: number | null
-          hra?: number | null
-          team_abbr?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
