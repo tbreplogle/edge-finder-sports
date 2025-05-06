@@ -4,8 +4,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw } from "lucide-react";
 
+// Define a custom type for our frontend prediction display
+interface PredictionDisplay {
+  id?: string;
+  sport: string;
+  home_team: string;
+  away_team: string;
+  game_id?: string;
+  game_date: string;
+  predicted_margin?: number;
+  edge?: number;
+  home_ml?: number;
+  away_ml?: number;
+  market_home_ml?: number;
+  market_away_ml?: number;
+  updated_at: string;
+}
+
 interface PredictionsTableProps {
-  predictions: Tables<"predictions">[];
+  predictions: PredictionDisplay[];
   isLoading: boolean;
 }
 
@@ -46,17 +63,17 @@ export function PredictionsTable({ predictions, isLoading }: PredictionsTablePro
             </TableRow>
           ) : (
             predictions.map((prediction) => (
-              <TableRow key={prediction.id}>
-                <TableCell className="font-mono text-xs">{prediction.id}</TableCell>
+              <TableRow key={prediction.id || `${prediction.game_id}-${prediction.sport}`}>
+                <TableCell className="font-mono text-xs">{prediction.id || '-'}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{prediction.sport}</Badge>
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">{prediction.away_team} @ {prediction.home_team}</div>
-                  <div className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{prediction.game_id}</div>
+                  <div className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{prediction.game_id || '-'}</div>
                 </TableCell>
                 <TableCell className="text-right">
-                  {prediction.predicted_margin ? (
+                  {prediction.predicted_margin !== undefined && prediction.predicted_margin !== null ? (
                     prediction.predicted_margin > 0 ? (
                       <span className="text-green-600">+{Number(prediction.predicted_margin).toFixed(1)}</span>
                     ) : (
@@ -83,7 +100,7 @@ export function PredictionsTable({ predictions, isLoading }: PredictionsTablePro
                   ) : null}
                 </TableCell>
                 <TableCell className="text-right">
-                  {prediction.edge !== null ? (
+                  {prediction.edge !== null && prediction.edge !== undefined ? (
                     <span className={Number(prediction.edge) > 0 ? "text-green-600" : "text-red-600"}>
                       {Number(prediction.edge).toFixed(1)}
                     </span>

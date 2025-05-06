@@ -2,8 +2,22 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tables } from "@/integrations/supabase/types";
 
+// Define a custom type for our frontend prediction display
+interface PredictionDisplay {
+  id?: string;
+  sport: string;
+  home_team: string;
+  away_team: string;
+  game_date: string;
+  predicted_margin?: number;
+  edge?: number;
+  home_ml?: number;
+  away_ml?: number;
+  updated_at: string;
+}
+
 interface PredictionStatsProps {
-  predictions: Tables<"predictions">[];
+  predictions: PredictionDisplay[];
 }
 
 export function PredictionStats({ predictions }: PredictionStatsProps) {
