@@ -5,7 +5,8 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 const DEBUG = process.env.DEBUG === 'true';
 
 /**
- * Map from your teams_mlb.alt_name to team_id
+ * alt_name → team_id
+ * from your teams_mlb table
  */
 const TEAM_ALT_NAME_TO_ID = {
   'SEATTLE':        1,
@@ -17,7 +18,7 @@ const TEAM_ALT_NAME_TO_ID = {
   'ATHLETICS':      7,
   'NY YANKEES':     8,
   'TAMPA BAY':      9,
-  'MINNESOTA':     10,
+  'MINNESOTA':      10,
   'KANSAS CITY':    11,
   'SF GIANTS':      12,
   'ARIZONA':        13,
@@ -41,21 +42,21 @@ const TEAM_ALT_NAME_TO_ID = {
 };
 
 async function scrapePitchingMatchups() {
-  // 1) get today's matchup_ids
+  // 1) grab today’s matchup_ids
   const today = new Date().toISOString().slice(0,10);
   const { data: games, error: fetchErr } = await supabase
     .from('mlb_matchups')
     .select('matchup_id')
     .eq('game_date', today);
 
-  if (fetchErr) throw new Error('Loading today matchups failed: ' + fetchErr.message);
+  if (fetchErr) throw new Error(`Could not load today's matchups: ${fetchErr.message}`);
   if (!games.length) {
-    console.warn('⚠️ No matchups for today.');
+    console.warn('⚠️  No matchups for today.');
     return [];
   }
   console.log(`→ Found ${games.length} matchups to scrape.`);
 
-  // 2) launch Puppeteer
+  // 2) boot Puppeteer
   const browser = await puppeteer.launch({
     args: ['--no-sandbox','--disable-setuid-sandbox'],
     headless: 'new'
@@ -66,71 +67,77 @@ async function scrapePitchingMatchups() {
 
   const rows = [];
 
-  for (const { matchup_id } of games) {
+  for (let { matchup_id } of games) {
     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
     console.log(`→ Loading ${url}`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    await page.waitForSelector('a[href="#away-team-last-5"]', { timeout: 30000 });
+    await page.goto(url, { waitUntil:'networkidle2', timeout:60000 });
 
-    for (const role of ['away','home']) {
+    // wait for the tabs to appear
+    await page.waitForSelector('a[href="#away-team-last-5"]', { timeout:30000 });
+
+    for (let role of ['away','home']) {
       const tab = role === 'away' ? '#away-team-last-5' : '#home-team-last-5';
 
-      // team name (alt_name)
-      const team_name = await page.$eval(
-        `a[href="${tab}"]`,
-        el => el.innerText.trim().toUpperCase()
+      // team alt_name
+      let team_name = await page.$eval(tab, el =>
+        el.innerText.replace(/\n/g,' ').trim().toUpperCase()
       );
 
-      // map to your team_id
-      const team_id = TEAM_ALT_NAME_TO_ID[team_name] ?? null;
-      if (!team_id) {
-        console.warn(`⚠️ No team_id mapping for "${team_name}"`);
-      }
+      const team_id = TEAM_ALT_NAME_TO_ID[team_name] || null;
+      if (!team_id) console.warn(`⚠️ No team_id mapping for "${team_name}"`);
 
       // pitcher name
-      const pitcher_name = await page.$eval(
+      let pitcher_name = await page.$eval(
         `${tab} a.anchor-with-border`,
         el => el.innerText.trim()
       );
 
-      // grab the "Last 5 Avg." row
-      const vals = await page.$$eval(
-        `${tab} table tr`,
-        trs => {
-          const row = trs.find(r => {
-            const b = r.querySelector('td b');
-            return b?.innerText.trim() === 'Last 5 Avg.';
-          });
-          if (!row) return [];
-          // collect each <b>…</b> cell, skip the first (label)
-          return Array.from(row.querySelectorAll('td b'))
-                      .map(b => b.innerText.trim())
-                      .slice(1);
-        }
-      );
+      // look for the "Last 5 Avg." row
+      const statRowHandle = (await page.$$(`${tab} table tr`))
+        .find(async tr => {
+          const txt = await tr.$eval('td b', b => b.innerText.trim().replace(/\u00A0/g,' '));
+          return txt.toLowerCase().includes('last') && txt.toLowerCase().includes('avg');
+        });
 
-      if (vals.length !== 10) {
+      if (!statRowHandle) {
         console.warn(`⚠️ ${role} stats missing for matchup ${matchup_id}`);
         continue;
       }
 
-      // destructure and parse
-      let [ ip, h, r, er, so, bb, hr, pit, pip, gbfb ] = vals;
-      const ip_n   = parseFloat(ip) || 0;
-      const h_n    = parseInt(h,10)     || 0;
-      const r_n    = parseInt(r,10)     || 0;
-      const er_n   = parseInt(er,10)    || 0;
-      const so_n   = parseInt(so,10)    || 0;
-      const bb_n   = parseInt(bb,10)    || 0;
-      const hr_n   = parseInt(hr,10)    || 0;
-      const pit_n  = parseInt(pit,10)   || 0;
-      const pip_n  = parseFloat(pip)    || 0;
-      const gbfb_n = parseFloat(gbfb)   || 0;
+      // pull out the 13 bolded values
+      const texts = await statRowHandle.$$eval(
+        'td b',
+        bs => bs.map(b => b.innerText.trim())
+      );
+      // texts[0] is "Last 5 Avg.", so slice it off:
+      const vals = texts.slice(1);
+      if (vals.length < 10) {
+        console.warn(`⚠️ unexpected # of columns (${vals.length}) for matchup ${matchup_id}`);
+        continue;
+      }
 
-      // ERA, ERA+, WHIP
-      const era    = ip_n > 0 ? +( (er_n / ip_n) * 9 ).toFixed(2) : null;
-      const era_plus = era ? Math.round(100 * (4.1 / era)) : null;
-      const whip   = ip_n > 0 ? +(((bb_n + h_n) / ip_n).toFixed(3)) : null;
+      // destructure & parse
+      const [
+        ip_s, h_s, r_s, er_s,
+        so_s, bb_s, hr_s, pit_s,
+        pip_s, gbfb_s
+      ] = vals;
+
+      const ip   = parseFloat(ip_s)  || 0;
+      const h    = parseInt(h_s,10)  || 0;
+      const r    = parseInt(r_s,10)  || 0;
+      const er   = parseInt(er_s,10) || 0;
+      const so   = parseInt(so_s,10) || 0;
+      const bb   = parseInt(bb_s,10) || 0;
+      const hr   = parseInt(hr_s,10) || 0;
+      const pit  = parseInt(pit_s,10)|| 0;
+      const pip  = parseFloat(pip_s) || 0;
+      const gbfb = parseFloat(gbfb_s)|| 0;
+
+      // compute ERA, ERA+, WHIP
+      const era      = ip > 0 ? +((er / ip * 9).toFixed(2)) : null;
+      const era_plus = era    ? Math.round(100 * (4.1 / era)) : null;
+      const whip     = ip > 0 ? +(((bb + h) / ip).toFixed(3)) : null;
 
       rows.push({
         matchup_id,
@@ -138,19 +145,8 @@ async function scrapePitchingMatchups() {
         team_name,
         team_id,
         pitcher_name,
-        ip:   ip_n,
-        h:    h_n,
-        r:    r_n,
-        er:   er_n,
-        so:   so_n,
-        bb:   bb_n,
-        hr:   hr_n,
-        pit:  pit_n,
-        pip:  pip_n,
-        gbfb: gbfb_n,
-        era,
-        era_plus,
-        whip
+        ip, h, r, er, so, bb, hr, pit, pip, gbfb,
+        era, era_plus, whip
       });
     }
   }
@@ -202,14 +198,14 @@ export async function scrapeAndSavePitchingMatchups() {
     console.error('❌ Error inserting pitching stats:', err);
     createScrapeReport({
       success: false,
-      error:   err.message,
+      error: err.message,
       timestamp: new Date().toISOString(),
       stats: { records: 0 }
     });
   }
 }
 
-// if run directly…
+// run if called directly
 if (import.meta.url.endsWith('scrapePitchingMatchups.js')) {
   scrapeAndSavePitchingMatchups()
     .then(() => process.exit(0))
