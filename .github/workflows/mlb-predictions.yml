@@ -22,11 +22,11 @@ jobs:
           sudo apt-get install -y postgresql-client
 
       # 3) Run our prediction SQL against Supabase
-      - name: Run MLB predictions SQL
+            - name: Run MLB predictions SQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          # this single psql invocation will connect to your Supabase DB
-          psql "$DATABASE_URL" \
+          # force IPv4
+          psql -4 "$DATABASE_URL" \
             -v ON_ERROR_STOP=1 \
             -f sql/mlb_predictions.sql
