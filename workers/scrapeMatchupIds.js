@@ -1,3 +1,4 @@
+
 // workers/scrapeMatchupIds.js
 import puppeteer from 'puppeteer';
 import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
@@ -22,29 +23,39 @@ async function scrapeTodayMatchups() {
   await page.waitForSelector("a.matchup-btn-link", { timeout: 30000 });
   await page.waitForTimeout(1000);
 
-  const matchups = await page.$$eval("article.gamebox", articles => {
-    return articles.map(a => {
-      const link = a.querySelector("a.matchup-btn-link");
+  const matchups = await page.$$eval("div.article-content.p-3", games =>
+    games.map(game => {
+      const link = game.querySelector("a.matchup-btn-link");
       if (!link) return null;
+
+      // 1) Extract ID from the URL
       const m = link.href.match(/\/matchup\/(\d+)$/);
       if (!m) return null;
       const matchup_id = m[1];
-      // header strong holds "Away @ Home"
-      const header = a.querySelector("p.gamebox-header strong.text-uppercase");
-      if (!header) return null;
-      const [away, home] = header.innerText.split("@").map(t => t.trim());
-      // pick desktop date first
-      const dateSpan = a.querySelector("strong.preGame-status span.d-none.d-xl-inline")
-                      || a.querySelector("strong.preGame-status span");
-      const dateText = dateSpan?.innerText.trim();
-      let game_date = null;
-      if (dateText) {
-        const dt = new Date(`${dateText} ${new Date().getFullYear()}`);
-        game_date = isNaN(dt) ? null : dt.toISOString().slice(0,10);
-      }
-      return { game_id: matchup_id, matchup_id, away_team: away, home_team: home, game_date };
-    }).filter(x => x !== null);
-  });
+      const game_id = matchup_id; // or whatever logic you prefer
+
+      // 2) Pull the "Away @ Home" text and split
+      const teamsText = game
+        .querySelector('strong.text-uppercase')
+        ?.innerText
+        .trim();
+      if (!teamsText || !teamsText.includes('@')) return null;
+      const [away_team, home_team] = teamsText.split('@').map(t => t.trim());
+
+      // 3) Parse the date
+      const dateText = game
+        .querySelector('strong.preGame-status')
+        ?.innerText
+        .trim();
+      const dt = dateText
+        ? new Date(`${dateText} ${new Date().getFullYear()}`)
+        : null;
+      const game_date = dt ? dt.toISOString().slice(0,10) : null;
+
+      return { game_id, matchup_id, away_team, home_team, game_date };
+    })
+    .filter(x => x !== null)
+  );
 
   await browser.close();
   console.log(`→ Scraped ${matchups.length} games.`);
@@ -52,7 +63,7 @@ async function scrapeTodayMatchups() {
   return matchups;
 }
 
-async function main() {
+async function scrapeAndSaveTodayMatchups() {
   console.log("Starting MLB matchup scraper…");
   if (!(await testConnection())) {
     console.error("❌ Supabase connection failed, aborting.");
@@ -69,7 +80,7 @@ async function main() {
         timestamp: new Date().toISOString(),
         stats: { matchups: 0 }
       });
-      process.exit(0);
+      return { success: false, error: "No matchups found", matchups: [] };
     }
 
     console.log(`→ Upserting ${matchups.length} records to Supabase…`);
@@ -87,7 +98,8 @@ async function main() {
       stats: { matchups: data.length },
       matchups: data
     });
-    process.exit(0);
+    
+    return { success: true, matchups: data };
 
   } catch (err) {
     console.error("❌ Error in scraper:", err.message);
@@ -97,9 +109,17 @@ async function main() {
       timestamp: new Date().toISOString(),
       stats: { matchups: 0 }
     });
-    process.exit(1);
+    
+    return { success: false, error: err.message, matchups: [] };
   }
 }
 
-// run immediately
-main();
+// Export the functions
+export { scrapeTodayMatchups, scrapeAndSaveTodayMatchups };
+
+// Run if this script is executed directly
+if (import.meta.url.endsWith('scrapeMatchupIds.js')) {
+  scrapeAndSaveTodayMatchups()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
+}

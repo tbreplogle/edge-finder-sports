@@ -1,5 +1,5 @@
 
-import { supabase, testConnection } from './lib/supabaseClient.js';
+// workers/saveMatchupsToSupabase.js
 import { scrapeAndSaveTodayMatchups } from './scrapeMatchupIds.js';
 
 /**
@@ -9,22 +9,15 @@ async function main() {
   console.log('Starting MLB matchup scraper...');
   
   try {
-    // Test connection to Supabase
-    const connected = await testConnection();
-    if (!connected) {
-      console.error('❌ Failed to connect to Supabase - aborting script');
-      process.exit(1);
-    }
-    
     // Scrape and save matchups
     console.log('Scraping and saving today\'s MLB matchups...');
-    const result = await scrapeAndSaveTodayMatchups(supabase);
+    const result = await scrapeAndSaveTodayMatchups();
     
     if (result.success) {
       console.log(`✅ Successfully scraped and saved ${result.matchups.length} MLB matchups`);
       return result.matchups;
     } else {
-      console.error('❌ Failed to save MLB matchups');
+      console.error('❌ Failed to save MLB matchups:', result.error);
       return [];
     }
   } catch (error) {
@@ -33,7 +26,7 @@ async function main() {
   }
 }
 
-// Run if script is executed directly
-if (import.meta.url === import.meta.main) {
-  main().then(() => process.exit(0)).catch(() => process.exit(1));
-}
+// Run the script
+main()
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1));
