@@ -1,226 +1,212 @@
+// workers/scrapeMatchupIds.js
 
-import puppeteer from 'puppeteer';
-import { createScrapeReport } from './lib/supabaseClient.js';
+import puppeteer from 'puppeteer'
+import { createScrapeReport } from './lib/supabaseClient.js'
 
-// Enable debug mode when environment variable is set
-const DEBUG = process.env.DEBUG === 'true';
+const DEBUG = process.env.DEBUG === 'true'
 
 /**
- * Scrapes MLB matchup IDs from Covers.com for today's games
- * @returns {Promise<string[]>} An array of unique matchup IDs
+ * Scrapes today’s MLB matchup IDs from Covers.com
+ * @returns {Promise<string[]>}
  */
 export async function scrapeTodayMatchupIDs() {
-  console.log('Starting to scrape today\'s MLB matchup IDs...');
-  const url = 'https://www.covers.com/sports/mlb/matchups';
-  
+  console.log("Starting to scrape today’s MLB matchup IDs…")
+  const url = 'https://www.covers.com/sports/mlb/matchups'
+
   try {
-    // Launch browser with no-sandbox for CI environments
-    const browser = await puppeteer.launch({ 
+    const browser = await puppeteer.launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      headless: 'new' // Use the new headless mode
-    });
-    
-    // Create a new page and navigate to the URL
-    const page = await browser.newPage();
-    
-    // Set viewport and user agent
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36');
-    
-    // Navigate to the matchups page
-    console.log(`Navigating to ${url}...`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    
-    if (DEBUG) {
-      await page.screenshot({ path: 'debug-matchups-page.png' });
-    }
-    
-    // Wait for the matchup buttons to appear
-    console.log('Waiting for matchup buttons to render...');
-    await page.waitForSelector('a.matchup-btn-link', { timeout: 30000 });
-    
-    // Extract all matchup IDs
-    console.log('Extracting matchup IDs...');
-    const matchupIDs = await page.$$eval('a.matchup-btn-link', els =>
-      els.map(el => {
-        const m = el.href.match(/\/matchup\/(\d+)$/);
-        return m ? m[1] : null;
-      }).filter(id => id)
-    );
-    
-    // Close browser
-    await browser.close();
-    
-    // Remove duplicates and log results
-    const uniqueMatchupIDs = [...new Set(matchupIDs)];
-    console.log(`Found ${uniqueMatchupIDs.length} unique MLB matchup IDs:`, uniqueMatchupIDs);
-    
-    return uniqueMatchupIDs;
-  } catch (error) {
-    console.error('Error scraping today\'s MLB matchup IDs:', error.message);
-    if (error.stack) console.error(error.stack);
-    
-    // Create error report
+      headless: 'new'
+    })
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1920, height: 1080 })
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'
+    )
+
+    console.log(`→ Navigating to ${url}`)
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 })
+    if (DEBUG) await page.screenshot({ path: 'debug-matchups-page.png' })
+
+    // make sure the new <article class="gamebox…"> wrappers are present
+    await page.waitForSelector('article.gamebox.pregamebox', { timeout: 30000 })
+
+    // grab every “Matchup” link under those
+    const ids = await page.$$eval(
+      'article.gamebox.pregamebox a.matchup-btn-link',
+      els =>
+        els
+          .map((a) => {
+            const m = a.href.match(/\/matchup\/(\d+)$/)
+            return m ? m[1] : null
+          })
+          .filter((x) => x)
+    )
+
+    await browser.close()
+    const unique = [...new Set(ids)]
+    console.log(`→ Found ${unique.length} unique matchup IDs:`, unique)
+    return unique
+  } catch (err) {
+    console.error("Error scraping matchup IDs:", err)
     createScrapeReport({
       success: false,
-      error: `Failed to scrape MLB matchup IDs: ${error.message}`,
+      error: `scrapeTodayMatchupIDs error: ${err.message}`,
       timestamp: new Date().toISOString(),
       stats: { matchups: 0 }
-    });
-    
-    // Return empty array on error
-    return [];
+    })
+    return []
   }
 }
 
 /**
- * Scrapes detailed MLB matchup data from Covers.com and saves to Supabase
- * @param {Object} supabase - The Supabase client instance
- * @returns {Promise<Object>} The result of the operation
+ * Scrapes today’s full MLB matchups and upserts them into Supabase
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
 export async function scrapeAndSaveTodayMatchups(supabase) {
-  console.log('Starting to scrape and save today\'s MLB matchups...');
-  const url = 'https://www.covers.com/sports/mlb/matchups';
-  let browser, page;
-  
+  console.log("Starting to scrape & save today’s MLB matchups…")
+  const url = 'https://www.covers.com/sports/mlb/matchups'
+  let browser, page
+
   try {
-    // Launch browser with no-sandbox for CI environments
-    browser = await puppeteer.launch({ 
+    browser = await puppeteer.launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      headless: 'new' // Use the new headless mode
-    });
-    
-    // Create a new page and navigate to the URL
-    page = await browser.newPage();
-    
-    // Set viewport and user agent
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36');
-    
-    // Navigate to the matchups page
-    console.log(`→ Navigating to ${url}`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    
-    if (DEBUG) {
-      await page.screenshot({ path: 'debug-matchups-page.png' });
-    }
-    
-    // Wait for the matchup buttons to appear
-    console.log('Waiting for matchup buttons to render...');
-    await page.waitForSelector('a.matchup-btn-link', { timeout: 30000 });
-    
-    // Give React a sec to finish rendering
-    await page.waitForTimeout(1500);
-    
-    // Extract matchup details with the updated selector approach
-    console.log('Extracting matchup details...');
-    const matchups = await page.$$eval('div.article-content.p-3', games =>
-      games.map(game => {
-        const link = game.querySelector('a.matchup-btn-link');
-        if (!link) return null;
-        
-        // 1) Extract ID from the URL
-        const m = link.href.match(/\/matchup\/(\d+)$/);
-        if (!m) return null;
-        const matchup_id = m[1];
-        const game_id = matchup_id; // Using same ID for both fields
-        
-        // 2) Pull the "Away @ Home" text and split
-        const teamsText = game
-          .querySelector('strong.text-uppercase')
-          ?.innerText
-          .trim();
-        if (!teamsText || !teamsText.includes('@')) return null;
-        const [away_team, home_team] = teamsText.split('@').map(t => t.trim());
-        
-        // 3) Parse the date
-        const dateText = game
-          .querySelector('strong.preGame-status')
-          ?.innerText
-          .trim();
-        const dt = dateText
-          ? new Date(`${dateText} ${new Date().getFullYear()}`)
-          : null;
-        const game_date = dt ? dt.toISOString().slice(0,10) : null;
-        
-        return { game_id, matchup_id, away_team, home_team, game_date };
-      })
-      .filter(x => x !== null)
-    );
-    
-    console.log(`→ Extracted ${matchups.length} matchups`);
-    
-    if (DEBUG) {
-      console.log('Matchup data:', JSON.stringify(matchups, null, 2));
-    }
-    
-    // Close browser
-    await page.close();
-    await browser.close();
-    
-    // Save to Supabase if we have matchups
-    if (matchups.length > 0) {
-      console.log(`Saving ${matchups.length} matchups to Supabase...`);
-      const { data, error } = await supabase
-        .from('mlb_matchups')
-        .upsert(matchups, { 
-          onConflict: ['matchup_id'],
-          ignoreDuplicates: false 
-        })
-        .select();
-        
-      if (error) {
-        console.error('❌ Supabase upsert error:', error);
-        createScrapeReport({
-          success: false,
-          error: `Failed to insert matchups: ${error.message}`,
-          timestamp: new Date().toISOString(),
-          stats: { matchups: 0 }
-        });
-        return { success: false, matchups: [] };
-      }
-      
-      console.log(`✅ Successfully saved ${data.length} matchups to Supabase`);
-      createScrapeReport({
-        success: true,
-        timestamp: new Date().toISOString(),
-        stats: { matchups: data.length },
-        matchups: data
-      });
-      
-      return { success: true, matchups: data };
-    } else {
-      console.warn('No matchups found to save');
+      headless: 'new'
+    })
+    page = await browser.newPage()
+    await page.setViewport({ width: 1920, height: 1080 })
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'
+    )
+
+    console.log(`→ Navigating to ${url}`)
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 })
+    if (DEBUG) await page.screenshot({ path: 'debug-matchups-page.png' })
+
+    // wait for the new article.gamebox wrappers
+    await page.waitForSelector('article.gamebox.pregamebox', { timeout: 30000 })
+    // give React a moment
+    await page.waitForTimeout(1000)
+
+    // how many games did we find?
+    const count = await page.$$eval(
+      'article.gamebox.pregamebox',
+      (els) => els.length
+    )
+    console.log(`→ Found ${count} game containers`)
+
+    // extract id, teams, date
+    const matchups = await page.$$eval(
+      'article.gamebox.pregamebox',
+      (articles) =>
+        articles
+          .map((article) => {
+            // 1) matchup_id from the action button
+            const link = article.querySelector('a.matchup-btn-link')
+            if (!link) return null
+            const m = link.href.match(/\/matchup\/(\d+)$/)
+            if (!m) return null
+            const matchup_id = m[1]
+            const game_id = matchup_id
+
+            // 2) “Away @ Home” header
+            const header = article.querySelector(
+              'p.gamebox-header strong.text-uppercase'
+            )
+            if (!header) return null
+            const txt = header.innerText.trim()
+            if (!txt.includes('@')) return null
+            const [away_team, home_team] = txt.split('@').map((s) => s.trim())
+
+            // 3) game date
+            const dateSpan =
+              article.querySelector(
+                'strong.preGame-status span.d-none.d-xl-inline'
+              ) ||
+              article.querySelector('strong.preGame-status span')
+            const dateText = dateSpan?.innerText.trim()
+            let game_date = null
+            if (dateText) {
+              const dt = new Date(
+                `${dateText} ${new Date().getFullYear()}`
+              )
+              game_date = isNaN(dt) ? null : dt.toISOString().slice(0, 10)
+            }
+
+            return { game_id, matchup_id, away_team, home_team, game_date }
+          })
+          .filter((x) => x)
+    )
+
+    console.log(`→ Extracted ${matchups.length} matchups`)
+    await page.close()
+    await browser.close()
+
+    if (matchups.length === 0) {
+      console.warn('No matchups to save')
       createScrapeReport({
         success: false,
         error: 'No matchups found to save',
         timestamp: new Date().toISOString(),
         stats: { matchups: 0 }
-      });
-      return { success: false, matchups: [] };
+      })
+      return { success: false, matchups: [] }
     }
-  } catch (error) {
-    console.error('Error scraping and saving matchups:', error.message);
-    if (error.stack) console.error(error.stack);
-    
+
+    console.log(`→ Upserting ${matchups.length} matchups into Supabase…`)
+    const { data, error } = await supabase
+      .from('mlb_matchups')
+      .upsert(matchups, {
+        onConflict: ['matchup_id'],
+        ignoreDuplicates: false
+      })
+      .select()
+
+    if (error) {
+      console.error('Supabase upsert error:', error)
+      createScrapeReport({
+        success: false,
+        error: `Supabase upsert failed: ${error.message}`,
+        timestamp: new Date().toISOString(),
+        stats: { matchups: 0 }
+      })
+      return { success: false, matchups: [] }
+    }
+
+    console.log(`✅ Saved ${data.length} matchups`)
+    createScrapeReport({
+      success: true,
+      timestamp: new Date().toISOString(),
+      stats: { matchups: data.length },
+      matchups: data
+    })
+    return { success: true, matchups: data }
+  } catch (err) {
+    console.error('Fatal error scraping & saving matchups:', err)
     createScrapeReport({
       success: false,
-      error: `Failed to scrape and save matchups: ${error.message}`,
+      error: `Fatal error: ${err.message}`,
       timestamp: new Date().toISOString(),
       stats: { matchups: 0 }
-    });
-    
-    return { success: false, matchups: [] };
+    })
+    return { success: false, matchups: [] }
   } finally {
-    // Make sure browser is closed in all cases
-    try {
-      if (page && !page.isClosed()) await page.close();
-      if (browser) await browser.close();
-    } catch (err) {
-      console.error('Error closing browser:', err.message);
-    }
+    if (page && !page.isClosed()) await page.close()
+    if (browser) await browser.close()
   }
 }
 
-// REMOVED the direct execution at the bottom of this file
-// This file will now only export functions, not run them directly
+// If you ever want to run just the ID‐scraper from the CLI:
+if (import.meta.url.endsWith('scrapeMatchupIds.js')) {
+  scrapeTodayMatchupIDs()
+    .then((ids) => {
+      console.log("Today's matchup IDs:", ids)
+      process.exit(0)
+    })
+    .catch((err) => {
+      console.error(err)
+      process.exit(1)
+    })
+}
