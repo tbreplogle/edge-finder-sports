@@ -1,6 +1,7 @@
+
 name: MLB Predictions
 
-# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
+# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
 on:
   schedule:
     - cron: '30 13 * * *'
@@ -21,11 +22,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      # 3) Run your predictions SQL
+      # 3) Check network connectivity to database
+      - name: Verify database connectivity
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Extract host and port from DATABASE_URL
+          DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
+          echo "Testing connectivity to $DB_HOST..."
+          
+          # Test basic connectivity
+          if nc -zv $DB_HOST 5432 -w 5 > /dev/null 2>&1; then
+            echo "✅ Network connectivity to database verified"
+          else
+            echo "❌ Cannot connect to database server"
+            echo "Attempting to resolve $DB_HOST..."
+            nslookup $DB_HOST
+            echo "Checking route to $DB_HOST..."
+            traceroute -m 15 $DB_HOST
+            exit 1
+          fi
+
+      # 4) Run your predictions SQL
       - name: Run MLB predictions SQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          echo "Running MLB predictions SQL..."
           psql "$DATABASE_URL" \
             --set=ON_ERROR_STOP=1 \
-            -f sql/mlb_predictions.sql
+            -f sql/mlb_predictions.sql || {
+              echo "❌ SQL execution failed"
+              echo "Testing basic connection..."
+              psql "$DATABASE_URL" -c "SELECT 1 as connection_test;" || echo "Could not connect at all"
+              exit 1
+            }
+          echo "✅ MLB predictions completed successfully"
