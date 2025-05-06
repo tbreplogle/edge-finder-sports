@@ -1,12 +1,10 @@
-
 # .github/workflows/mlb-predictions.yml
 name: MLB Predictions
 
-# 8:30 AM Central Time
-# • CDT is UTC−5 → 8:30 CDT = 13:30 UTC
 on:
   schedule:
-    - cron:  '30 13 * * *'
+    # 8:30 AM CDT → 13:30 UTC
+    - cron: '30 13 * * *'
   workflow_dispatch:
 
 jobs:
@@ -14,20 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Pull down your code
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # 2) Install the Supabase CLI so we can run SQL
       - name: Install Supabase CLI
         run: |
-          curl -L https://github.com/supabase/cli/releases/latest/download/\
-supabase_$(uname -s)_$(uname -m).tar.gz \
+          curl -L https://github.com/supabase/cli/releases/latest/download/supabase_$(uname -s)_$(uname -m).tar.gz \
             | tar xz -C /usr/local/bin supabase
 
-      # 3) Execute your predictions SQL
-      - name: Run MLB prediction script
+      - name: Run MLB predictions SQL
         env:
-          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           supabase db query \
