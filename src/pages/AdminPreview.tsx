@@ -119,10 +119,12 @@ const AdminPreview = () => {
             
             // Latest update timestamp from predictions
             const latestUpdate = predictionsArray.length > 0 
-              ? predictionsArray.reduce((latest, p) => 
-                  p && p.created_at > latest ? p.created_at : latest, 
-                  predictionsArray[0].created_at
-                )
+              ? predictionsArray.reduce((latest, p) => {
+                  if (p && typeof p.created_at === 'string' && typeof latest === 'string') {
+                    return p.created_at > latest ? p.created_at : latest;
+                  }
+                  return latest;
+                }, predictionsArray[0]?.created_at || new Date().toISOString())
               : new Date().toISOString();
             
             return {
