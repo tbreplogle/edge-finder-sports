@@ -1,7 +1,6 @@
-
 name: MLB Predictions
 
-# Runs daily at 8:30 AM Central (CDT is UTC−5 → 13:30 UTC)
+# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
 on:
   schedule:
     - cron: '30 13 * * *'
@@ -13,21 +12,20 @@ jobs:
 
     steps:
       # 1) Check out your repo
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2) Install the psql client
+      # 2) Install psql client
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      # 3) Run our prediction SQL against Supabase
+      # 3) Run your predictions SQL
       - name: Run MLB predictions SQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          # force IPv4
-          psql -4 "$DATABASE_URL" \
-            -v ON_ERROR_STOP=1 \
+          psql "$DATABASE_URL" \
+            --set=ON_ERROR_STOP=1 \
             -f sql/mlb_predictions.sql
