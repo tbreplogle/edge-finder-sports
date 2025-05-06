@@ -81,23 +81,24 @@ export async function scrapeTodayMatchupIDs() {
 export async function scrapeAndSaveTodayMatchups(supabase) {
   console.log('Starting to scrape and save today\'s MLB matchups...');
   const url = 'https://www.covers.com/sports/mlb/matchups';
+  let browser, page;
   
   try {
     // Launch browser with no-sandbox for CI environments
-    const browser = await puppeteer.launch({ 
+    browser = await puppeteer.launch({ 
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
       headless: 'new' // Use the new headless mode
     });
     
     // Create a new page and navigate to the URL
-    const page = await browser.newPage();
+    page = await browser.newPage();
     
     // Set viewport and user agent
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36');
     
     // Navigate to the matchups page
-    console.log(`Navigating to ${url}...`);
+    console.log(`→ Navigating to ${url}`);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     
     if (DEBUG) {
@@ -108,55 +109,45 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
     console.log('Waiting for matchup buttons to render...');
     await page.waitForSelector('a.matchup-btn-link', { timeout: 30000 });
     
-    // Get all game containers
-    console.log('Finding game containers...');
-    const gameContainers = await page.$$('.article-content.p-3');
-    console.log(`Found ${gameContainers.length} game containers`);
-    
-    // Extract data from each container
-    console.log('Extracting matchup details...');
-    const matchups = [];
-    
-    for (let i = 0; i < gameContainers.length; i++) {
-      const game = gameContainers[i];
-      
-      try {
-        // Get matchup ID from link
-        const href = await game.$eval('a.matchup-btn-link', a => a.href);
-        const matchupIdMatch = href.match(/\/matchup\/(\d+)$/);
-        if (!matchupIdMatch) continue;
+    // Grab everything in one pass - starting with the matchup links
+    console.log('Extracting matchup details from links...');
+    const matchups = await page.$$eval('a.matchup-btn-link', anchors =>
+      anchors.map(a => {
+        const m = a.href.match(/\/matchup\/(\d+)$/);
+        const matchup_id = m && m[1];
         
-        const matchup_id = matchupIdMatch[1];
-        const game_id = matchup_id; // Using matchup_id as game_id for now
+        // Climb up to the nearest game box wrapper
+        const gameBox = a.closest('.article-content.p-3');
+        if (!gameBox) return null;
         
-        // Get team names
-        const teamAnchors = await game.$$('a.gamebox-team-anchor span.text-nowrap');
-        if (teamAnchors.length < 2) continue;
+        const codes = Array.from(gameBox.querySelectorAll('span.text-nowrap'))
+          .map(el => el.innerText.trim());
+            
+        const dateText = gameBox.querySelector('strong.preGame-status')?.innerText.trim();
+        const dt = dateText
+          ? new Date(`${dateText} ${new Date().getFullYear()}`)
+          : null;
+        const game_date = dt ? dt.toISOString().slice(0,10) : null;
         
-        const away_team = await teamAnchors[0].evaluate(el => el.innerText.trim());
-        const home_team = await teamAnchors[1].evaluate(el => el.innerText.trim());
-        
-        // Get game date
-        const dateText = await game.$eval('strong.preGame-status', el => el.innerText.trim());
-        // e.g. "Wednesday, May 7"
-        const dt = new Date(`${dateText} ${new Date().getFullYear()}`);
-        const game_date = dt.toISOString().slice(0, 10);
-        
-        matchups.push({
-          game_id,
+        return matchup_id ? {
+          game_id: matchup_id,
           matchup_id,
-          home_team,
-          away_team,
+          away_team: codes[0] ?? null,
+          home_team: codes[1] ?? null,
           game_date
-        });
-        
-        console.log(`Processed game ${i+1}/${gameContainers.length}: ${away_team} @ ${home_team} on ${game_date} (ID: ${matchup_id})`);
-      } catch (err) {
-        console.error(`Error processing game container ${i+1}:`, err.message);
-      }
+        } : null;
+      })
+      .filter(x => x)
+    );
+    
+    console.log(`→ Extracted ${matchups.length} matchups`);
+    
+    if (DEBUG) {
+      console.log('Matchup data:', JSON.stringify(matchups, null, 2));
     }
     
     // Close browser
+    await page.close();
     await browser.close();
     
     // Save to Supabase if we have matchups
@@ -171,7 +162,7 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
         .select();
         
       if (error) {
-        console.error('Failed inserting matchups:', error);
+        console.error('❌ Supabase upsert error:', error);
         createScrapeReport({
           success: false,
           error: `Failed to insert matchups: ${error.message}`,
@@ -181,7 +172,7 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
         return { success: false, matchups: [] };
       }
       
-      console.log(`Successfully saved ${data.length} matchups to Supabase`);
+      console.log(`✅ Successfully saved ${data.length} matchups to Supabase`);
       createScrapeReport({
         success: true,
         timestamp: new Date().toISOString(),
@@ -212,6 +203,14 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
     });
     
     return { success: false, matchups: [] };
+  } finally {
+    // Make sure browser is closed in all cases
+    try {
+      if (page && !page.isClosed()) await page.close();
+      if (browser) await browser.close();
+    } catch (err) {
+      console.error('Error closing browser:', err.message);
+    }
   }
 }
 
