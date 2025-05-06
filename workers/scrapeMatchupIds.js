@@ -109,35 +109,43 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
     console.log('Waiting for matchup buttons to render...');
     await page.waitForSelector('a.matchup-btn-link', { timeout: 30000 });
     
-    // Grab everything in one pass - starting with the matchup links
-    console.log('Extracting matchup details from links...');
-    const matchups = await page.$$eval('a.matchup-btn-link', anchors =>
-      anchors.map(a => {
-        const m = a.href.match(/\/matchup\/(\d+)$/);
-        const matchup_id = m && m[1];
+    // Give React a sec to finish rendering
+    await page.waitForTimeout(1500);
+    
+    // Extract matchup details with the updated selector approach
+    console.log('Extracting matchup details...');
+    const matchups = await page.$$eval('div.article-content.p-3', games =>
+      games.map(game => {
+        const link = game.querySelector('a.matchup-btn-link');
+        if (!link) return null;
         
-        // Climb up to the nearest game box wrapper
-        const gameBox = a.closest('.article-content.p-3');
-        if (!gameBox) return null;
+        // 1) Extract ID from the URL
+        const m = link.href.match(/\/matchup\/(\d+)$/);
+        if (!m) return null;
+        const matchup_id = m[1];
+        const game_id = matchup_id; // Using same ID for both fields
         
-        const codes = Array.from(gameBox.querySelectorAll('span.text-nowrap'))
-          .map(el => el.innerText.trim());
-            
-        const dateText = gameBox.querySelector('strong.preGame-status')?.innerText.trim();
+        // 2) Pull the "Away @ Home" text and split
+        const teamsText = game
+          .querySelector('strong.text-uppercase')
+          ?.innerText
+          .trim();
+        if (!teamsText || !teamsText.includes('@')) return null;
+        const [away_team, home_team] = teamsText.split('@').map(t => t.trim());
+        
+        // 3) Parse the date
+        const dateText = game
+          .querySelector('strong.preGame-status')
+          ?.innerText
+          .trim();
         const dt = dateText
           ? new Date(`${dateText} ${new Date().getFullYear()}`)
           : null;
         const game_date = dt ? dt.toISOString().slice(0,10) : null;
         
-        return matchup_id ? {
-          game_id: matchup_id,
-          matchup_id,
-          away_team: codes[0] ?? null,
-          home_team: codes[1] ?? null,
-          game_date
-        } : null;
+        return { game_id, matchup_id, away_team, home_team, game_date };
       })
-      .filter(x => x)
+      .filter(x => x !== null)
     );
     
     console.log(`→ Extracted ${matchups.length} matchups`);
