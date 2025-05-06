@@ -1,8 +1,8 @@
-
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
 import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
+import { scrapeTodayMatchupIDs } from './scrapeMatchupIds.js';
 
 // Enable debug mode when environment variable is set
 const DEBUG = process.env.DEBUG === 'true';
@@ -72,6 +72,10 @@ function mapTeamInfo(teamName) {
  */
 export async function scrapeTeamHittingStats() {
   try {
+    // First fetch today's matchup IDs
+    const todayMatchupIDs = await scrapeTodayMatchupIDs();
+    console.log('Today\'s matchup IDs:', todayMatchupIDs);
+    
     const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=-${TIMEFRAME_DAYS}`;
     console.log(`🕵️‍♂️ Launching browser to scrape: ${url}`);
     
