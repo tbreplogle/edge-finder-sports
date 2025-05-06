@@ -118,14 +118,21 @@ const AdminPreview = () => {
             }
             
             // Latest update timestamp from predictions
-            const latestUpdate = predictionsArray.length > 0 
-              ? predictionsArray.reduce((latest, p) => {
-                  if (p && typeof p.created_at === 'string' && typeof latest === 'string') {
-                    return p.created_at > latest ? p.created_at : latest;
-                  }
-                  return latest;
-                }, predictionsArray[0]?.created_at || new Date().toISOString())
-              : new Date().toISOString();
+            // Fix: Ensure we're working with string timestamps consistently
+            let latestUpdate = new Date().toISOString();
+            
+            if (predictionsArray.length > 0) {
+              // Initialize with the first prediction's timestamp or current time if not available
+              latestUpdate = predictionsArray[0]?.created_at || new Date().toISOString();
+              
+              // Find the latest timestamp
+              for (let i = 1; i < predictionsArray.length; i++) {
+                const prediction = predictionsArray[i];
+                if (prediction && prediction.created_at && prediction.created_at > latestUpdate) {
+                  latestUpdate = prediction.created_at;
+                }
+              }
+            }
             
             return {
               id: matchup.matchup_id,
