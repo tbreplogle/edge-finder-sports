@@ -22,8 +22,8 @@ jobs:
         working-directory: ./workers
         run: npm install
       
-      - name: Run MLB matchup ID scraper
-        run: node workers/getMlbMatchupIds.js
+      - name: Scrape & save today's MLB matchups
+        run: node workers/saveMatchupsToSupabase.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

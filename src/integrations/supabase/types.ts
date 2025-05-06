@@ -11,27 +11,27 @@ export type Database = {
     Tables: {
       mlb_matchups: {
         Row: {
-          away_team: string | null
-          created_at: string | null
-          game_date: string | null
+          away_team: string
+          created_at: string
+          game_date: string
           game_id: string
-          home_team: string | null
+          home_team: string
           matchup_id: string
         }
         Insert: {
-          away_team?: string | null
-          created_at?: string | null
-          game_date?: string | null
+          away_team: string
+          created_at?: string
+          game_date: string
           game_id: string
-          home_team?: string | null
+          home_team: string
           matchup_id: string
         }
         Update: {
-          away_team?: string | null
-          created_at?: string | null
-          game_date?: string | null
+          away_team?: string
+          created_at?: string
+          game_date?: string
           game_id?: string
-          home_team?: string | null
+          home_team?: string
           matchup_id?: string
         }
         Relationships: []
