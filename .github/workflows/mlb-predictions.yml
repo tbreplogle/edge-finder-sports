@@ -15,16 +15,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2) Install psql client
+      # 2) Install the psql client
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      # 3) Run our SQL script
-      - name: Run MLB predictions
+      # 3) Run our prediction SQL against Supabase
+      - name: Run MLB predictions SQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+          # this single psql invocation will connect to your Supabase DB
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
             -f sql/mlb_predictions.sql
