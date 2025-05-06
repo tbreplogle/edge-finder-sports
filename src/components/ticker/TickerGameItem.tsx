@@ -58,12 +58,12 @@ export const TickerGameItem = ({ game }: Props) => {
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="flex items-center justify-between px-3 py-1.5 bg-edge-primary text-white rounded-none whitespace-nowrap border-l border-r border-edge-neutral/30">
+    <div className="flex items-center justify-between px-4 py-2.5 bg-edge-primary text-white rounded-none whitespace-nowrap border-l border-r border-edge-neutral/30">
       {isFinal ? (
         <>
           {/* Final game display */}
           <div className="flex items-center">
-            <div className="flex flex-col mr-1.5">
+            <div className="flex flex-col mr-3">
               <span className="font-medium text-sm">{awayTeam}</span>
               <span className="font-medium text-sm">{homeTeam}</span>
             </div>
@@ -72,7 +72,7 @@ export const TickerGameItem = ({ game }: Props) => {
               <span className="font-medium text-sm">{game.score_home}</span>
             </div>
           </div>
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-secondary border-secondary">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-secondary border-secondary ml-2">
             FINAL
           </Badge>
         </>
@@ -81,30 +81,30 @@ export const TickerGameItem = ({ game }: Props) => {
           {/* Live/Upcoming game display */}
           <div className="flex items-center">
             <div className="flex flex-col">
-              <div className="flex items-center justify-between w-20">
+              <div className="flex items-center justify-between w-24">
                 <span className="font-medium text-sm">{awayTeam}</span>
                 {!isBaseball && game.spread > 0 && (
-                  <span className="text-xs text-muted-foreground">+{Math.abs(game.spread)}</span>
+                  <span className="text-xs text-muted-foreground ml-2">+{Math.abs(game.spread)}</span>
                 )}
                 {!isBaseball && game.spread < 0 && (
-                  <span className="text-xs text-secondary">-{Math.abs(game.spread)}</span>
+                  <span className="text-xs text-secondary ml-2">-{Math.abs(game.spread)}</span>
                 )}
                 {isBaseball && game.moneyline_opponent !== undefined && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground ml-2">
                     {game.moneyline_opponent > 0 ? `+${game.moneyline_opponent}` : game.moneyline_opponent}
                   </span>
                 )}
               </div>
-              <div className="flex items-center justify-between w-20">
+              <div className="flex items-center justify-between w-24 mt-1.5">
                 <span className="font-medium text-sm">{homeTeam}</span>
                 {!isBaseball && game.spread < 0 && (
-                  <span className="text-xs text-muted-foreground">+{Math.abs(game.spread)}</span>
+                  <span className="text-xs text-muted-foreground ml-2">+{Math.abs(game.spread)}</span>
                 )}
                 {!isBaseball && game.spread > 0 && (
-                  <span className="text-xs text-secondary">-{Math.abs(game.spread)}</span>
+                  <span className="text-xs text-secondary ml-2">-{Math.abs(game.spread)}</span>
                 )}
                 {isBaseball && game.moneyline !== undefined && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground ml-2">
                     {game.moneyline > 0 ? `+${game.moneyline}` : game.moneyline}
                   </span>
                 )}
@@ -113,7 +113,7 @@ export const TickerGameItem = ({ game }: Props) => {
           </div>
           
           {/* Right side info */}
-          <div className="flex items-center">
+          <div className="flex items-center ml-3">
             {oddsDisplay}
             
             {game.total && !oddsDisplay && (
@@ -124,7 +124,7 @@ export const TickerGameItem = ({ game }: Props) => {
             )}
             
             {game.tip && (
-              <span className="text-xs font-semibold ml-2">{game.tip}</span>
+              <span className="text-xs font-semibold ml-3">{game.tip}</span>
             )}
           </div>
         </div>
