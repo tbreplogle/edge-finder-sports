@@ -97,6 +97,7 @@ export type Database = {
           game_date: string | null
           game_id: string
           home_team: string | null
+          matchup_id: string | null
         }
         Insert: {
           away_team?: string | null
@@ -104,6 +105,7 @@ export type Database = {
           game_date?: string | null
           game_id: string
           home_team?: string | null
+          matchup_id?: string | null
         }
         Update: {
           away_team?: string | null
@@ -111,6 +113,7 @@ export type Database = {
           game_date?: string | null
           game_id?: string
           home_team?: string | null
+          matchup_id?: string | null
         }
         Relationships: []
       }

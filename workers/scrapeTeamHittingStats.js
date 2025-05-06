@@ -517,6 +517,10 @@ export async function updateTeamHittingStats() {
       throw new Error('Failed to connect to Supabase - aborting scrape job');
     }
     
+    // First fetch today's matchup IDs
+    const todayMatchupIDs = await scrapeTodayMatchupIDs();
+    console.log('Today\'s matchup IDs:', todayMatchupIDs);
+    
     // Scrape team stats (7-day only)
     console.log(`Scraping ${TIMEFRAME_DAYS}-day team stats...`);
     const teamStats = await scrapeTeamHittingStats();
