@@ -1,28 +1,30 @@
-# .github/workflows/mlb-predictions.yml
 name: MLB Predictions
 
+# Runs daily at 8:30 AM Central (CDT is UTC−5 → 13:30 UTC)
 on:
   schedule:
-    # 8:30 AM Central → 13:30 UTC
     - cron: '30 13 * * *'
   workflow_dispatch:
 
 jobs:
   run-mlb-predictions:
     runs-on: ubuntu-latest
+
     steps:
+      # 1) Check out your repo
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
-
-      - name: Run MLB Predictions SQL
-        env:
-          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # 2) Install psql client
+      - name: Install PostgreSQL client
         run: |
-          supabase db query \
-            --url "$SUPABASE_URL" \
-            --key "$SUPABASE_SERVICE_ROLE_KEY" \
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      # 3) Run our SQL script
+      - name: Run MLB predictions
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
             -f sql/mlb_predictions.sql
