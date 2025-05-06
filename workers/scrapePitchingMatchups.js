@@ -4,68 +4,64 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 
 const DEBUG = process.env.DEBUG === 'true'
 
-// exact Covers.com “alt_name” → your teams_mlb.team_id
+// Covers.com “alt_name” → your teams_mlb.team_id
 const TEAM_ALT_NAME_TO_ID = {
-  'SEATTLE':             1,
-  'CLEVELAND':           2,
-  'PITTSBURGH':          3,
-  'LA ANGELS':           4,
-  'LOS ANGELES ANGELS':  4,
-  'TORONTO':             5,
-  'MIAMI':               6,
-  'ATHLETICS':           7,
-  'NY YANKEES':          8,
-  'TAMPA BAY':           9,
-  'MINNESOTA':          10,
-  'KANSAS CITY':        11,
-  'SF GIANTS':          12,
-  'SAN FRANCISCO GIANTS':12,
-  'ARIZONA':            13,
-  'MILWAUKEE':          14,
-  'CHI. WHITE SOX':     15,
-  'CHI. CUBS':          16,
-  'ATLANTA':            17,
-  'SAN DIEGO':          18,
-  'HOUSTON':            19,
-  'NY METS':            20,
-  'LA DODGERS':         21,
-  'LOS ANGELES DODGERS':21,
-  'COLORADO':           22,
-  'CINCINNATI':         23,
-  'WASHINGTON':         24,
-  'DETROIT':            25,
-  'PHILADELPHIA':       26,
-  'ST. LOUIS':          27,
-  'TEXAS':              28,
-  'BOSTON':             29,
-  'BALTIMORE':          30
+  'SEATTLE':              1,
+  'CLEVELAND':            2,
+  'PITTSBURGH':           3,
+  'LA ANGELS':            4,
+  'LOS ANGELES ANGELS':   4,
+  'TORONTO':              5,
+  'MIAMI':                6,
+  'ATHLETICS':            7,
+  'NY YANKEES':           8,
+  'TAMPA BAY':            9,
+  'MINNESOTA':           10,
+  'KANSAS CITY':         11,
+  'SF GIANTS':           12,
+  'SAN FRANCISCO':       12,
+  'ARIZONA':             13,
+  'MILWAUKEE':           14,
+  'CHI. WHITE SOX':      15,
+  'CHI. CUBS':           16,
+  'ATLANTA':             17,
+  'SAN DIEGO':           18,
+  'HOUSTON':             19,
+  'NY METS':             20,
+  'LA DODGERS':          21,
+  'LOS ANGELES DODGERS': 21,
+  'COLORADO':            22,
+  'CINCINNATI':          23,
+  'WASHINGTON':          24,
+  'DETROIT':             25,
+  'PHILADELPHIA':        26,
+  'ST. LOUIS':           27,
+  'TEXAS':               28,
+  'BOSTON':              29,
+  'BALTIMORE':           30
 }
 
-// safe parse‑to‑float
-function toFloat(str) {
-  const n = parseFloat(str)
+function toFloat(s) {
+  const n = parseFloat(s)
   return isNaN(n) ? null : n
 }
 
 async function scrapePitchingMatchups() {
-  // 1) load today’s matchups from Supabase
+  // 1. load today's matchup IDs
   const today = new Date().toISOString().slice(0,10)
   const { data: games, error: loadErr } = await supabase
     .from('mlb_matchups')
     .select('matchup_id')
     .eq('game_date', today)
 
-  if (loadErr) {
-    console.error('❌ Could not load today’s matchups:', loadErr)
-    throw loadErr
-  }
+  if (loadErr) throw loadErr
   if (!games.length) {
-    console.log('⚠️  No matchups for today.')
+    console.log('⚠️ No matchups found for today')
     return []
   }
-  console.log(`→ Found ${games.length} games to scrape.`)
+  console.log(`→ Found ${games.length} matchups to scrape`)
 
-  // 2) spin up Puppeteer
+  // 2. launch Puppeteer
   const browser = await puppeteer.launch({
     args: ['--no-sandbox','--disable-setuid-sandbox'],
     headless: 'new'
@@ -76,18 +72,19 @@ async function scrapePitchingMatchups() {
 
   const rows = []
 
-  // 3) scrape each game
+  // 3. iterate each matchup
   for (const { matchup_id } of games) {
     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`
     console.log(`→ Loading ${url}`)
     await page.goto(url, { waitUntil:'networkidle2', timeout:60000 })
     await page.waitForSelector('a[href="#away-team-last-5"]', { timeout:30000 })
 
-    // helper to grab one side (prefix = "away" or "home")
-    async function scrapeSide(prefix, role) {
+    // helper: scrape one side
+    async function scrapeSide(side) {
+      const role = side === 'away' ? 'away' : 'home'
       // team label
       const label = await page.$eval(
-        `a[href="#${prefix}-team-last-5"]`,
+        `a[href="#${side}-team-last-5"]`,
         el => el.innerText.trim().toUpperCase()
       )
       const team_id = TEAM_ALT_NAME_TO_ID[label]
@@ -98,44 +95,43 @@ async function scrapePitchingMatchups() {
 
       // pitcher name
       const pitcher_name = await page.$eval(
-        `#${prefix}-team-last-5 a.anchor-with-border`,
+        `#${side}-team-last-5 a.anchor-with-border`,
         el => el.innerText.trim()
       )
 
-      // find the “Last 5 Avg.” row and pull its 10 <b> values
+      // find the row whose first <b> startsWith "Last 5 Avg"
       const vals = await page.$$eval(
-        `#${prefix}-team-last-5 table tr`,
+        `#${side}-team-last-5 table tr`,
         trs => {
-          const tr = trs.find(r=>
-            r.querySelector('td b')?.innerText.trim() === 'Last 5 Avg.'
-          )
-          if (!tr) return []
-          return Array.from(tr.querySelectorAll('td b'))
+          const target = trs.find(tr => {
+            const b = tr.querySelector('td b')
+            return b && b.innerText.trim().startsWith('Last 5 Avg')
+          })
+          if (!target) {
+            console.debug('Row HTML:', target?.outerHTML || 'none')
+            return []
+          }
+          // grab all <b> except the first one
+          return Array.from(target.querySelectorAll('td b'))
             .map(b=>b.innerText.trim())
-            .slice(1)  // drop the first <b> “Last 5 Avg.”
+            .slice(1)
         }
       )
 
       if (vals.length !== 10) {
         console.warn(`⚠️ ${role} stats missing for matchup ${matchup_id}`)
+        if (DEBUG) console.debug(`Extracted vals for ${role}:`, vals)
         return
       }
 
-      const [
-        rawIp, rawH, rawR, rawEr,
-        rawSo, rawBb, rawHr, rawPit,
-        rawPip, rawGbfb
-      ] = vals
-
-      // push one row
+      // destructure & parse floats
+      const [ rawIp,rawH,rawR,rawEr,rawSo,rawBb,rawHr,rawPit,rawPip,rawGbfb ] = vals
       rows.push({
         matchup_id,
         pitcher_role: role,
         team_name:    label,
         team_id,
         pitcher_name,
-
-        // preserve decimals exactly as shown on Covers.com
         ip:   toFloat(rawIp),
         h:    toFloat(rawH),
         r:    toFloat(rawR),
@@ -149,20 +145,20 @@ async function scrapePitchingMatchups() {
       })
     }
 
-    await scrapeSide('away','away')
-    await scrapeSide('home','home')
+    await scrapeSide('away')
+    await scrapeSide('home')
   }
 
   await browser.close()
-  console.log(`→ Scraped ${rows.length} pitcher‑records`)
-  if (DEBUG) console.log(JSON.stringify(rows,null,2))
+  console.log(`→ Scraped ${rows.length} pitching records`)
+  if (DEBUG) console.debug(rows)
   return rows
 }
 
 export async function scrapeAndSavePitchingMatchups() {
   console.log('⏳ Starting pitching‑matchups scraper…')
   if (!(await testConnection())) {
-    console.error('❌ Supabase connection failed, aborting.')
+    console.error('❌ Supabase connection failed')
     process.exit(1)
   }
 
@@ -179,28 +175,26 @@ export async function scrapeAndSavePitchingMatchups() {
       return
     }
 
-    // 4) compute ERA, ERA+ & WHIP
+    // compute ERA, ERA+, WHIP
     const enriched = stats.map(r => {
       const ip = r.ip  || 0
       const h  = r.h   || 0
       const er = r.er  || 0
       const bb = r.bb  || 0
-
-      const era     = ip>0 ? parseFloat(((er/ip)*9).toFixed(2)) : null
-      const era_plus= era  ? parseFloat((100*(4.1/era)).toFixed(0))  : null
-      const whip    = ip>0 ? parseFloat(((bb+h)/ip).toFixed(3))      : null
-
+      const era = ip>0 ? parseFloat(((er/ip)*9).toFixed(2)) : null
+      const era_plus = era ? parseFloat((100*(4.1/era)).toFixed(0)) : null
+      const whip = ip>0 ? parseFloat(((bb+h)/ip).toFixed(3)) : null
       return { ...r, era, era_plus, whip }
     })
 
-    console.log(`→ Upserting ${enriched.length} records to Supabase…`)
+    console.log(`→ Upserting ${enriched.length} records into Supabase…`)
     const { data, error } = await supabase
       .from('pitching_matchups')
-      .upsert(enriched, { onConflict:['matchup_id','pitcher_role'] })
+      .upsert(enriched, { onConflict: ['matchup_id','pitcher_role'] })
       .select()
 
     if (error) throw error
-    console.log(`✅ Saved ${data.length} pitching records`)
+    console.log(`✅ Inserted ${data.length} pitching records`)
     createScrapeReport({
       success:   true,
       timestamp: new Date().toISOString(),
@@ -208,7 +202,7 @@ export async function scrapeAndSavePitchingMatchups() {
       records:   data
     })
   }
-  catch(err) {
+  catch (err) {
     console.error('❌ Error inserting pitching stats:', err)
     createScrapeReport({
       success:   false,
@@ -219,7 +213,7 @@ export async function scrapeAndSavePitchingMatchups() {
   }
 }
 
-// auto‑run when called directly
+// auto‑run when this file is invoked directly
 if (import.meta.url.endsWith('scrapePitchingMatchups.js')) {
   scrapeAndSavePitchingMatchups()
     .then(()=>process.exit(0))
