@@ -1,145 +1,147 @@
-
 // workers/scrapePitchingMatchups.js
 import puppeteer from 'puppeteer';
 import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
 
 const DEBUG = process.env.DEBUG === 'true';
 
-/** scrape one matchup's pitcher names + "Last 5 Avg." row for away & home */
-async function scrapePitchingFor(matchup_id) {
-  const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
+async function loadTodayMatchups() {
+  try {
+    const { data, error } = await supabase
+      .from('mlb_matchups')
+      .select('matchup_id');
+    if (error) throw error;
+    return data.map(r => r.matchup_id);
+  } catch (err) {
+    // fixed: use double‑quotes so the apostrophes inside don’t break the JS string
+    console.error("❌ Couldn't load today's matchups:", err);
+    return [];
+  }
+}
+
+async function scrapePitchingMatchups() {
+  const matchupIds = await loadTodayMatchups();
+  if (!matchupIds.length) {
+    console.warn('⚠️  No matchup IDs to process.');
+    return [];
+  }
+  console.log(`→ Will scrape pitching stats for ${matchupIds.length} games`);
+
   const browser = await puppeteer.launch({
     args: ['--no-sandbox','--disable-setuid-sandbox'],
-    headless: 'new',
+    headless: 'new'
   });
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-  // wait for pitchers to appear
-  await page.waitForSelector('a.anchor-with-border', { timeout: 30000 });
-  await page.waitForTimeout(500);             // let React finish
+  const records = [];
 
-  // 1) grab the two starter names (away first, home second)
-  const [away_pitcher_name, home_pitcher_name] = await page.$$eval(
-    'a.anchor-with-border',
-    els => els
-      .map(el => el.innerText.trim())
-      .filter(txt => /\(\w\)$/.test(txt))
-      .slice(0, 2)
-  );
+  for (const id of matchupIds) {
+    const url = `https://www.covers.com/sport/baseball/mlb/matchup/${id}`;
+    console.log(`→ Loading ${url}`);
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    await page.waitForSelector('a.anchor-with-border', { timeout: 30000 });
+    if (DEBUG) await page.screenshot({ path: `debug-pitching-${id}.png` });
 
-  // 2) grab all "Last 5 Avg." rows (one per pitcher) and parse
-  const statsRows = await page.$$eval('tr', trs =>
-    trs
-      .filter(tr => tr.querySelector('td b')?.innerText === 'Last 5 Avg.')
-      .map(row => Array.from(row.querySelectorAll('td b')).map(b => b.innerText))
-  );
+    // grab the two pitcher links (away first, home second)
+    const pitchers = await page.$$eval(
+      'a.anchor-with-border',
+      els => els.slice(0,2).map(a => a.innerText.trim())
+    );
+    const [awayName, homeName] = pitchers;
+
+    // find the “Last 5 Avg.” row and pull out all <b> values
+    const allRows = await page.$$eval(
+      'table tbody tr',
+      rows => rows.map(r => ({
+        title: r.querySelector('td b')?.innerText.trim(),
+        stats: Array.from(r.querySelectorAll('b')).map(b => b.innerText.trim())
+      }))
+    );
+
+    const mapStats = arr => ({
+      ip:       parseFloat(arr[3] || 0),
+      h:        parseFloat(arr[4] || 0),
+      r:        parseFloat(arr[5] || 0),
+      er:       parseFloat(arr[6] || 0),
+      so:       parseFloat(arr[7] || 0),
+      bb:       parseFloat(arr[8] || 0),
+      hr:       parseFloat(arr[9] || 0),
+      pit:      parseFloat(arr[10]|| 0),
+      pip:      parseFloat(arr[11]|| 0),
+      gbfb:     parseFloat(arr[12]|| 0),
+    });
+
+    const awayRow = allRows.find(r => r.title === 'Last 5 Avg.');
+    const homeRow = allRows.slice(allRows.indexOf(awayRow)+1).find(r => r.title === 'Last 5 Avg.');
+
+    records.push({
+      matchup_id: id,
+      pitcher_role: 'away',
+      name: awayName,
+      ...mapStats(awayRow?.stats || [])
+    });
+
+    records.push({
+      matchup_id: id,
+      pitcher_role: 'home',
+      name: homeName,
+      ...mapStats(homeRow?.stats || [])
+    });
+
+    await page.close();
+  }
 
   await browser.close();
-
-  if (statsRows.length < 2) {
-    throw new Error(`Couldn't find two "Last 5 Avg." rows for ${matchup_id}`);
-  }
-
-  const parseRow = bs => ({
-    ip:         parseFloat(bs[3]),
-    h:          parseFloat(bs[4]),
-    r:          parseFloat(bs[5]),
-    er:         parseFloat(bs[6]),
-    so:         parseFloat(bs[7]),
-    bb:         parseFloat(bs[8]),
-    hr:         parseFloat(bs[9]),
-    pit:        parseFloat(bs[10]),
-    p_per_ip:   parseFloat(bs[11]),
-    gb_fb:      parseFloat(bs[12]),
-  });
-
-  const awayStats = parseRow(statsRows[0]);
-  const homeStats = parseRow(statsRows[1]);
-
-  return {
-    matchup_id,
-    away_pitcher_name,
-    ...Object.fromEntries(
-      Object.entries(awayStats).map(([k,v]) => [`away_${k}`, v])
-    ),
-    home_pitcher_name,
-    ...Object.fromEntries(
-      Object.entries(homeStats).map(([k,v]) => [`home_${k}`, v])
-    )
-  };
+  return records;
 }
 
-export async function scrapeAndSavePitchingMatchups() {
-  console.log('→ Starting pitching-matchups scraper…');
+async function main() {
+  console.log('⏳ Starting pitching-matchups scraper…');
   if (!(await testConnection())) {
-    console.error('❌ Supabase connection failed');
+    console.error('❌ Supabase connection failed, aborting.');
     process.exit(1);
   }
 
-  // pull today's matchup_ids from mlb_matchups
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: rows, error: selErr } = await supabase
-    .from('mlb_matchups')
-    .select('matchup_id')
-    .eq('game_date', today);
-
-  if (selErr) {
-    console.error('❌ Couldn't load today's matchups:', selErr);
-    process.exit(1);
-  }
-
-  const results = [];
-  for (const { matchup_id } of rows) {
-    try {
-      const rec = await scrapePitchingFor(matchup_id);
-      console.log(`→ [${matchup_id}] scraped`);
-      results.push(rec);
-    } catch (e) {
-      console.error(`⚠️  [${matchup_id}] failed:`, e.message);
-    }
-  }
-
-  if (results.length === 0) {
-    console.warn('⚠️  No pitching stats to save');
+  const data = await scrapePitchingMatchups();
+  if (!data.length) {
     createScrapeReport({
       success: false,
-      error: 'No pitching stats scraped',
+      error: 'No pitching data found',
       timestamp: new Date().toISOString(),
-      stats: { count: 0 }
+      stats: { records: 0 }
     });
     return;
   }
 
-  // upsert into pitching_matchups
-  const { data, error: upErr } = await supabase
+  console.log(`→ Inserting ${data.length} pitching records into Supabase…`);
+  const { error } = await supabase
     .from('pitching_matchups')
-    .upsert(results, { onConflict: ['matchup_id'] })
-    .select();
+    .insert(data);
 
-  if (upErr) {
-    console.error('❌ Upsert error:', upErr);
+  if (error) {
+    console.error('❌ Supabase insert error:', error);
     createScrapeReport({
       success: false,
-      error: upErr.message,
+      error: error.message,
       timestamp: new Date().toISOString(),
-      stats: { count: 0 }
+      stats: { records: 0 }
     });
-    return;
+  } else {
+    console.log(`✅ Successfully inserted ${data.length} records`);
+    createScrapeReport({
+      success: true,
+      timestamp: new Date().toISOString(),
+      stats: { records: data.length }
+    });
   }
-
-  console.log(`✅ Saved ${data.length} pitching‐matchup rows`);
-  createScrapeReport({
-    success: true,
-    timestamp: new Date().toISOString(),
-    stats: { count: data.length },
-    pitching: data
-  });
 }
 
-// if invoked directly…
 if (import.meta.url.endsWith('scrapePitchingMatchups.js')) {
-  scrapeAndSavePitchingMatchups()
-    .then(()=>process.exit(0))
-    .catch(()=>process.exit(1));
+  main()
+    .then(() => process.exit(0))
+    .catch(err => {
+      console.error('Fatal error:', err);
+      process.exit(1);
+    });
 }
