@@ -12,29 +12,50 @@ export type Database = {
       mlb_matchups: {
         Row: {
           away_team: string
+          away_team_id: number | null
           created_at: string
           game_date: string
           game_id: string
           home_team: string
+          home_team_id: number | null
           matchup_id: string
         }
         Insert: {
           away_team: string
+          away_team_id?: number | null
           created_at?: string
           game_date: string
           game_id: string
           home_team: string
+          home_team_id?: number | null
           matchup_id: string
         }
         Update: {
           away_team?: string
+          away_team_id?: number | null
           created_at?: string
           game_date?: string
           game_id?: string
           home_team?: string
+          home_team_id?: number | null
           matchup_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_away_team"
+            columns: ["away_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "fk_home_team"
+            columns: ["home_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+        ]
       }
       mlb_team_hitting_stats: {
         Row: {
@@ -128,29 +149,94 @@ export type Database = {
           },
         ]
       }
-      pitcher_stats: {
+      pitching_matchups: {
         Row: {
-          era_plus: number | null
-          game_id: string
-          side: string
-          team_abbr: string | null
-          whip: number | null
+          away_bb: number | null
+          away_er: number | null
+          away_gb_fb: number | null
+          away_h: number | null
+          away_hr: number | null
+          away_ip: number | null
+          away_p_per_ip: number | null
+          away_pit: number | null
+          away_pitcher_name: string | null
+          away_r: number | null
+          away_so: number | null
+          created_at: string | null
+          home_bb: number | null
+          home_er: number | null
+          home_gb_fb: number | null
+          home_h: number | null
+          home_hr: number | null
+          home_ip: number | null
+          home_p_per_ip: number | null
+          home_pit: number | null
+          home_pitcher_name: string | null
+          home_r: number | null
+          home_so: number | null
+          matchup_id: string
         }
         Insert: {
-          era_plus?: number | null
-          game_id: string
-          side: string
-          team_abbr?: string | null
-          whip?: number | null
+          away_bb?: number | null
+          away_er?: number | null
+          away_gb_fb?: number | null
+          away_h?: number | null
+          away_hr?: number | null
+          away_ip?: number | null
+          away_p_per_ip?: number | null
+          away_pit?: number | null
+          away_pitcher_name?: string | null
+          away_r?: number | null
+          away_so?: number | null
+          created_at?: string | null
+          home_bb?: number | null
+          home_er?: number | null
+          home_gb_fb?: number | null
+          home_h?: number | null
+          home_hr?: number | null
+          home_ip?: number | null
+          home_p_per_ip?: number | null
+          home_pit?: number | null
+          home_pitcher_name?: string | null
+          home_r?: number | null
+          home_so?: number | null
+          matchup_id: string
         }
         Update: {
-          era_plus?: number | null
-          game_id?: string
-          side?: string
-          team_abbr?: string | null
-          whip?: number | null
+          away_bb?: number | null
+          away_er?: number | null
+          away_gb_fb?: number | null
+          away_h?: number | null
+          away_hr?: number | null
+          away_ip?: number | null
+          away_p_per_ip?: number | null
+          away_pit?: number | null
+          away_pitcher_name?: string | null
+          away_r?: number | null
+          away_so?: number | null
+          created_at?: string | null
+          home_bb?: number | null
+          home_er?: number | null
+          home_gb_fb?: number | null
+          home_h?: number | null
+          home_hr?: number | null
+          home_ip?: number | null
+          home_p_per_ip?: number | null
+          home_pit?: number | null
+          home_pitcher_name?: string | null
+          home_r?: number | null
+          home_so?: number | null
+          matchup_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pitching_matchups_matchup_id_fkey"
+            columns: ["matchup_id"]
+            isOneToOne: true
+            referencedRelation: "mlb_matchups"
+            referencedColumns: ["matchup_id"]
+          },
+        ]
       }
       predictions: {
         Row: {
@@ -212,16 +298,19 @@ export type Database = {
       teams_mlb: {
         Row: {
           actual_team_name: string
+          alt_name: string | null
           team_abbr: string
           team_id: number
         }
         Insert: {
           actual_team_name: string
+          alt_name?: string | null
           team_abbr: string
           team_id?: number
         }
         Update: {
           actual_team_name?: string
+          alt_name?: string | null
           team_abbr?: string
           team_id?: number
         }
