@@ -1,7 +1,6 @@
-
 name: MLB Predictions
 
-# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
+# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
 on:
   schedule:
     - cron: '30 13 * * *'
@@ -16,45 +15,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2) Install psql client
-      - name: Install PostgreSQL client
+      # 2) Install psql client + traceroute for your network tests
+      - name: Install PostgreSQL client & network tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client traceroute dnsutils
 
-      # 3) Check network connectivity to database
+      # 3) Verify network connectivity to your Supabase host
       - name: Verify database connectivity
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          # Extract host and port from DATABASE_URL
           DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
-          echo "Testing connectivity to $DB_HOST..."
-          
-          # Test basic connectivity
+          echo "Testing connectivity to $DB_HOST:5432…"
           if nc -zv $DB_HOST 5432 -w 5 > /dev/null 2>&1; then
             echo "✅ Network connectivity to database verified"
           else
             echo "❌ Cannot connect to database server"
-            echo "Attempting to resolve $DB_HOST..."
+            echo "Resolving $DB_HOST…"
             nslookup $DB_HOST
-            echo "Checking route to $DB_HOST..."
+            echo "Tracing route to $DB_HOST…"
             traceroute -m 15 $DB_HOST
             exit 1
           fi
 
-      # 4) Run your predictions SQL
+      # 4) Run your predictions SQL against Supabase
       - name: Run MLB predictions SQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          echo "Running MLB predictions SQL..."
+          echo "Running MLB predictions SQL…"
           psql "$DATABASE_URL" \
             --set=ON_ERROR_STOP=1 \
             -f sql/mlb_predictions.sql || {
               echo "❌ SQL execution failed"
-              echo "Testing basic connection..."
-              psql "$DATABASE_URL" -c "SELECT 1 as connection_test;" || echo "Could not connect at all"
+              echo "Testing basic connection…"
+              psql "$DATABASE_URL" -c "SELECT 1;" || echo "Could not connect at all"
               exit 1
             }
           echo "✅ MLB predictions completed successfully"
