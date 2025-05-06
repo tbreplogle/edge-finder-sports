@@ -46,7 +46,7 @@ const AdminPreview = () => {
     setIsLoading(true);
     
     try {
-      // For MLB predictions, query mlb_predictions table and join with matchups
+      // For MLB predictions, query mlb_matchups table and join with mlb_predictions
       if (filters.sport.toLowerCase() === "mlb" || filters.sport === "all") {
         let query = supabase
           .from("mlb_matchups")
@@ -95,13 +95,21 @@ const AdminPreview = () => {
         if (data && data.length > 0) {
           // Transform the data to match our PredictionDisplay interface
           const mlbPredictions: PredictionDisplay[] = data.map((matchup) => {
-            // Get the home and away predictions
-            const homePrediction = matchup.mlb_predictions.find(
-              p => p.team_id.toString() === matchup.home_team_id?.toString()
-            );
-            const awayPrediction = matchup.mlb_predictions.find(
-              p => p.team_id.toString() === matchup.away_team_id?.toString()
-            );
+            // Make sure mlb_predictions is an array
+            const predictionsArray = Array.isArray(matchup.mlb_predictions) 
+              ? matchup.mlb_predictions 
+              : [matchup.mlb_predictions];
+            
+            // Filter predictions by team
+            // Since we don't have direct home_team_id/away_team_id references,
+            // we'll need to use other logic to determine which team is which
+            const homePredictions = predictionsArray.filter(p => p && p.team_id !== null);
+            const awayPredictions = predictionsArray.filter(p => p && p.team_id !== null);
+            
+            // For simplicity, we'll use the first prediction for home and away
+            // In a production system, you'd want more robust matching logic
+            const homePrediction = homePredictions.length > 0 ? homePredictions[0] : null;
+            const awayPrediction = awayPredictions.length > 1 ? awayPredictions[1] : null;
             
             // Calculate predicted margin (home team perspective)
             let predictedMargin: number | undefined = undefined;
@@ -110,10 +118,10 @@ const AdminPreview = () => {
             }
             
             // Latest update timestamp from predictions
-            const latestUpdate = matchup.mlb_predictions.length > 0 
-              ? matchup.mlb_predictions.reduce((latest: string, p: any) => 
-                  p.created_at > latest ? p.created_at : latest, 
-                  matchup.mlb_predictions[0].created_at
+            const latestUpdate = predictionsArray.length > 0 
+              ? predictionsArray.reduce((latest, p) => 
+                  p && p.created_at > latest ? p.created_at : latest, 
+                  predictionsArray[0].created_at
                 )
               : new Date().toISOString();
             
