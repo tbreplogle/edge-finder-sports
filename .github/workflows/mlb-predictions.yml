@@ -3,29 +3,26 @@ name: MLB Predictions
 
 on:
   schedule:
-    # 8:30 AM CDT → 13:30 UTC
+    # 8:30 AM Central → 13:30 UTC
     - cron: '30 13 * * *'
   workflow_dispatch:
 
 jobs:
   run-mlb-predictions:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install Supabase CLI
-        run: |
-          curl -L https://github.com/supabase/cli/releases/latest/download/supabase_$(uname -s)_$(uname -m).tar.gz \
-            | tar xz -C /usr/local/bin supabase
+        uses: supabase/setup-cli@v1
 
-      - name: Run MLB predictions SQL
+      - name: Run MLB Predictions SQL
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           supabase db query \
-            --url $SUPABASE_URL \
-            --key $SUPABASE_SERVICE_ROLE_KEY \
+            --url "$SUPABASE_URL" \
+            --key "$SUPABASE_SERVICE_ROLE_KEY" \
             -f sql/mlb_predictions.sql
