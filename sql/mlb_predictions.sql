@@ -1,92 +1,87 @@
-
 -- sql/mlb_predictions.sql
 
-BEGIN;
+-- 1) Ensure table exists
+\i sql/create_mlb_predictions_table.sql
 
--- 1) Create the predictions table if it doesn't exist
-CREATE TABLE IF NOT EXISTS mlb_predictions (
-  matchup_id      TEXT        PRIMARY KEY
-    REFERENCES mlb_matchups(matchup_id)
-    ON UPDATE CASCADE ON DELETE CASCADE,
-  home_win_pct    NUMERIC,
-  away_win_pct    NUMERIC,
-  home_moneyline  INTEGER,
-  away_moneyline  INTEGER,
-  run_date        DATE        NOT NULL DEFAULT CURRENT_DATE
-);
-
--- 2) Compute raw ratings for each side
-WITH computed AS (
+-- 2) Compute raw ratings per team
+WITH ratings AS (
   SELECT
-    m.matchup_id,
-    -- home rating
-    (56.74
-      + 0.108 * h_home.home_runs
-      - 0.0934 * p_away.hr
-      + 334.9 * h_home.avg
-      + 0.188 * p_home.era_plus
-      - 61.98 * p_home.whip
-    ) AS home_rating,
-    -- away rating
-    (56.74
-      + 0.108 * h_away.home_runs
-      - 0.0934 * p_home.hr
-      + 334.9 * h_away.avg
-      + 0.188 * p_away.era_plus
-      - 61.98 * p_away.whip
-    ) AS away_rating
-  FROM mlb_matchups m
-  JOIN mlb_team_hitting_stats   h_home ON h_home.team_id  = m.home_team_id
-                                      AND h_home.game_date = CURRENT_DATE
-                                      AND h_home.timeframe_days = 7
-  JOIN mlb_team_hitting_stats   h_away ON h_away.team_id  = m.away_team_id
-                                      AND h_away.game_date = CURRENT_DATE
-                                      AND h_away.timeframe_days = 7
-  JOIN pitching_matchups        p_home ON p_home.matchup_id = m.matchup_id
-                                      AND p_home.pitcher_role = 'home'
-  JOIN pitching_matchups        p_away ON p_away.matchup_id = m.matchup_id
-                                      AND p_away.pitcher_role = 'away'
+    pm.matchup_id,
+    pm.team_id,
+    -- rating formula:
+    56.74
+    +  0.108 * pm.hr               -- HR
+    -  0.0934 * pm.hr              -- HRA (using same hr column)
+    + 334.9   * pm.ba              -- BA
+    +  0.188  * pm.era_plus        -- ERA+
+    -  61.98  * pm.whip            -- WHIP
+      AS rating,
+    pm.pitcher_role
+  FROM pitching_matchups pm
 ),
--- 3) Apply the "adjustment" step
+
+-- 3) Adjust ratings for home/away
 adjusted AS (
   SELECT
-    matchup_id,
-    ((home_rating/162) * (15-1) + 0.5) / 15 * 1.02   AS home_adj,
-    ((away_rating/162) * (15-1) + 0.5) / 15 * 0.98   AS away_adj
-  FROM computed
+    r.*,
+    CASE
+      WHEN r.pitcher_role = 'home'
+        THEN ((r.rating/162)*(15-1)+0.5)/15 * 1.02
+      ELSE ((r.rating/162)*(15-1)+0.5)/15 * 0.98
+    END AS adjusted_rating
+  FROM ratings r
 ),
--- 4) Convert adj ratings into win percentages & moneylines
-probs AS (
+
+-- 4) Compute win probabilities by pairing home vs away
+win_probs AS (
   SELECT
-    matchup_id,
-    (home_adj - home_adj * away_adj) /
-      (home_adj + away_adj - 2 * home_adj * away_adj) AS home_win_pct,
-    (away_adj - away_adj * home_adj) /
-      (away_adj + home_adj - 2 * away_adj * home_adj) AS away_win_pct,
+    a.matchup_id,
+    a.team_id,
+    a.rating,
+    a.adjusted_rating,
+    -- find the opposite team in this matchup
+    b.adjusted_rating AS opp_adjusted_rating,
+    -- same formula for both roles:
+    ( (a.adjusted_rating - a.adjusted_rating * b.adjusted_rating)
+      / (a.adjusted_rating + b.adjusted_rating - 2 * a.adjusted_rating * b.adjusted_rating)
+    ) AS win_pct
+  FROM adjusted a
+  JOIN adjusted b
+    ON a.matchup_id = b.matchup_id
+   AND a.pitcher_role <> b.pitcher_role
+),
+
+-- 5) Translate win_pct to moneyline
+final AS (
+  SELECT
+    w.matchup_id,
+    w.team_id,
+    w.rating,
+    w.adjusted_rating,
+    w.win_pct,
     CASE
-      WHEN (home_win_pct > 0.5)
-      THEN ROUND(100 / ((1/home_win_pct) - 1) * -1)
-      ELSE ROUND((1/home_win_pct) * 100 - 100)
-    END AS home_moneyline,
-    CASE
-      WHEN (away_win_pct > 0.5)
-      THEN ROUND(100 / ((1/away_win_pct) - 1) * -1)
-      ELSE ROUND((1/away_win_pct) * 100 - 100)
-    END AS away_moneyline
-  FROM adjusted
+      WHEN w.win_pct > 0.5
+        THEN ROUND((1 / w.win_pct - 1) * -100)
+      ELSE ROUND((1 / w.win_pct) * 100 - 100)
+    END AS moneyline
+  FROM win_probs w
 )
 
--- 5) Upsert into your predictions table
+-- 6) Upsert into mlb_predictions
 INSERT INTO mlb_predictions
-  (matchup_id, home_win_pct, away_win_pct, home_moneyline, away_moneyline, run_date)
+  (matchup_id, team_id, rating, adjusted_rating, win_pct, moneyline)
 SELECT
-  matchup_id, home_win_pct, away_win_pct, home_moneyline, away_moneyline, CURRENT_DATE
-FROM probs
-ON CONFLICT (matchup_id) DO UPDATE
-  SET home_win_pct   = EXCLUDED.home_win_pct,
-      away_win_pct   = EXCLUDED.away_win_pct,
-      home_moneyline = EXCLUDED.home_moneyline,
-      away_moneyline = EXCLUDED.away_moneyline,
-      run_date       = EXCLUDED.run_date;
-
-COMMIT;
+  matchup_id,
+  team_id,
+  rating,
+  adjusted_rating,
+  win_pct,
+  moneyline
+FROM final
+ON CONFLICT (matchup_id, team_id)
+DO UPDATE
+  SET rating          = EXCLUDED.rating,
+      adjusted_rating = EXCLUDED.adjusted_rating,
+      win_pct         = EXCLUDED.win_pct,
+      moneyline       = EXCLUDED.moneyline,
+      created_at      = now();
