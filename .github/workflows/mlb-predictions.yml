@@ -1,6 +1,7 @@
+
 name: MLB Predictions
 
-# Runs daily at 8:30 AM Central (CDT is UTC−5 → 13:30 UTC)
+# Runs daily at 8:30 AM Central (CDT is UTC−5 → 13:30 UTC)
 on:
   schedule:
     - cron: '30 13 * * *'

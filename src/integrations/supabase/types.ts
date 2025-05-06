@@ -71,6 +71,51 @@ export type Database = {
           },
         ]
       }
+      mlb_predictions: {
+        Row: {
+          adjusted_rating: number
+          created_at: string
+          matchup_id: string
+          moneyline: number
+          rating: number
+          team_id: number
+          win_pct: number
+        }
+        Insert: {
+          adjusted_rating: number
+          created_at?: string
+          matchup_id: string
+          moneyline: number
+          rating: number
+          team_id: number
+          win_pct: number
+        }
+        Update: {
+          adjusted_rating?: number
+          created_at?: string
+          matchup_id?: string
+          moneyline?: number
+          rating?: number
+          team_id?: number
+          win_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mlb_predictions_matchup_id_fkey"
+            columns: ["matchup_id"]
+            isOneToOne: true
+            referencedRelation: "mlb_matchups"
+            referencedColumns: ["matchup_id"]
+          },
+          {
+            foreignKeyName: "mlb_predictions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+        ]
+      }
       mlb_team_hitting_stats: {
         Row: {
           actual_team_name: string | null
@@ -250,63 +295,6 @@ export type Database = {
             referencedColumns: ["team_id"]
           },
         ]
-      }
-      predictions: {
-        Row: {
-          away_ml: number | null
-          away_team: string
-          confidence_pct: number | null
-          created_at: string
-          edge: number | null
-          game_date: string
-          game_id: string
-          home_ml: number | null
-          home_team: string
-          id: number
-          market_away_ml: number | null
-          market_home_ml: number | null
-          predicted_margin: number | null
-          predicted_total: number | null
-          sport: string
-          updated_at: string
-        }
-        Insert: {
-          away_ml?: number | null
-          away_team: string
-          confidence_pct?: number | null
-          created_at?: string
-          edge?: number | null
-          game_date: string
-          game_id: string
-          home_ml?: number | null
-          home_team: string
-          id?: number
-          market_away_ml?: number | null
-          market_home_ml?: number | null
-          predicted_margin?: number | null
-          predicted_total?: number | null
-          sport: string
-          updated_at?: string
-        }
-        Update: {
-          away_ml?: number | null
-          away_team?: string
-          confidence_pct?: number | null
-          created_at?: string
-          edge?: number | null
-          game_date?: string
-          game_id?: string
-          home_ml?: number | null
-          home_team?: string
-          id?: number
-          market_away_ml?: number | null
-          market_home_ml?: number | null
-          predicted_margin?: number | null
-          predicted_total?: number | null
-          sport?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       teams_mlb: {
         Row: {
