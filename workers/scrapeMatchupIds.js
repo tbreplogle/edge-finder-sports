@@ -156,7 +156,7 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
       const { data, error } = await supabase
         .from('mlb_matchups')
         .upsert(matchups, { 
-          onConflict: 'matchup_id',
+          onConflict: ['matchup_id'],
           ignoreDuplicates: false 
         })
         .select();
@@ -214,15 +214,5 @@ export async function scrapeAndSaveTodayMatchups(supabase) {
   }
 }
 
-// Run if script is executed directly
-if (import.meta.url.endsWith('scrapeMatchupIds.js')) {
-  scrapeTodayMatchupIDs()
-    .then(matchupIDs => {
-      console.log('Today\'s MLB matchup IDs:', matchupIDs);
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error('Fatal error in MLB matchup ID scraper:', error);
-      process.exit(1);
-    });
-}
+// REMOVED the direct execution at the bottom of this file
+// This file will now only export functions, not run them directly
