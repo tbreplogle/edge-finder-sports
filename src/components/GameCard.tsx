@@ -70,6 +70,7 @@ export function GameCard({
         const user = JSON.parse(userStr);
         setIsAdmin(user.is_admin === true);
         setIsPaid(user.role === "premium" || user.is_admin === true);
+        console.log("GameCard user status - isAdmin:", user.is_admin === true);
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
@@ -79,12 +80,15 @@ export function GameCard({
   const isPositiveEdge = edge !== null && edge > 0;
   
   // Determine if content should be masked (premium protection)
-  const shouldMask = predictedMargin === null || 
-                     (edge === null) || 
-                     (!isAdmin && isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame);
+  // isAdmin should override premium protection
+  const shouldMask = !isAdmin && (
+    predictedMargin === null || 
+    (edge === null) || 
+    (isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame)
+  );
   
   // Check if card is locked (guest/free user)
-  const isLocked = (predictedMargin === null || edge === null) && !isPreviewGame;
+  const isLocked = !isAdmin && ((predictedMargin === null || edge === null) && !isPreviewGame);
   
   // Is this a baseball game? (MLB uses moneyline rather than spread)
   const isBaseball = sport === "mlb";
@@ -112,6 +116,9 @@ export function GameCard({
         ? `${awayTeam} -${Math.abs(marketSpread)}` 
         : "Pick'em";
   }
+
+  // Debug log to see card status
+  console.log(`GameCard ${id} - isPremium prop: ${isPremium}, isAdmin: ${isAdmin}, isLocked: ${isLocked}`);
 
   return (
     <Card 
@@ -244,8 +251,8 @@ export function GameCard({
         </div>
       </CardContent>
       
-      {/* Locked overlay for premium content */}
-      {isLocked && (
+      {/* Locked overlay for premium content - Don't show for admin users */}
+      {!isAdmin && isLocked && (
         <div className="absolute inset-0 flex flex-col items-center justify-center 
                       backdrop-blur-sm bg-black/30 rounded-lg transition
                       hover:bg-black/15 z-10">

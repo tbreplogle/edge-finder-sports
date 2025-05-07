@@ -114,12 +114,15 @@ const Dashboard = () => {
   useEffect(() => {
     // Check authentication status from localStorage
     const userStr = localStorage.getItem("user");
+    console.log("User from localStorage:", userStr);
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
+        console.log("Parsed user:", user);
         setIsAuthenticated(true);
         setIsPremium(user.role === "premium" || user.is_admin === true);
         setIsAdmin(user.is_admin === true);
+        console.log("isAdmin set to:", user.is_admin === true);
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
@@ -140,23 +143,44 @@ const Dashboard = () => {
     setLoading(true);
     try {
       const mlbPredictions = await fetchMlbPredictions();
+      console.log("MLB predictions fetched:", mlbPredictions);
+      
+      // Get admin status from localStorage again to ensure it's current
+      let currentIsAdmin = false;
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          currentIsAdmin = user.is_admin === true;
+          console.log("Current admin status:", currentIsAdmin);
+        } catch (e) {
+          console.error("Error parsing user data:", e);
+        }
+      }
       
       // Convert processed MLB predictions to our GameData format
-      const mlbGames: GameData[] = mlbPredictions.map(prediction => ({
-        id: prediction.matchup_id,
-        sport: "mlb",
-        homeTeam: prediction.home_team,
-        awayTeam: prediction.away_team,
-        startTime: prediction.game_date,
-        marketSpread: 0, // MLB doesn't use spread
-        predictedMargin: null, // We'll use moneyline instead
-        edge: prediction.edge_pct ? prediction.edge_pct * 100 : null, // Convert to percentage points
-        confidence: prediction.predicted_implied_pct ? Math.round(prediction.predicted_implied_pct * 100) : null,
-        isPremium: !isAdmin && Math.abs(prediction.edge_pct || 0) > 0.02, // Make edges > 2% premium, but admins see all
-        homeMoneyline: prediction.moneyline,
-        awayMoneyline: null, // This would need to come from another source
-        marketMoneyline: prediction.market_ml
-      }));
+      const mlbGames: GameData[] = mlbPredictions.map(prediction => {
+        const edgePct = prediction.edge_pct ? prediction.edge_pct * 100 : null;
+        const isPremium = !currentIsAdmin && Math.abs(prediction.edge_pct || 0) > 0.02;
+        
+        console.log(`Game ${prediction.matchup_id}: edge=${edgePct}, isPremium=${isPremium}, isAdmin=${currentIsAdmin}`);
+        
+        return {
+          id: prediction.matchup_id,
+          sport: "mlb",
+          homeTeam: prediction.home_team,
+          awayTeam: prediction.away_team,
+          startTime: prediction.game_date,
+          marketSpread: 0, // MLB doesn't use spread
+          predictedMargin: null, // We'll use moneyline instead
+          edge: edgePct,
+          confidence: prediction.predicted_implied_pct ? Math.round(prediction.predicted_implied_pct * 100) : null,
+          isPremium: isPremium,
+          homeMoneyline: prediction.moneyline,
+          awayMoneyline: null, // This would need to come from another source
+          marketMoneyline: prediction.market_ml
+        };
+      });
       
       setGames(sortGames(mlbGames));
     } catch (error) {
@@ -206,6 +230,8 @@ const Dashboard = () => {
 
   // Format today's date
   const todaysDate = format(new Date(), "EEEE, MMMM d");
+
+  console.log("Dashboard rendering with isAdmin:", isAdmin, "isPremium:", isPremium);
 
   return (
     <AppLayout>
@@ -269,13 +295,18 @@ const Dashboard = () => {
                   )}
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredGames.map(game => (
-                      <GameCard 
-                        key={game.id} 
-                        {...game} 
-                        isPremium={(isPremium || isAdmin) ? false : game.isPremium}
-                      />
-                    ))}
+                    {filteredGames.map(game => {
+                      // Debug log to see if games are correctly marked
+                      console.log(`Rendering game ${game.id}: isPremium=${game.isPremium}, isAdmin=${isAdmin}`);
+                      
+                      return (
+                        <GameCard 
+                          key={game.id} 
+                          {...game} 
+                          isPremium={isAdmin ? false : (isPremium ? false : game.isPremium)}
+                        />
+                      );
+                    })}
                   </div>
                 </>
               )}
