@@ -1,0 +1,136 @@
+
+import { useState, useEffect } from "react";
+import { AppLayout } from "@/components/AppLayout";
+import { Button } from "@/components/ui/button";
+import { Calendar, RefreshCw, Info } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { format } from "date-fns";
+import { MlbPredictionsTable } from "@/components/admin/MlbPredictionsTable";
+import { fetchMlbPredictions, ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+
+const MlbDashboard = () => {
+  const { toast } = useToast();
+  const [predictions, setPredictions] = useState<ProcessedMlbPrediction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [generatedDate, setGeneratedDate] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const fetchData = async (skipLoading = false) => {
+    if (!skipLoading) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
+    try {
+      const mlbPredictions = await fetchMlbPredictions();
+      setPredictions(mlbPredictions);
+      
+      // Set the generated date to today's date
+      setGeneratedDate(format(new Date(), "MMM d, yyyy"));
+    } catch (error) {
+      console.error('Error fetching MLB predictions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load MLB predictions. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Manual refresh handler
+  const handleRefresh = () => {
+    fetchData(true);
+  };
+
+  // Format today's date for display
+  const todayFormatted = format(new Date(), "MMM d, yyyy");
+
+  return (
+    <AppLayout isAuthenticated={isAuthenticated}>
+      <div className="container py-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">MLB Predictions Dashboard</h1>
+            <p className="text-muted-foreground">
+              MLB games with predicted odds and market edges
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </Button>
+            
+            <Button variant="outline" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span>{generatedDate || todayFormatted}</span>
+            </Button>
+          </div>
+        </div>
+        
+        <Alert className="mb-6 bg-muted">
+          <Info className="h-4 w-4" />
+          <AlertTitle>MLB Predictions</AlertTitle>
+          <AlertDescription>
+            Using live data from the mlb_predictions table and current market odds.
+          </AlertDescription>
+        </Alert>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <RefreshCw className="h-10 w-10 animate-spin mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Loading MLB predictions...</p>
+          </div>
+        ) : (
+          <MlbPredictionsTable predictions={predictions} isLoading={false} />
+        )}
+
+        <div className="mt-8 p-4 border rounded-lg bg-card">
+          <h3 className="font-medium mb-2">Legend</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-3 h-3 bg-edge-mlb rounded-full"></div>
+                <span className="text-sm font-medium">MLB</span>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 mb-1">
+                <p><strong>Predicted Odds:</strong> From mlb_predictions.moneyline</p>
+              </div>
+              <p><strong>Actual Market Odds:</strong> From live odds API</p>
+              <p><strong>Market/Predicted Implied %:</strong> Conversion from odds to win probability</p>
+              <p><strong>Edge %:</strong> Difference between predicted and market implied percentages</p>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <p>Last updated: {generatedDate || todayFormatted}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </AppLayout>
+  );
+};
+
+export default MlbDashboard;

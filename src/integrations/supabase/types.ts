@@ -73,48 +73,33 @@ export type Database = {
       }
       mlb_predictions: {
         Row: {
-          adjusted_rating: number
+          adjusted_rating: number | null
           created_at: string
           matchup_id: string
-          moneyline: number
-          rating: number
+          moneyline: number | null
+          rating: number | null
           team_id: number
-          win_pct: number
+          win_pct: number | null
         }
         Insert: {
-          adjusted_rating: number
+          adjusted_rating?: number | null
           created_at?: string
           matchup_id: string
-          moneyline: number
-          rating: number
+          moneyline?: number | null
+          rating?: number | null
           team_id: number
-          win_pct: number
+          win_pct?: number | null
         }
         Update: {
-          adjusted_rating?: number
+          adjusted_rating?: number | null
           created_at?: string
           matchup_id?: string
-          moneyline?: number
-          rating?: number
+          moneyline?: number | null
+          rating?: number | null
           team_id?: number
-          win_pct?: number
+          win_pct?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "mlb_predictions_matchup_id_fkey"
-            columns: ["matchup_id"]
-            isOneToOne: true
-            referencedRelation: "mlb_matchups"
-            referencedColumns: ["matchup_id"]
-          },
-          {
-            foreignKeyName: "mlb_predictions_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams_mlb"
-            referencedColumns: ["team_id"]
-          },
-        ]
+        Relationships: []
       }
       mlb_team_hitting_stats: {
         Row: {

@@ -18,6 +18,7 @@ import Privacy from "./pages/Privacy";
 import Contact from "./pages/Contact";
 import InjuryDashboard from "./pages/InjuryDashboard";
 import AdminPreview from "./pages/AdminPreview";
+import MlbDashboard from "./pages/MlbDashboard";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,9 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             {/* Redirect any unknown routes to home page */}
             <Route path="*" element={<NotFound />} />
+            
+            {/* Add MLB Dashboard route */}
+            <Route path="/mlb-dashboard" element={<MlbDashboard />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
