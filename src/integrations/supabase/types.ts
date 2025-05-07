@@ -45,6 +45,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_mmo_away_team"
+            columns: ["away_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "fk_mmo_home_team"
+            columns: ["home_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "fk_mmo_matchup"
+            columns: ["matchup_id"]
+            isOneToOne: false
+            referencedRelation: "mlb_matchups"
+            referencedColumns: ["matchup_id"]
+          },
+          {
             foreignKeyName: "mlb_market_odds_away_team_id_fkey"
             columns: ["away_team_id"]
             isOneToOne: false

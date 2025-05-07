@@ -8,7 +8,6 @@ const ODDS_API_KEY = 'ca659a5203c1cfc6a0275ebd54c57262';
 const ODDS_API_URL = 'https://api.the-odds-api.com/v4/sports';
 const SPORT_KEY = 'baseball_mlb';
 const ACTION_NAME = 'fetch_mlb_odds';
-const DEBUG = process.env.DEBUG === 'true';
 
 /**
  * Fetches MLB moneyline odds from the Odds API
