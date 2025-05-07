@@ -58,7 +58,7 @@ win_probs AS (
    AND a.pitcher_role <> b.pitcher_role
 ),
 
--- 5) Convert win_pct into moneyline
+-- 5) Convert win_pct into moneyline (Excel formula) and cap to [-500,500]
 final AS (
   SELECT
     w.matchup_id,
@@ -66,11 +66,17 @@ final AS (
     w.rating,
     w.adjusted_rating,
     w.win_pct,
-    CASE
-      WHEN w.win_pct > 0.5
-        THEN ROUND((1 / w.win_pct - 1) * -100)
-      ELSE ROUND((1 / w.win_pct) * 100 - 100)
-    END AS moneyline
+    LEAST(
+      500,
+      GREATEST(
+        -500,
+        CASE
+          WHEN w.win_pct > 0.5
+            THEN ROUND(-100 * w.win_pct / (1 - w.win_pct))
+          ELSE ROUND(100 / w.win_pct - 100)
+        END
+      )
+    ) AS moneyline
   FROM win_probs w
 )
 
