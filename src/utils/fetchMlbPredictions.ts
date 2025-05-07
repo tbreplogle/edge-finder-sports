@@ -62,8 +62,8 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
     if (predictionsError) throw predictionsError;
     if (!predictionsData || !Array.isArray(predictionsData)) return [];
 
-    // Convert to MlbPrediction type to ensure type safety
-    const typedPredictions: MlbPrediction[] = predictionsData;
+    // Use type assertion to ensure we're working with the right type
+    const typedPredictions = predictionsData as unknown as MlbPrediction[];
     
     const { data: matchupsData, error: matchupsError } = await supabase
       .from("mlb_matchups")
@@ -72,8 +72,8 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
     if (matchupsError) throw matchupsError;
     if (!matchupsData || !Array.isArray(matchupsData)) return [];
     
-    // Convert to MlbMatchup type to ensure type safety
-    const typedMatchups: MlbMatchup[] = matchupsData;
+    // Use type assertion to ensure we're working with the right type
+    const typedMatchups = matchupsData as unknown as MlbMatchup[];
 
     // pull live odds
     const sportKey = SPORT_KEYS.MLB;

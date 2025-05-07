@@ -14,7 +14,6 @@ import {
 } from "@/utils/fetchMlbPredictions";
 import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
 import { OddsApiGame } from "@/utils/types/sports";
-import { generateSampleMlbData } from "@/utils/generateSampleMlbData";
 
 interface GameData {
   id: string;
@@ -102,13 +101,15 @@ export default function Dashboard() {
   async function loadMlb() {
     setLoading(true);
     try {
-      // First try to fetch real data
-      let preds = await fetchMlbPredictions();
+      // Directly fetch MLB predictions from the API
+      const preds = await fetchMlbPredictions();
       
-      // If no data, use sample data
+      // If no data, show empty state
       if (preds.length === 0) {
-        console.log("No MLB predictions found, using sample data");
-        return setGames(generateSampleMlbData());
+        console.log("No MLB predictions found");
+        setGames([]);
+        setLoading(false);
+        return;
       }
       
       console.log("Fetched MLB predictions:", preds);
@@ -175,8 +176,8 @@ export default function Dashboard() {
       console.error("Failed to load MLB predictions:", e);
       toast.error("Failed to load MLB predictions");
       
-      // Fall back to sample data
-      setGames(generateSampleMlbData());
+      // Show empty state on error
+      setGames([]);
     } finally {
       setLoading(false);
     }
@@ -234,27 +235,35 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                {preview && (
-                  <div className="mb-4">
-                    <h3 className="font-medium mb-1">Preview Game</h3>
-                    <GameCard 
-                      {...preview} 
-                      isAdmin={isAdmin} 
-                      isPaid={isPaid} 
-                      isPreviewGame
-                    />
+                {games.length === 0 ? (
+                  <div className="p-8 text-center border rounded-lg bg-muted">
+                    <p className="text-muted-foreground">No {activeSport.toUpperCase()} games available at this time</p>
                   </div>
+                ) : (
+                  <>
+                    {preview && (
+                      <div className="mb-4">
+                        <h3 className="font-medium mb-1">Preview Game</h3>
+                        <GameCard 
+                          {...preview} 
+                          isAdmin={isAdmin} 
+                          isPaid={isPaid} 
+                          isPreviewGame
+                        />
+                      </div>
+                    )}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {shown.map(g=>(
+                        <GameCard 
+                          key={g.id} 
+                          {...g} 
+                          isAdmin={isAdmin} 
+                          isPaid={isPaid} 
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
-                <div className="grid md:grid-cols-2 gap-4">
-                  {shown.map(g=>(
-                    <GameCard 
-                      key={g.id} 
-                      {...g} 
-                      isAdmin={isAdmin} 
-                      isPaid={isPaid} 
-                    />
-                  ))}
-                </div>
               </>
             )}
           </div>
