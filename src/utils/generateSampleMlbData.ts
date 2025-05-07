@@ -21,7 +21,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: false,
       isPreviewGame: true,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: -150,
+      awayMarketMoneyline: +130,
+      homePredictedOdds: -160,
+      awayPredictedOdds: +140,
+      homePredictedPct: 62,
+      awayPredictedPct: 38
     },
     {
       id: "685101",
@@ -37,7 +43,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: -120,
+      awayMarketMoneyline: +110,
+      homePredictedOdds: -130,
+      awayPredictedOdds: +120,
+      homePredictedPct: 56.5,
+      awayPredictedPct: 43.5
     },
     {
       id: "685102",
@@ -53,7 +65,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: +150,
+      awayMarketMoneyline: -170,
+      homePredictedOdds: +130,
+      awayPredictedOdds: -150,
+      homePredictedPct: 43.5,
+      awayPredictedPct: 56.5
     },
     {
       id: "685103",
@@ -69,7 +87,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: -200,
+      awayMarketMoneyline: +180,
+      homePredictedOdds: -220,
+      awayPredictedOdds: +200,
+      homePredictedPct: 68.8,
+      awayPredictedPct: 31.2
     },
     {
       id: "685104",
@@ -85,7 +109,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: -110,
+      awayMarketMoneyline: +100,
+      homePredictedOdds: -120,
+      awayPredictedOdds: +110,
+      homePredictedPct: 54.5,
+      awayPredictedPct: 45.5
     },
     {
       id: "685105",
@@ -101,7 +131,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: -180,
+      awayMarketMoneyline: +170,
+      homePredictedOdds: -200,
+      awayPredictedOdds: +190,
+      homePredictedPct: 66.7,
+      awayPredictedPct: 33.3
     },
     {
       id: "685106",
@@ -117,7 +153,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: -130,
+      awayMarketMoneyline: +120,
+      homePredictedOdds: -140,
+      awayPredictedOdds: +130,
+      homePredictedPct: 58.3,
+      awayPredictedPct: 41.7
     },
     {
       id: "685107",
@@ -133,7 +175,13 @@ export function generateSampleMlbData(): GameProps[] {
       isPremium: true,
       isPreviewGame: false,
       isAdmin: false,
-      isPaid: false
+      isPaid: false,
+      homeMarketMoneyline: +110,
+      awayMarketMoneyline: -120,
+      homePredictedOdds: +120,
+      awayPredictedOdds: -130,
+      homePredictedPct: 45.5,
+      awayPredictedPct: 54.5
     }
   ];
   

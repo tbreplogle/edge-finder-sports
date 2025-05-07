@@ -21,6 +21,13 @@ export interface GameProps {
   isPreviewGame?: boolean;
   isAdmin: boolean;
   isPaid: boolean;
+  // Add separate fields for home/away odds
+  homeMarketMoneyline?: number|null;
+  awayMarketMoneyline?: number|null;
+  homePredictedOdds?: number|null;
+  awayPredictedOdds?: number|null;
+  homePredictedPct?: number|null;
+  awayPredictedPct?: number|null;
 }
 
 export function GameCard({
@@ -36,7 +43,14 @@ export function GameCard({
   isPremium = false,
   isPreviewGame = false,
   isAdmin,
-  isPaid
+  isPaid,
+  // New props for separate team odds
+  homeMarketMoneyline,
+  awayMarketMoneyline,
+  homePredictedOdds,
+  awayPredictedOdds,
+  homePredictedPct,
+  awayPredictedPct
 }: GameProps) {
   const [open, setOpen] = useState(false);
   const locked = !isAdmin && isPremium && !isPaid;
@@ -72,33 +86,59 @@ export function GameCard({
         </div>
 
         {sport==="mlb" && (
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <div className={cn("text-sm", locked?"text-slate-400":"text-muted-foreground")}>
+          <div className="mt-4">
+            <div className="grid grid-cols-3 gap-1 mb-3">
+              <div></div>
+              <div className={cn("text-xs font-semibold text-center", locked?"text-slate-400":"text-muted-foreground")}>
                 Market Odds
               </div>
-              <div className={cn("font-medium", locked&&"text-slate-400")}>
-                {fmtML(marketMoneyline)}
-              </div>
-              {marketImpliedPct != null && (
-                <div className="text-xs text-muted-foreground">
-                  {marketImpliedPct.toFixed(0)}%
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div className={cn("text-sm", locked?"text-slate-400":"text-muted-foreground")}>
+              <div className={cn("text-xs font-semibold text-center", locked?"text-slate-400":"text-muted-foreground")}>
                 Predicted Odds
               </div>
-              <div className={cn("font-medium", locked&&"text-slate-400")}>
-                {fmtML(predictedOdds)}
+            </div>
+            
+            {/* Away Team Row */}
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              <div className={cn("text-sm font-medium", locked&&"text-slate-400")}>
+                {awayTeam}
               </div>
-              {predictedImpliedPct != null && (
-                <div className="text-xs text-muted-foreground">
-                  {predictedImpliedPct.toFixed(0)}%
+              <div className="text-center">
+                <div className={cn("font-medium", locked&&"text-slate-400")}>
+                  {fmtML(awayMarketMoneyline || marketMoneyline)}
                 </div>
-              )}
+              </div>
+              <div className="text-center">
+                <div className={cn("font-medium", locked&&"text-slate-400")}>
+                  {fmtML(awayPredictedOdds || predictedOdds)}
+                </div>
+                {awayPredictedPct != null && (
+                  <div className="text-xs text-muted-foreground">
+                    {awayPredictedPct.toFixed(0)}%
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Home Team Row */}
+            <div className="grid grid-cols-3 gap-1">
+              <div className={cn("text-sm font-medium", locked&&"text-slate-400")}>
+                {homeTeam}
+              </div>
+              <div className="text-center">
+                <div className={cn("font-medium", locked&&"text-slate-400")}>
+                  {fmtML(homeMarketMoneyline || marketMoneyline)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className={cn("font-medium", locked&&"text-slate-400")}>
+                  {fmtML(homePredictedOdds || predictedOdds)}
+                </div>
+                {homePredictedPct != null && (
+                  <div className="text-xs text-muted-foreground">
+                    {homePredictedPct.toFixed(0)}%
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

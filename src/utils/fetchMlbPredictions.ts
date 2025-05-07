@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
 import { OddsApiGame } from "@/utils/types/sports";
@@ -28,11 +29,15 @@ export interface ProcessedMlbPrediction {
   home_team: string;
   away_team: string;
   game_date: string;
-  moneyline: number | null;
-  market_ml: number | null;
-  market_implied_pct: number | null;    // fraction 0–1
-  predicted_implied_pct: number | null; // fraction 0–1
-  edge_pct: number | null;              // difference
+  home_moneyline: number | null;
+  away_moneyline: number | null;
+  home_market_ml: number | null;
+  away_market_ml: number | null;
+  home_predicted_pct: number | null;
+  away_predicted_pct: number | null;
+  home_market_implied_pct: number | null;
+  away_market_implied_pct: number | null;
+  edge_pct: number | null;
   updated_at: string;
 }
 
@@ -49,7 +54,7 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
   try {
     // Fix: Add proper type parameters to the supabase queries
     const { data: predictionsData, error: predictionsError } = await supabase
-      .from("mlb_predictions")
+      .from<MlbPrediction>("mlb_predictions")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -58,7 +63,7 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
 
     // Fix: Add proper type parameters to the supabase queries
     const { data: matchupsData, error: matchupsError } = await supabase
-      .from("mlb_matchups")
+      .from<MlbMatchup>("mlb_matchups")
       .select("*");
 
     if (matchupsError) throw matchupsError;
@@ -72,20 +77,33 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
     const matchupsMap = new Map(matchupsData.map(m => [m.matchup_id, m] as const));
     const oddsMap = new Map(liveOddsData.map(o => [o.id, o] as const));
 
-    // keep only the latest prediction per matchup
-    const latest = new Map<string, MlbPrediction>();
-    predictionsData.forEach(p => {
-      const existing = latest.get(p.matchup_id);
-      if (!existing || new Date(p.created_at) > new Date(existing.created_at)) {
-        latest.set(p.matchup_id, p as MlbPrediction);
+    // Group predictions by matchup_id to get both teams
+    const predictionsByMatchup = new Map<string, MlbPrediction[]>();
+    
+    for (const pred of predictionsData) {
+      if (!predictionsByMatchup.has(pred.matchup_id)) {
+        predictionsByMatchup.set(pred.matchup_id, []);
       }
-    });
+      
+      const existingPreds = predictionsByMatchup.get(pred.matchup_id)!;
+      
+      // Check if we already have a prediction for this team
+      const teamPredIndex = existingPreds.findIndex(p => p.team_id === pred.team_id);
+      
+      if (teamPredIndex === -1) {
+        // No prediction for this team yet, add it
+        existingPreds.push(pred);
+      } else if (new Date(pred.created_at) > new Date(existingPreds[teamPredIndex].created_at)) {
+        // Newer prediction for this team, replace it
+        existingPreds[teamPredIndex] = pred;
+      }
+    }
 
     const out: ProcessedMlbPrediction[] = [];
 
-    latest.forEach(pred => {
-      const m = matchupsMap.get(pred.matchup_id);
-      if (!m) return;
+    for (const [matchupId, preds] of predictionsByMatchup.entries()) {
+      const m = matchupsMap.get(matchupId);
+      if (!m) continue;
 
       // find live-API game by id or team names
       const liveGame = oddsMap.get(m.game_id)
@@ -93,45 +111,68 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
              (g.home_team === m.home_team && g.away_team === m.away_team)
           );
 
-      let market_ml: number | null = null;
+      // Extract market ML for both teams
+      let home_market_ml: number | null = null;
+      let away_market_ml: number | null = null;
+      
       if (liveGame) {
         const bm = liveGame.bookmakers?.[0];
         const h2h = bm?.markets.find(x => x.key === "h2h");
         if (h2h) {
-          // pick the odds for whichever team this pred is for
           const homeO = h2h.outcomes.find(o => o.name === m.home_team);
           const awayO = h2h.outcomes.find(o => o.name === m.away_team);
-          if (pred.team_id === m.home_team_id && homeO) market_ml = homeO.price;
-          if (pred.team_id === m.away_team_id && awayO) market_ml = awayO.price;
+          
+          if (homeO) home_market_ml = homeO.price;
+          if (awayO) away_market_ml = awayO.price;
         }
       }
 
-      const predictedImpliedPct = pred.moneyline != null
-        ? calculateImpliedProbability(pred.moneyline)
-        : null;
+      // Process predictions for each team
+      let home_moneyline: number | null = null;
+      let away_moneyline: number | null = null;
+      let home_predicted_pct: number | null = null;
+      let away_predicted_pct: number | null = null;
+      
+      for (const pred of preds) {
+        if (pred.team_id === m.home_team_id) {
+          home_moneyline = pred.moneyline;
+          home_predicted_pct = pred.moneyline != null ? calculateImpliedProbability(pred.moneyline) : null;
+        } else if (pred.team_id === m.away_team_id) {
+          away_moneyline = pred.moneyline;
+          away_predicted_pct = pred.moneyline != null ? calculateImpliedProbability(pred.moneyline) : null;
+        }
+      }
 
-      const marketImpliedPct = market_ml != null
-        ? calculateImpliedProbability(market_ml)
-        : null;
+      const home_market_implied_pct = home_market_ml != null ? calculateImpliedProbability(home_market_ml) : null;
+      const away_market_implied_pct = away_market_ml != null ? calculateImpliedProbability(away_market_ml) : null;
 
-      const edge_pct = (predictedImpliedPct != null && marketImpliedPct != null)
-        ? predictedImpliedPct - marketImpliedPct
-        : null;
+      // Calculate edge as the difference between predicted and market for the higher probability team
+      let edge_pct: number | null = null;
+      
+      if (home_predicted_pct != null && home_market_implied_pct != null) {
+        edge_pct = home_predicted_pct - home_market_implied_pct;
+      } else if (away_predicted_pct != null && away_market_implied_pct != null) {
+        edge_pct = away_predicted_pct - away_market_implied_pct;
+      }
 
       out.push({
-        matchup_id: pred.matchup_id,
+        matchup_id: matchupId,
         game_id: m.game_id,
         home_team: m.home_team,
         away_team: m.away_team,
         game_date: m.game_date,
-        moneyline: pred.moneyline,
-        market_ml,
-        predicted_implied_pct: predictedImpliedPct,
-        market_implied_pct: marketImpliedPct,
+        home_moneyline,
+        away_moneyline,
+        home_market_ml,
+        away_market_ml,
+        home_predicted_pct,
+        away_predicted_pct,
+        home_market_implied_pct,
+        away_market_implied_pct,
         edge_pct,
-        updated_at: pred.created_at
+        updated_at: preds[0]?.created_at || new Date().toISOString()
       });
-    });
+    }
 
     return out;
   }

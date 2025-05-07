@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,13 @@ interface GameData {
   edgePct?: number | null;
   isPremium?: boolean;
   isPreviewGame?: boolean;
+  // Add separate fields for home/away odds
+  homeMarketMoneyline?: number | null;
+  awayMarketMoneyline?: number | null;
+  homePredictedOdds?: number | null;
+  awayPredictedOdds?: number | null;
+  homePredictedPct?: number | null;
+  awayPredictedPct?: number | null;
 }
 
 const sampleGames: GameData[] = [
@@ -105,19 +111,30 @@ export default function Dashboard() {
         );
         
         // Get market ML from live odds if available
-        let marketML = p.market_ml;
-        if (liveGame && marketML === null) {
+        let homeMarketML = p.home_market_ml;
+        let awayMarketML = p.away_market_ml;
+        
+        if (liveGame && (!homeMarketML || !awayMarketML)) {
           const bookmaker = liveGame.bookmakers?.[0];
           if (bookmaker) {
             const h2h = bookmaker.markets.find(m => m.key === "h2h");
             if (h2h) {
               const homeOutcome = h2h.outcomes.find(o => o.name === p.home_team);
+              const awayOutcome = h2h.outcomes.find(o => o.name === p.away_team);
+              
               if (homeOutcome) {
-                marketML = homeOutcome.price;
+                homeMarketML = homeOutcome.price;
+              }
+              
+              if (awayOutcome) {
+                awayMarketML = awayOutcome.price;
               }
             }
           }
         }
+        
+        // Premium if edge is greater than 2% (absolute value) and user is not admin
+        const isPremium = Math.abs(p.edge_pct || 0) > 0.02;
         
         return {
           id: p.matchup_id,
@@ -125,13 +142,20 @@ export default function Dashboard() {
           homeTeam: p.home_team,
           awayTeam: p.away_team,
           startTime: p.game_date,
-          marketMoneyline: marketML,
-          marketImpliedPct: p.market_implied_pct != null ? p.market_implied_pct * 100 : null,
-          predictedOdds: p.moneyline,
-          predictedImpliedPct: p.predicted_implied_pct != null ? p.predicted_implied_pct * 100 : null,
+          // Keep legacy fields for compatibility
+          marketMoneyline: homeMarketML, 
+          marketImpliedPct: p.home_market_implied_pct != null ? p.home_market_implied_pct * 100 : null,
+          predictedOdds: p.home_moneyline,
+          predictedImpliedPct: p.home_predicted_pct != null ? p.home_predicted_pct * 100 : null,
           edgePct: p.edge_pct != null ? p.edge_pct * 100 : null,
-          // Premium if edge is greater than 2% (absolute value) and user is not admin
-          isPremium: Math.abs(p.edge_pct || 0) > 0.02
+          isPremium,
+          // Add separate fields for home/away odds
+          homeMarketMoneyline: homeMarketML,
+          awayMarketMoneyline: awayMarketML,
+          homePredictedOdds: p.home_moneyline,
+          awayPredictedOdds: p.away_moneyline,
+          homePredictedPct: p.home_predicted_pct != null ? p.home_predicted_pct * 100 : null,
+          awayPredictedPct: p.away_predicted_pct != null ? p.away_predicted_pct * 100 : null,
         };
       });
       
@@ -164,7 +188,7 @@ export default function Dashboard() {
     : null;
   const shown = preview ? games.filter(g=>g.id!==preview.id) : games;
 
-  // Fix: Cast the setActiveSport function to accept the string type that SportTabs expects
+  // Fix: Handle sport change with proper type conversion
   const handleSportChange = (value: string) => {
     setActiveSport(value as GameData["sport"]);
   };
@@ -201,7 +225,12 @@ export default function Dashboard() {
                 {preview && (
                   <div className="mb-4">
                     <h3 className="font-medium mb-1">Preview Game</h3>
-                    <GameCard {...preview} isAdmin={isAdmin} isPaid={isPaid} isPreviewGame />
+                    <GameCard 
+                      {...preview} 
+                      isAdmin={isAdmin} 
+                      isPaid={isPaid} 
+                      isPreviewGame
+                    />
                   </div>
                 )}
                 <div className="grid md:grid-cols-2 gap-4">
