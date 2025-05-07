@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import {
   fetchMlbPredictions,
   ProcessedMlbPrediction
 } from "@/utils/fetchMlbPredictions";
+import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
+import { OddsApiGame } from "@/utils/types/sports";
 
 interface GameData {
   id: string;
@@ -40,6 +43,7 @@ export default function Dashboard() {
   const [sortOrder, setSortOrder] = useState<"asc"|"desc">("desc");
   const [isAdmin, setIsAdmin]     = useState(false);
   const [isPaid, setIsPaid]       = useState(false);
+  const [liveOdds, setLiveOdds]   = useState<OddsApiGame[]>([]);
 
   useEffect(() => {
     const u = localStorage.getItem("user");
@@ -48,8 +52,36 @@ export default function Dashboard() {
         const user = JSON.parse(u);
         setIsAdmin(user.is_admin === true);
         setIsPaid(user.role === "premium" || user.is_admin === true);
-      } catch {}
+        console.log("User data:", { isAdmin: user.is_admin, role: user.role, isPaid });
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    } else {
+      console.log("No user data found in localStorage");
     }
+    
+    // Fetch live odds for the current sport
+    async function getLiveOdds() {
+      let sportKey = "";
+      switch (activeSport) {
+        case "mlb": sportKey = SPORT_KEYS.MLB; break;
+        case "nfl": sportKey = SPORT_KEYS.NFL; break;
+        case "ncaaf": sportKey = SPORT_KEYS.NCAAF; break;
+        case "ncaab": sportKey = SPORT_KEYS.NCAAB; break;
+      }
+      if (sportKey) {
+        try {
+          const odds = await fetchOdds(sportKey);
+          setLiveOdds(odds);
+          console.log(`Fetched ${odds.length} live odds for ${activeSport}`);
+        } catch (e) {
+          console.error(`Error fetching odds for ${activeSport}:`, e);
+        }
+      }
+    }
+
+    getLiveOdds();
+
     if (activeSport === "mlb") {
       loadMlb();
     } else {
@@ -63,22 +95,50 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const preds = await fetchMlbPredictions();
-      const out: GameData[] = preds.map(p => ({
-        id: p.matchup_id,
-        sport: "mlb",
-        homeTeam: p.home_team,
-        awayTeam: p.away_team,
-        startTime: p.game_date,
-        marketMoneyline: p.market_ml,
-        marketImpliedPct: p.market_implied_pct != null ? p.market_implied_pct * 100 : null,
-        predictedOdds: p.moneyline,
-        predictedImpliedPct: p.predicted_implied_pct != null ? p.predicted_implied_pct * 100 : null,
-        edgePct: p.edge_pct != null ? p.edge_pct * 100 : null,
-        isPremium: !isAdmin && Math.abs(p.edge_pct || 0) > 0.02
-      }));
+      console.log("Fetched MLB predictions:", preds);
+      
+      const out: GameData[] = preds.map(p => {
+        // Find matching live odds if available
+        const liveGame = liveOdds.find(g => 
+          g.id === p.game_id || 
+          (g.home_team === p.home_team && g.away_team === p.away_team)
+        );
+        
+        // Get market ML from live odds if available
+        let marketML = p.market_ml;
+        if (liveGame && marketML === null) {
+          const bookmaker = liveGame.bookmakers?.[0];
+          if (bookmaker) {
+            const h2h = bookmaker.markets.find(m => m.key === "h2h");
+            if (h2h) {
+              const homeOutcome = h2h.outcomes.find(o => o.name === p.home_team);
+              if (homeOutcome) {
+                marketML = homeOutcome.price;
+              }
+            }
+          }
+        }
+        
+        return {
+          id: p.matchup_id,
+          sport: "mlb" as const,
+          homeTeam: p.home_team,
+          awayTeam: p.away_team,
+          startTime: p.game_date,
+          marketMoneyline: marketML,
+          marketImpliedPct: p.market_implied_pct != null ? p.market_implied_pct * 100 : null,
+          predictedOdds: p.moneyline,
+          predictedImpliedPct: p.predicted_implied_pct != null ? p.predicted_implied_pct * 100 : null,
+          edgePct: p.edge_pct != null ? p.edge_pct * 100 : null,
+          // Premium if edge is greater than 2% (absolute value) and user is not admin
+          isPremium: Math.abs(p.edge_pct || 0) > 0.02
+        };
+      });
+      
+      console.log("Processed game data:", out);
       setGames(sort(out));
     } catch (e) {
-      console.error(e);
+      console.error("Failed to load MLB predictions:", e);
       toast.error("Failed to load MLB predictions");
       setGames([]);
     } finally {
@@ -141,7 +201,12 @@ export default function Dashboard() {
                 )}
                 <div className="grid md:grid-cols-2 gap-4">
                   {shown.map(g=>(
-                    <GameCard key={g.id} {...g} isAdmin={isAdmin} isPaid={isPaid} />
+                    <GameCard 
+                      key={g.id} 
+                      {...g} 
+                      isAdmin={isAdmin} 
+                      isPaid={isPaid} 
+                    />
                   ))}
                 </div>
               </>

@@ -1,11 +1,10 @@
+
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ArrowUp, ArrowDown, Clock, LockIcon, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle
-} from "@/components/ui/dialog";
 
 export interface GameProps {
   id: string;
@@ -40,7 +39,7 @@ export function GameCard({
   isPaid
 }: GameProps) {
   const [open, setOpen] = useState(false);
-  const locked = !isAdmin && isPremium;
+  const locked = !isAdmin && isPremium && !isPaid;
   const hasEdge = edgePct != null;
   const positive = hasEdge && (edgePct! > 0);
 
