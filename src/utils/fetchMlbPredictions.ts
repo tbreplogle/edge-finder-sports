@@ -47,33 +47,37 @@ function calculateImpliedProbability(odds: number): number {
 
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
   try {
+    // Fix: Add proper type parameters to the supabase queries
     const { data: predictionsData, error: predictionsError } = await supabase
-      .from<MlbPrediction>("mlb_predictions")
+      .from("mlb_predictions")
       .select("*")
       .order("created_at", { ascending: false });
 
     if (predictionsError) throw predictionsError;
+    if (!predictionsData) return [];
 
+    // Fix: Add proper type parameters to the supabase queries
     const { data: matchupsData, error: matchupsError } = await supabase
-      .from<MlbMatchup>("mlb_matchups")
+      .from("mlb_matchups")
       .select("*");
 
     if (matchupsError) throw matchupsError;
+    if (!matchupsData) return [];
 
     // pull live odds
     const sportKey = SPORT_KEYS.MLB;
     const liveOddsData = await fetchOdds(sportKey);
 
     // map for quick lookup
-    const matchupsMap = new Map(matchupsData.map(m => [m.matchup_id, m]));
-    const oddsMap = new Map(liveOddsData.map(o => [o.id, o]));
+    const matchupsMap = new Map(matchupsData.map(m => [m.matchup_id, m] as const));
+    const oddsMap = new Map(liveOddsData.map(o => [o.id, o] as const));
 
     // keep only the latest prediction per matchup
     const latest = new Map<string, MlbPrediction>();
-    predictionsData?.forEach(p => {
+    predictionsData.forEach(p => {
       const existing = latest.get(p.matchup_id);
       if (!existing || new Date(p.created_at) > new Date(existing.created_at)) {
-        latest.set(p.matchup_id, p);
+        latest.set(p.matchup_id, p as MlbPrediction);
       }
     });
 

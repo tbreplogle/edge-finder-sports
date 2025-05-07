@@ -164,6 +164,11 @@ export default function Dashboard() {
     : null;
   const shown = preview ? games.filter(g=>g.id!==preview.id) : games;
 
+  // Fix: Cast the setActiveSport function to accept the string type that SportTabs expects
+  const handleSportChange = (value: string) => {
+    setActiveSport(value as GameData["sport"]);
+  };
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 space-y-6">
@@ -175,7 +180,7 @@ export default function Dashboard() {
               <span>{format(new Date(), "EEEE, MMMM d")}</span>
             </div>
 
-            <SportTabs activeTab={activeSport} onTabChange={setActiveSport} />
+            <SportTabs activeTab={activeSport} onTabChange={handleSportChange} />
 
             <div className="flex justify-between items-center mt-4 mb-2">
               <h2 className="text-xl font-semibold">{activeSport.toUpperCase()} Games</h2>

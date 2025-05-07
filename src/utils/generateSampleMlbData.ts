@@ -1,3 +1,4 @@
+
 import { GameProps } from "@/components/GameCard";
 
 // Function to generate sample MLB data for testing when API is unavailable
@@ -12,12 +13,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "PHI",
       awayTeam: "WSH",
       startTime: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
-      marketSpread: -1.5,
-      predictedMargin: 1.8,
-      edge: 3.3,
-      confidence: 62,
+      marketMoneyline: -150,
+      marketImpliedPct: 60,
+      predictedOdds: -160,
+      predictedImpliedPct: 62,
+      edgePct: 3.3,
       isPremium: false,
-      isPreviewGame: true
+      isPreviewGame: true,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685101",
@@ -25,11 +29,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "TOR",
       awayTeam: "BOS",
       startTime: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
-      marketSpread: -1,
-      predictedMargin: 1.2,
-      edge: 2.2,
-      confidence: 58,
-      isPremium: true
+      marketMoneyline: -120,
+      marketImpliedPct: 54.5,
+      predictedOdds: -130,
+      predictedImpliedPct: 56.5,
+      edgePct: 2.2,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685102",
@@ -37,11 +45,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "LAA",
       awayTeam: "DET",
       startTime: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
-      marketSpread: 1.5,
-      predictedMargin: -0.8,
-      edge: -2.3,
-      confidence: 56,
-      isPremium: true
+      marketMoneyline: 150,
+      marketImpliedPct: 40,
+      predictedOdds: 130,
+      predictedImpliedPct: 43.5,
+      edgePct: -2.3,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685103",
@@ -49,11 +61,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "SF",
       awayTeam: "COL",
       startTime: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
-      marketSpread: -2,
-      predictedMargin: 2.5,
-      edge: 4.5,
-      confidence: 65,
-      isPremium: true
+      marketMoneyline: -200,
+      marketImpliedPct: 66.7,
+      predictedOdds: -220,
+      predictedImpliedPct: 68.8,
+      edgePct: 4.5,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685104",
@@ -61,11 +77,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "LAD",
       awayTeam: "SD",
       startTime: `${todayDateStr}T02:10:00Z`, // 10:10 p.m. ET
-      marketSpread: -1,
-      predictedMargin: 1.3,
-      edge: 2.3,
-      confidence: 57,
-      isPremium: true
+      marketMoneyline: -110,
+      marketImpliedPct: 52.4,
+      predictedOdds: -120,
+      predictedImpliedPct: 54.5,
+      edgePct: 2.3,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685105",
@@ -73,11 +93,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "SEA",
       awayTeam: "OAK",
       startTime: `${todayDateStr}T02:15:00Z`, // 10:15 p.m. ET
-      marketSpread: -1.5,
-      predictedMargin: 2.1,
-      edge: 3.6,
-      confidence: 61,
-      isPremium: true
+      marketMoneyline: -180,
+      marketImpliedPct: 64.3,
+      predictedOdds: -200,
+      predictedImpliedPct: 66.7,
+      edgePct: 3.6,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685106",
@@ -85,11 +109,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "CLE",
       awayTeam: "KC",
       startTime: `${todayDateStr}T18:10:00Z`, // 2:10 p.m. ET
-      marketSpread: -1,
-      predictedMargin: 1.4,
-      edge: 2.4,
-      confidence: 58,
-      isPremium: true
+      marketMoneyline: -130,
+      marketImpliedPct: 56.5,
+      predictedOdds: -140,
+      predictedImpliedPct: 58.3,
+      edgePct: 2.4,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     },
     {
       id: "685107",
@@ -97,11 +125,15 @@ export function generateSampleMlbData(): GameProps[] {
       homeTeam: "NYM",
       awayTeam: "ATL",
       startTime: `${todayDateStr}T19:10:00Z`, // 3:10 p.m. ET
-      marketSpread: 1,
-      predictedMargin: -0.7,
-      edge: -1.7,
-      confidence: 55,
-      isPremium: true
+      marketMoneyline: 110,
+      marketImpliedPct: 47.6,
+      predictedOdds: 120,
+      predictedImpliedPct: 45.5,
+      edgePct: -1.7,
+      isPremium: true,
+      isPreviewGame: false,
+      isAdmin: false,
+      isPaid: false
     }
   ];
   
