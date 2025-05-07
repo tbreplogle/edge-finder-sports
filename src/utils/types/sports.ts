@@ -74,4 +74,18 @@ export interface MlbPrediction {
   edge?: number;
 }
 
-// No change to interfaces as the relevant types are already defined in Supabase types
+
+// --- newly added for fetchMlbPredictions.ts ---
+export interface ProcessedMlbPrediction {
+  matchup_id: string;
+  game_id: string;
+  home_team: string;
+  away_team: string;
+  game_date: string;
+  moneyline: number | null;
+  market_ml: number | null;
+  market_implied_pct: number | null;
+  predicted_implied_pct: number | null;
+  edge_pct: number | null;
+  updated_at: string;
+}
