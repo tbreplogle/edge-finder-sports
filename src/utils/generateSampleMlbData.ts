@@ -1,4 +1,3 @@
-
 import { GameProps } from "@/components/GameCard";
 
 // Function to generate sample MLB data for testing when API is unavailable
@@ -14,9 +13,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "WSH",
       startTime: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
       marketMoneyline: -150,
-      marketImpliedPct: 60,
+      marketImpliedPct: 0.60,
       predictedOdds: -160,
-      predictedImpliedPct: 62,
+      predictedImpliedPct: 0.62,
       edgePct: 3.3,
       isPremium: false,
       isPreviewGame: true,
@@ -26,8 +25,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: +130,
       homePredictedOdds: -160,
       awayPredictedOdds: +140,
-      homePredictedPct: 62,
-      awayPredictedPct: 38
+      homePredictedPct: 0.62,
+      awayPredictedPct: 0.38
     },
     {
       id: "685101",
@@ -36,9 +35,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "BOS",
       startTime: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
       marketMoneyline: -120,
-      marketImpliedPct: 54.5,
+      marketImpliedPct: 0.545,
       predictedOdds: -130,
-      predictedImpliedPct: 56.5,
+      predictedImpliedPct: 0.565,
       edgePct: 2.2,
       isPremium: true,
       isPreviewGame: false,
@@ -48,8 +47,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: +110,
       homePredictedOdds: -130,
       awayPredictedOdds: +120,
-      homePredictedPct: 56.5,
-      awayPredictedPct: 43.5
+      homePredictedPct: 0.565,
+      awayPredictedPct: 0.435
     },
     {
       id: "685102",
@@ -58,9 +57,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "DET",
       startTime: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
       marketMoneyline: 150,
-      marketImpliedPct: 40,
+      marketImpliedPct: 0.40,
       predictedOdds: 130,
-      predictedImpliedPct: 43.5,
+      predictedImpliedPct: 0.435,
       edgePct: -2.3,
       isPremium: true,
       isPreviewGame: false,
@@ -70,8 +69,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: -170,
       homePredictedOdds: +130,
       awayPredictedOdds: -150,
-      homePredictedPct: 43.5,
-      awayPredictedPct: 56.5
+      homePredictedPct: 0.435,
+      awayPredictedPct: 0.565
     },
     {
       id: "685103",
@@ -80,9 +79,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "COL",
       startTime: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
       marketMoneyline: -200,
-      marketImpliedPct: 66.7,
+      marketImpliedPct: 0.667,
       predictedOdds: -220,
-      predictedImpliedPct: 68.8,
+      predictedImpliedPct: 0.688,
       edgePct: 4.5,
       isPremium: true,
       isPreviewGame: false,
@@ -92,8 +91,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: +180,
       homePredictedOdds: -220,
       awayPredictedOdds: +200,
-      homePredictedPct: 68.8,
-      awayPredictedPct: 31.2
+      homePredictedPct: 0.688,
+      awayPredictedPct: 0.312
     },
     {
       id: "685104",
@@ -102,9 +101,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "SD",
       startTime: `${todayDateStr}T02:10:00Z`, // 10:10 p.m. ET
       marketMoneyline: -110,
-      marketImpliedPct: 52.4,
+      marketImpliedPct: 0.524,
       predictedOdds: -120,
-      predictedImpliedPct: 54.5,
+      predictedImpliedPct: 0.545,
       edgePct: 2.3,
       isPremium: true,
       isPreviewGame: false,
@@ -114,8 +113,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: +100,
       homePredictedOdds: -120,
       awayPredictedOdds: +110,
-      homePredictedPct: 54.5,
-      awayPredictedPct: 45.5
+      homePredictedPct: 0.545,
+      awayPredictedPct: 0.455
     },
     {
       id: "685105",
@@ -124,9 +123,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "OAK",
       startTime: `${todayDateStr}T02:15:00Z`, // 10:15 p.m. ET
       marketMoneyline: -180,
-      marketImpliedPct: 64.3,
+      marketImpliedPct: 0.643,
       predictedOdds: -200,
-      predictedImpliedPct: 66.7,
+      predictedImpliedPct: 0.667,
       edgePct: 3.6,
       isPremium: true,
       isPreviewGame: false,
@@ -136,8 +135,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: +170,
       homePredictedOdds: -200,
       awayPredictedOdds: +190,
-      homePredictedPct: 66.7,
-      awayPredictedPct: 33.3
+      homePredictedPct: 0.667,
+      awayPredictedPct: 0.333
     },
     {
       id: "685106",
@@ -146,9 +145,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "KC",
       startTime: `${todayDateStr}T18:10:00Z`, // 2:10 p.m. ET
       marketMoneyline: -130,
-      marketImpliedPct: 56.5,
+      marketImpliedPct: 0.565,
       predictedOdds: -140,
-      predictedImpliedPct: 58.3,
+      predictedImpliedPct: 0.583,
       edgePct: 2.4,
       isPremium: true,
       isPreviewGame: false,
@@ -158,8 +157,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: +120,
       homePredictedOdds: -140,
       awayPredictedOdds: +130,
-      homePredictedPct: 58.3,
-      awayPredictedPct: 41.7
+      homePredictedPct: 0.583,
+      awayPredictedPct: 0.417
     },
     {
       id: "685107",
@@ -168,9 +167,9 @@ export function generateSampleMlbData(): GameProps[] {
       awayTeam: "ATL",
       startTime: `${todayDateStr}T19:10:00Z`, // 3:10 p.m. ET
       marketMoneyline: 110,
-      marketImpliedPct: 47.6,
+      marketImpliedPct: 0.476,
       predictedOdds: 120,
-      predictedImpliedPct: 45.5,
+      predictedImpliedPct: 0.455,
       edgePct: -1.7,
       isPremium: true,
       isPreviewGame: false,
@@ -180,8 +179,8 @@ export function generateSampleMlbData(): GameProps[] {
       awayMarketMoneyline: -120,
       homePredictedOdds: +120,
       awayPredictedOdds: -130,
-      homePredictedPct: 45.5,
-      awayPredictedPct: 54.5
+      homePredictedPct: 0.455,
+      awayPredictedPct: 0.545
     }
   ];
   

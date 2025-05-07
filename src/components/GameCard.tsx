@@ -60,6 +60,10 @@ export function GameCard({
   const fmtML = (v?:number|null) =>
     v == null ? "N/A" : (v>0? `+${v}` : `${v}`);
 
+  // Format percentage values properly with % sign and rounded to whole number
+  const fmtPct = (v?: number|null) =>
+    v == null ? "N/A" : `${Math.round(v * 100)}%`;
+
   return (
     <Card
       className={cn(
@@ -113,7 +117,7 @@ export function GameCard({
                 </div>
                 {awayPredictedPct != null && (
                   <div className="text-xs text-muted-foreground">
-                    {awayPredictedPct.toFixed(0)}%
+                    {fmtPct(awayPredictedPct)}
                   </div>
                 )}
               </div>
@@ -135,7 +139,7 @@ export function GameCard({
                 </div>
                 {homePredictedPct != null && (
                   <div className="text-xs text-muted-foreground">
-                    {homePredictedPct.toFixed(0)}%
+                    {fmtPct(homePredictedPct)}
                   </div>
                 )}
               </div>

@@ -55,22 +55,22 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
   try {
     // Use proper type parameters for the Supabase queries
     const { data: predictionsData, error: predictionsError } = await supabase
-      .from("mlb_predictions")
+      .from<"mlb_predictions", MlbPrediction>("mlb_predictions")
       .select("*")
       .order("created_at", { ascending: false });
 
     if (predictionsError) throw predictionsError;
-    if (!predictionsData) return [];
+    if (!predictionsData || !Array.isArray(predictionsData)) return [];
 
     // Convert to MlbPrediction type to ensure type safety
     const typedPredictions: MlbPrediction[] = predictionsData;
     
     const { data: matchupsData, error: matchupsError } = await supabase
-      .from("mlb_matchups")
+      .from<"mlb_matchups", MlbMatchup>("mlb_matchups")
       .select("*");
 
     if (matchupsError) throw matchupsError;
-    if (!matchupsData) return [];
+    if (!matchupsData || !Array.isArray(matchupsData)) return [];
     
     // Convert to MlbMatchup type to ensure type safety
     const typedMatchups: MlbMatchup[] = matchupsData;
@@ -142,10 +142,12 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
       for (const pred of preds) {
         if (pred.team_id === m.home_team_id) {
           home_moneyline = pred.moneyline;
-          home_predicted_pct = pred.win_pct;
+          // Store win_pct as a decimal (0-1) value
+          home_predicted_pct = pred.win_pct ? pred.win_pct / 100 : null;
         } else if (pred.team_id === m.away_team_id) {
           away_moneyline = pred.moneyline;
-          away_predicted_pct = pred.win_pct;
+          // Store win_pct as a decimal (0-1) value
+          away_predicted_pct = pred.win_pct ? pred.win_pct / 100 : null;
         }
       }
 
@@ -156,9 +158,9 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
       let edge_pct: number | null = null;
       
       if (home_predicted_pct != null && home_market_implied_pct != null) {
-        edge_pct = home_predicted_pct - home_market_implied_pct;
+        edge_pct = (home_predicted_pct - home_market_implied_pct) * 100;
       } else if (away_predicted_pct != null && away_market_implied_pct != null) {
-        edge_pct = away_predicted_pct - away_market_implied_pct;
+        edge_pct = (away_predicted_pct - away_market_implied_pct) * 100;
       }
 
       out.push({
