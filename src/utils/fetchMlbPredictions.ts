@@ -64,7 +64,7 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
     if (matchupsError) throw new Error(`Error fetching MLB matchups: ${matchupsError.message}`);
 
     // Fetch live odds data
-    const sportKey = SPORT_KEYS.mlb;
+    const sportKey = SPORT_KEYS.MLB; // Fixed: Changed mlb to MLB to match the SPORT_KEYS object
     const liveOddsData = await fetchOdds(sportKey);
 
     // Create a map of matchups by matchup_id

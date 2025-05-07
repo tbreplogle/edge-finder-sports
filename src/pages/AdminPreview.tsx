@@ -56,13 +56,8 @@ const AdminPreview = () => {
             game_date,
             home_team,
             away_team,
-            mlb_predictions (
-              matchup_id,
-              team_id,
-              win_pct,
-              moneyline,
-              created_at
-            )
+            home_team_id,
+            away_team_id
           `)
           .order("game_date", { ascending: false });
         
@@ -86,34 +81,44 @@ const AdminPreview = () => {
           query = query.gte("game_date", monthAgo.toISOString());
         }
         
-        const { data, error } = await query;
+        const { data: matchupsData, error: matchupsError } = await query;
         
-        if (error) {
-          throw error;
+        if (matchupsError) {
+          throw matchupsError;
         }
         
-        if (data && data.length > 0) {
+        if (matchupsData && matchupsData.length > 0) {
+          // Next, get the predictions for these matchups
+          const { data: predictionsData, error: predictionsError } = await supabase
+            .from("mlb_predictions")
+            .select("*");
+          
+          if (predictionsError) {
+            throw predictionsError;
+          }
+          
+          // Group predictions by matchup_id
+          const predictionsByMatchup = new Map();
+          if (predictionsData) {
+            predictionsData.forEach(prediction => {
+              if (!predictionsByMatchup.has(prediction.matchup_id)) {
+                predictionsByMatchup.set(prediction.matchup_id, []);
+              }
+              predictionsByMatchup.get(prediction.matchup_id).push(prediction);
+            });
+          }
+          
           // Transform the data to match our PredictionDisplay interface
-          const mlbPredictions: PredictionDisplay[] = data.map((matchup) => {
-            // Make sure mlb_predictions is an array
-            const predictionsArray = Array.isArray(matchup.mlb_predictions) 
-              ? matchup.mlb_predictions 
-              : [matchup.mlb_predictions];
+          const mlbPredictions: PredictionDisplay[] = matchupsData.map((matchup) => {
+            const matchupPredictions = predictionsByMatchup.get(matchup.matchup_id) || [];
             
-            // Filter predictions by team
-            // Since we don't have direct home_team_id/away_team_id references,
-            // we'll need to use other logic to determine which team is which
-            const homePredictions = predictionsArray.filter(p => p && p.team_id !== null);
-            const awayPredictions = predictionsArray.filter(p => p && p.team_id !== null);
-            
-            // For simplicity, we'll use the first prediction for home and away
-            // In a production system, you'd want more robust matching logic
-            const homePrediction = homePredictions.length > 0 ? homePredictions[0] : null;
-            const awayPrediction = awayPredictions.length > 1 ? awayPredictions[1] : null;
+            // Find home and away team predictions
+            const homePrediction = matchupPredictions.find(p => p && p.team_id === matchup.home_team_id);
+            const awayPrediction = matchupPredictions.find(p => p && p.team_id === matchup.away_team_id);
             
             // Calculate predicted margin (home team perspective)
             let predictedMargin: number | undefined = undefined;
-            if (homePrediction && awayPrediction) {
+            if (homePrediction && awayPrediction && homePrediction.win_pct !== null && awayPrediction.win_pct !== null) {
               predictedMargin = (homePrediction.win_pct - awayPrediction.win_pct) * 10;
             }
             
@@ -121,13 +126,13 @@ const AdminPreview = () => {
             // Fix: Ensure we're working with string timestamps consistently
             let latestUpdate = new Date().toISOString();
             
-            if (predictionsArray.length > 0) {
+            if (matchupPredictions.length > 0) {
               // Initialize with the first prediction's timestamp or current time if not available
-              latestUpdate = predictionsArray[0]?.created_at || new Date().toISOString();
+              latestUpdate = matchupPredictions[0]?.created_at || new Date().toISOString();
               
               // Find the latest timestamp
-              for (let i = 1; i < predictionsArray.length; i++) {
-                const prediction = predictionsArray[i];
+              for (let i = 1; i < matchupPredictions.length; i++) {
+                const prediction = matchupPredictions[i];
                 if (prediction && prediction.created_at && prediction.created_at > latestUpdate) {
                   latestUpdate = prediction.created_at;
                 }
