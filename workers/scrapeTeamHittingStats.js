@@ -1,152 +1,238 @@
-// workers/scrapeTeamHittingStats.js
-//--------------------------------------------------------------
-//  Scrape the MLB 7‑day team‑hitting table and persist results
-//--------------------------------------------------------------
+#scrapeTeamHittingStats.js
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
-
-import {
-  supabase,
-  testConnection,
-  createScrapeReport
-} from './lib/supabaseClient.js';
-
+import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
 import { scrapeTodayMatchupIDs } from './scrapeMatchupIds.js';
 
-const DEBUG          = process.env.DEBUG === 'true';
-const TIMEFRAME_DAYS = 7;                      // always 7‑day window
+// Enable debug mode when environment variable is set
+const DEBUG = process.env.DEBUG === 'true';
 
-/*─────────────────────────────────────────────────────────────*/
-/*  0. Helpers                                                */
-/*─────────────────────────────────────────────────────────────*/
+// Only 7 days needed
+const TIMEFRAME_DAYS = 7;
+
+/**
+ * Maps a raw team name to its proper name, abbreviation, and ID
+ * @param {string} teamName The raw team name from MLB stats
+ * @returns {object} Object containing actual_team_name, team_abbr, and team_id
+ */
 function mapTeamInfo(teamName) {
-  /* … (UNCHANGED look‑up table you already had) … */
-  /* complete mapping trimmed for brevity – keep what you had */
-  return teamMap[Object.keys(teamMap).find(k => teamName.includes(k))] ?? {
-    actual_team_name: null,
-    team_abbr:        null,
-    team_id:          null
+  // Team ID mapping based on the image provided
+  const teamMap = {
+    'Seattle Mariners': { actual_team_name: 'Seattle Mariners', team_abbr: 'SEA', team_id: 1 },
+    'Cleveland Guardians': { actual_team_name: 'Cleveland Guardians', team_abbr: 'CLE', team_id: 2 },
+    'Pittsburgh Pirates': { actual_team_name: 'Pittsburgh Pirates', team_abbr: 'PIT', team_id: 3 },
+    'Los Angeles Angels': { actual_team_name: 'Los Angeles Angels', team_abbr: 'LAA', team_id: 4 },
+    'Toronto Blue Jays': { actual_team_name: 'Toronto Blue Jays', team_abbr: 'TOR', team_id: 5 },
+    'Miami Marlins': { actual_team_name: 'Miami Marlins', team_abbr: 'MIA', team_id: 6 },
+    'Oakland Athletics': { actual_team_name: 'Oakland Athletics', team_abbr: 'OAK', team_id: 7 },
+    'New York Yankees': { actual_team_name: 'New York Yankees', team_abbr: 'NYY', team_id: 8 },
+    'Tampa Bay Rays': { actual_team_name: 'Tampa Bay Rays', team_abbr: 'TBR', team_id: 9 },
+    'Minnesota Twins': { actual_team_name: 'Minnesota Twins', team_abbr: 'MIN', team_id: 10 },
+    'Kansas City Royals': { actual_team_name: 'Kansas City Royals', team_abbr: 'KCR', team_id: 11 },
+    'San Francisco Giants': { actual_team_name: 'San Francisco Giants', team_abbr: 'SFG', team_id: 12 },
+    'Arizona Diamondbacks': { actual_team_name: 'Arizona Diamondbacks', team_abbr: 'ARI', team_id: 13 },
+    'Milwaukee Brewers': { actual_team_name: 'Milwaukee Brewers', team_abbr: 'MIL', team_id: 14 },
+    'Chicago White Sox': { actual_team_name: 'Chicago White Sox', team_abbr: 'CWS', team_id: 15 },
+    'Chicago Cubs': { actual_team_name: 'Chicago Cubs', team_abbr: 'CHC', team_id: 16 },
+    'Atlanta Braves': { actual_team_name: 'Atlanta Braves', team_abbr: 'ATL', team_id: 17 },
+    'San Diego Padres': { actual_team_name: 'San Diego Padres', team_abbr: 'SDP', team_id: 18 },
+    'Houston Astros': { actual_team_name: 'Houston Astros', team_abbr: 'HOU', team_id: 19 },
+    'New York Mets': { actual_team_name: 'New York Mets', team_abbr: 'NYM', team_id: 20 },
+    'Los Angeles Dodgers': { actual_team_name: 'Los Angeles Dodgers', team_abbr: 'LAD', team_id: 21 },
+    'Colorado Rockies': { actual_team_name: 'Colorado Rockies', team_abbr: 'COL', team_id: 22 },
+    'Cincinnati Reds': { actual_team_name: 'Cincinnati Reds', team_abbr: 'CIN', team_id: 23 },
+    'Washington Nationals': { actual_team_name: 'Washington Nationals', team_abbr: 'WSH', team_id: 24 },
+    'Detroit Tigers': { actual_team_name: 'Detroit Tigers', team_abbr: 'DET', team_id: 25 },
+    'Philadelphia Phillies': { actual_team_name: 'Philadelphia Phillies', team_abbr: 'PHI', team_id: 26 },
+    'St. Louis Cardinals': { actual_team_name: 'St. Louis Cardinals', team_abbr: 'STL', team_id: 27 },
+    'Texas Rangers': { actual_team_name: 'Texas Rangers', team_abbr: 'TEX', team_id: 28 },
+    'Boston Red Sox': { actual_team_name: 'Boston Red Sox', team_abbr: 'BOS', team_id: 29 },
+    'Baltimore Orioles': { actual_team_name: 'Baltimore Orioles', team_abbr: 'BAL', team_id: 30 }
   };
+
+  // Special case for Athletics with duplicate name (case-insensitive)
+  if (teamName.toUpperCase().includes('ATHLETICS') || teamName.includes('Oakland')) {
+    return teamMap['Oakland Athletics'];
+  }
+
+  // Look for the team name in our mapping (handling variations with ILIKE logic)
+  for (const [key, value] of Object.entries(teamMap)) {
+    if (teamName.includes(key)) {
+      return value;
+    }
+  }
+
+  // Default return if no match found
+  return { actual_team_name: null, team_abbr: null, team_id: null };
 }
 
-/*─────────────────────────────────────────────────────────────*/
-/*  1.  Core scraper                                          */
-/*─────────────────────────────────────────────────────────────*/
+/**
+ * Scrapes MLB team hitting statistics from the MLB stats website using Puppeteer
+ * @returns {Promise<object[]>} An array of team hitting stats
+ */
 export async function scrapeTeamHittingStats() {
-  const outPath = path.resolve(process.cwd(), 'scrape-result.json');
-  /** we’ll always write *something* to this path in the finally block */
-  let stats = [];
-
   try {
-    /* ── pre‑flight ─────────────────────────────────────────── */
+    // First fetch today's matchup IDs
     const todayMatchupIDs = await scrapeTodayMatchupIDs();
-    if (DEBUG) console.log('Today’s matchup IDs:', todayMatchupIDs);
-
-    const url = `https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=-${TIMEFRAME_DAYS}`;
-    console.log(`🕵️‍♂️  Launching Puppeteer → ${url}`);
-
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args:     ['--no-sandbox', '--disable-setuid-sandbox']
+    console.log('Today\'s matchup IDs:', todayMatchupIDs);
+    
+    const url = https://www.mlb.com/stats/team/hitting?sortState=asc&timeframe=-${TIMEFRAME_DAYS};
+    console.log(🕵️‍♂️ Launching browser to scrape: ${url});
+    
+    if (DEBUG) {
+      console.log(SUPABASE_URL set: ${process.env.SUPABASE_URL ? 'Yes' : 'No'});
+      console.log(SUPABASE_SERVICE_ROLE_KEY set: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Yes' : 'No'});
+    }
+    
+    // Launch browser with no-sandbox for CI environments
+    const browser = await puppeteer.launch({ 
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: 'new' // Use the new headless mode
     });
+    
+    // Create a new page and navigate to the URL
     const page = await browser.newPage();
+    
+    // Set viewport and user agent
     await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/123 Safari/537.36'
-    );
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60_000 });
-
-    /* ── robust selector choice ─────────────────────────────── */
-    const SEL_PRIMARY  = 'table[data-component="stats-table"] tbody tr';
-    const SEL_FALLBACK = 'table.bui-table tbody tr';
-
-    await page.waitForFunction(
-      (a, b) => document.querySelector(a) || document.querySelector(b),
-      { timeout: 45_000 },
-      SEL_PRIMARY,
-      SEL_FALLBACK
-    );
-
-    const TABLE_SEL = await page.evaluate(
-      (a, b) => document.querySelector(a) ? a : b,
-      SEL_PRIMARY,
-      SEL_FALLBACK
-    );
-
-    /* wait a touch longer for React to finish inserting numbers */
-    await page.waitForTimeout(2000);
-
-    /* ── pull rows inside the page context ──────────────────── */
-    const rawRows = await page.evaluate(sel => {
-      const rows = [...document.querySelectorAll(sel)];
-      const out  = [];
-
-      rows.forEach(r => {
-        const cells = [...r.querySelectorAll('th,td')];
-        if (cells.length < 18) return;              // skip headers/ads
-
-        const link = cells[0].querySelector('a');
-        if (!link)   return;                        // not a team row
-
-        out.push({
-          team_name  : link.textContent.trim(),
-          league     : cells[1].textContent.trim(),
-          games_played: +cells[2].textContent.trim() || 0,
-          at_bats    : +cells[3].textContent.trim() || 0,
-          runs       : +cells[4].textContent.trim() || 0,
-          hits       : +cells[5].textContent.trim() || 0,
-          doubles    : +cells[6].textContent.trim() || 0,
-          triples    : +cells[7].textContent.trim() || 0,
-          home_runs  : +cells[8].textContent.trim() || 0,
-          rbi        : +cells[9].textContent.trim() || 0,
-          bb         : +cells[10].textContent.trim() || 0,
-          so         : +cells[11].textContent.trim() || 0,
-          sb         : +cells[12].textContent.trim() || 0,
-          cs         : +cells[13].textContent.trim() || 0,
-          avg        : parseFloat(cells[14].textContent.trim()) || 0,
-          obp        : parseFloat(cells[15].textContent.trim()) || 0,
-          slg        : parseFloat(cells[16].textContent.trim()) || 0,
-          ops        : parseFloat(cells[17].textContent.trim()) || 0
-        });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36');
+    
+    // Navigate to the page and wait for content to load
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    
+    // Wait for the stats table to appear - specifically look for tbody rows
+    await page.waitForSelector('table.bui-table tbody tr', { timeout: 30000 });
+    
+    if (DEBUG) {
+      // Save screenshot and HTML for debugging
+      await page.screenshot({ path: debug-screenshot-${TIMEFRAME_DAYS}-day.png });
+      const html = await page.content();
+      fs.writeFileSync(debug-html-${TIMEFRAME_DAYS}-day.html, html);
+      console.log(Debug screenshot and HTML saved for ${TIMEFRAME_DAYS}-day stats);
+    }
+    
+    // Wait longer to ensure table is fully loaded with data
+    await page.waitForTimeout(5000);
+    
+    // Extract rows from the table with updated selector to handle the new table structure
+    const rawRows = await page.evaluate(() => {
+      const results = [];
+      
+      // Get all rows from the table body
+      const rows = Array.from(document.querySelectorAll('table.bui-table tbody tr'));
+      console.log(Found ${rows.length} total rows in the table body);
+      
+      // Track teams processed for better debugging
+      const teamNames = [];
+      
+      rows.forEach((row, index) => {
+        try {
+          // Select both th and td cells to handle the first column being a th
+          const cells = Array.from(row.querySelectorAll('th, td'));
+          
+          // Skip rows that don't have enough cells for a team row
+          if (cells.length < 18) {
+            console.log(Skipping row ${index} with only ${cells.length} cells (likely a header));
+            return;
+          }
+          
+          // Check if first cell has a team link (all team rows should have this)
+          const firstCell = cells[0];
+          const link = firstCell.querySelector('a');
+          
+          if (!link) {
+            console.log(Skipping row ${index} with no team link in first cell);
+            return;
+          }
+          
+          const teamName = link.textContent.trim();
+          teamNames.push(teamName);
+          
+          // Extract all the stats fields from the cells
+          const teamData = {
+            team_name: teamName,
+            league: cells[1].textContent.trim(),
+            games_played: parseInt(cells[2].textContent.trim(), 10) || 0,
+            at_bats: parseInt(cells[3].textContent.trim(), 10) || 0,
+            runs: parseInt(cells[4].textContent.trim(), 10) || 0,
+            hits: parseInt(cells[5].textContent.trim(), 10) || 0,
+            doubles: parseInt(cells[6].textContent.trim(), 10) || 0,
+            triples: parseInt(cells[7].textContent.trim(), 10) || 0,
+            home_runs: parseInt(cells[8].textContent.trim(), 10) || 0,
+            rbi: parseInt(cells[9].textContent.trim(), 10) || 0,
+            bb: parseInt(cells[10].textContent.trim(), 10) || 0,
+            so: parseInt(cells[11].textContent.trim(), 10) || 0,
+            sb: parseInt(cells[12].textContent.trim(), 10) || 0,
+            cs: parseInt(cells[13].textContent.trim(), 10) || 0,
+            avg: parseFloat(cells[14].textContent.trim()) || 0,
+            obp: parseFloat(cells[15].textContent.trim()) || 0,
+            slg: parseFloat(cells[16].textContent.trim()) || 0,
+            ops: parseFloat(cells[17].textContent.trim()) || 0,
+          };
+          
+          results.push(teamData);
+        } catch (err) {
+          console.log(Error processing row ${index}: ${err.message});
+        }
       });
-      return out;
-    }, TABLE_SEL);
-
-    console.log(`→ Extracted ${rawRows.length} rows (should be 30)`);
-
-    /* ── enrich with mapping + meta ─────────────────────────── */
-    const gameDateISO = new Date().toISOString().slice(0, 10);
-    stats = rawRows.map(r => {
-      const t = mapTeamInfo(r.team_name);
+      
+      console.log(Found ${teamNames.length} teams: ${teamNames.join(', ')});
+      console.log(Successfully extracted data for ${results.length} teams);
+      
+      return results;
+    });
+    
+    console.log(Extracted ${rawRows.length} team rows from the page (should be 30));
+    
+    if (rawRows.length === 0) {
+      console.error('❌ ERROR: No team rows were extracted! Table structure might have changed.');
+      if (DEBUG) {
+        console.log('Check the debug-html file for the current table structure.');
+      }
+    } else if (rawRows.length < 30) {
+      console.warn(⚠️ WARNING: Expected 30 teams but only found ${rawRows.length});
+    } else {
+      console.log(✅ Successfully extracted all 30 MLB teams);
+    }
+    
+    // Close the browser
+    await browser.close();
+    
+    // Add timeframe_days, game_date, and map team names to proper names and abbreviations
+    const gameDate = new Date().toISOString().split('T')[0];
+    const stats = rawRows.map(r => {
+      // Get proper team name and abbreviation
+      const teamInfo = mapTeamInfo(r.team_name);
+      
       return {
         ...r,
-        timeframe_days : TIMEFRAME_DAYS,
-        game_date      : gameDateISO,
-        actual_team_name: t.actual_team_name,
-        team_abbr      : t.team_abbr,
-        team_id        : t.team_id
+        timeframe_days: TIMEFRAME_DAYS,
+        game_date: gameDate,
+        actual_team_name: teamInfo.actual_team_name,
+        team_abbr: teamInfo.team_abbr,
+        team_id: teamInfo.team_id
       };
     });
-
-    if (DEBUG && stats.length) {
-      console.log('Sample row after mapping:\n', JSON.stringify(stats[0], null, 2));
+    
+    console.log(Successfully scraped ${stats.length} team hitting stats for ${TIMEFRAME_DAYS}-day period);
+    
+    if (DEBUG && stats.length > 0) {
+      console.log('Sample data with mapped team names:', JSON.stringify(stats.slice(0, 2), null, 2));
     }
-
-    await browser.close();
+    
+    // Write to repo root for GitHub Actions to find
+    const outPath = path.resolve(process.cwd(), 'scrape-result.json');
+    fs.writeFileSync(outPath, JSON.stringify(stats, null, 2));
+    console.log(✅ Wrote scrape-result.json with ${stats.length} rows to ${outPath});
+    
     return stats;
   } catch (err) {
-    console.error('[scraper] Fatal error:', err);
+    console.error(Error scraping MLB team hitting stats for ${TIMEFRAME_DAYS}-day period:, err.message);
+    if (err.stack) console.error(err.stack);
+    
+    // Return empty array instead of fallback data
     return [];
-  } finally {
-    /* Always drop a scrape‑result.json so the workflow’s verify step passes */
-    const safe = stats.length
-      ? stats
-      : [{ success: false, error: 'scrape failed', timestamp: new Date().toISOString() }];
-
-    fs.writeFileSync(outPath, JSON.stringify(safe, null, 2));
-    console.log(`📝  scrape-result.json written (${safe.length} row(s))`);
   }
 }
 
@@ -158,7 +244,7 @@ async function runTeamStatsMigration() {
   try {
     console.log('Running SQL migration and cleanup on mlb_team_hitting_stats table');
     
-    const migrationSQL = `
+    const migrationSQL = 
     BEGIN;
 
     -- 1) Add team_id column if it doesn't exist
@@ -275,7 +361,7 @@ async function runTeamStatsMigration() {
     WHERE actual_team_name IS NULL OR team_abbr IS NULL OR team_id IS NULL;
 
     COMMIT;
-    `;
+    ;
     
     const { error } = await supabase.rpc('exec_sql', { sql: migrationSQL });
     
@@ -304,7 +390,7 @@ async function saveTeamStatsToSupabase(teamStats) {
     return false;
   }
   
-  console.log(`Saving ${teamStats.length} team hitting stats to Supabase`);
+  console.log(Saving ${teamStats.length} team hitting stats to Supabase);
   
   try {
     // Test Supabase connection before attempting operations
@@ -335,7 +421,7 @@ async function saveTeamStatsToSupabase(teamStats) {
     const gameDate = enhancedTeamStats[0].game_date;
     
     // Step 1: Delete existing records for the same timeframe and game date
-    console.log(`Deleting existing records for timeframe: ${timeframe} days and date: ${gameDate}...`);
+    console.log(Deleting existing records for timeframe: ${timeframe} days and date: ${gameDate}...);
     const { error: deleteError } = await supabase
       .from('mlb_team_hitting_stats')
       .delete()
@@ -437,9 +523,9 @@ export async function updateTeamHittingStats() {
     console.log('Today\'s matchup IDs:', todayMatchupIDs);
     
     // Scrape team stats (7-day only)
-    console.log(`Scraping ${TIMEFRAME_DAYS}-day team stats...`);
+    console.log(Scraping ${TIMEFRAME_DAYS}-day team stats...);
     const teamStats = await scrapeTeamHittingStats();
-    console.log(`Fetched ${teamStats.length} team stats`);
+    console.log(Fetched ${teamStats.length} team stats);
     results.stats.seven_day = teamStats.length;
     
     // Save stats to Supabase only if we have data
@@ -459,9 +545,9 @@ export async function updateTeamHittingStats() {
     const duration = (endTime - startTime) / 1000;
     
     if (saveSuccess) {
-      console.log(`✅ MLB team hitting stats update completed successfully in ${duration}s`);
+      console.log(✅ MLB team hitting stats update completed successfully in ${duration}s);
     } else {
-      console.log(`⚠️ MLB team hitting stats update completed with issues in ${duration}s`);
+      console.log(⚠️ MLB team hitting stats update completed with issues in ${duration}s);
     }
     
     // Always write results to file for GitHub Actions
@@ -501,7 +587,7 @@ if (import.meta.url.endsWith('scrapeTeamHittingStats.js')) {
   updateTeamHittingStats()
     .then(result => {
       console.log('Script completed successfully!');
-      console.log(`Scraped ${result.stats.length} team stats records.`);
+      console.log(Scraped ${result.stats.length} team stats records.);
       process.exit(result.success ? 0 : 1);
     })
     .catch(error => {
