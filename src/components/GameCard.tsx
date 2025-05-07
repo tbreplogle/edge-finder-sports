@@ -1,17 +1,15 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, Clock, LockIcon, Star } from "lucide-react";
+import { ArrowUp, ArrowDown, Clock, LockIcon, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   Dialog,
+  DialogTrigger,
   DialogContent,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  DialogTitle
 } from "@/components/ui/dialog";
-import { useState, useEffect } from "react";
 
 export interface GameProps {
   id: string;
@@ -19,253 +17,138 @@ export interface GameProps {
   homeTeam: string;
   awayTeam: string;
   startTime: string;
-  marketSpread: number;
-  predictedMargin: number | null;
-  edge: number | null;
-  confidence?: number | null;
+  marketMoneyline?: number | null;
+  predictedOdds?: number | null;
+  edgePct?: number | null;
+  confidencePct?: number | null;
   isPremium?: boolean;
-  rawFactors?: Record<string, any> | null;
   isPreviewGame?: boolean;
-  isPreview?: boolean;
-  // Additional props for moneyline odds
-  homeMoneyline?: number | null;
-  awayMoneyline?: number | null;
+  isAdmin: boolean;
+  isPaid: boolean;
 }
 
 export function GameCard({
-  id,
   sport,
   homeTeam,
   awayTeam,
   startTime,
-  marketSpread,
-  predictedMargin,
-  edge,
-  confidence,
+  marketMoneyline,
+  predictedOdds,
+  edgePct,
+  confidencePct,
   isPremium = false,
-  rawFactors,
   isPreviewGame = false,
-  isPreview = false,
-  homeMoneyline,
-  awayMoneyline
+  isAdmin,
+  isPaid
 }: GameProps) {
   const [open, setOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isPaid, setIsPaid] = useState(false);
-  
-  const formattedDate = new Date(startTime).toLocaleString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'America/Chicago'
-  });
-  
-  // Check if user is admin or paid
-  useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setIsAdmin(user.is_admin === true);
-        setIsPaid(user.role === "premium" || user.is_admin === true);
-        console.log("GameCard user status - isAdmin:", user.is_admin === true);
-      } catch (e) {
-        console.error("Error parsing user data:", e);
-      }
-    }
-  }, []);
-  
-  const isPositiveEdge = edge !== null && edge > 0;
-  
-  // Determine if content should be masked (premium protection)
-  // isAdmin should override premium protection
-  const shouldMask = !isAdmin && (
-    predictedMargin === null || 
-    (edge === null) || 
-    (isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame)
-  );
-  
-  // Check if card is locked (guest/free user)
-  const isLocked = !isAdmin && ((predictedMargin === null || edge === null) && !isPreviewGame);
-  
-  // Is this a baseball game? (MLB uses moneyline rather than spread)
-  const isBaseball = sport === "mlb";
-  
-  // Format the market odds for display
-  let formattedMarketOdds = "";
-  
-  if (isBaseball && homeMoneyline !== undefined && awayMoneyline !== undefined) {
-    // For baseball games, show moneyline favorite
-    // Determine favorite (negative odds or less positive odds)
-    const homeIsFavorite = 
-      (homeMoneyline < 0 && awayMoneyline > 0) || // Home negative, away positive
-      (homeMoneyline < 0 && awayMoneyline < 0 && homeMoneyline < awayMoneyline) || // Both negative, home more negative
-      (homeMoneyline > 0 && awayMoneyline > 0 && homeMoneyline < awayMoneyline); // Both positive, home less positive
-    
-    const favTeam = homeIsFavorite ? homeTeam : awayTeam;
-    const favOdds = homeIsFavorite ? homeMoneyline : awayMoneyline;
-    
-    formattedMarketOdds = `${favTeam} ${favOdds > 0 ? '+' + favOdds : favOdds}`;
-  } else {
-    // For other sports, show spread
-    formattedMarketOdds = marketSpread > 0 
-      ? `${homeTeam} -${Math.abs(marketSpread)}` 
-      : marketSpread < 0 
-        ? `${awayTeam} -${Math.abs(marketSpread)}` 
-        : "Pick'em";
-  }
 
-  // Debug log to see card status
-  console.log(`GameCard ${id} - isPremium prop: ${isPremium}, isAdmin: ${isAdmin}, isLocked: ${isLocked}`);
+  const formattedDate = new Date(startTime).toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Chicago"
+  });
+
+  const locked = !isAdmin && isPremium;
+  const hasEdge = edgePct != null;
+  const positive = hasEdge && edgePct! > 0;
+
+  const fmtML = (ml: number | null | undefined) =>
+    ml == null ? "N/A" : ml > 0 ? `+${ml}` : `${ml}`;
 
   return (
-    <Card 
+    <Card
       className={cn(
-        "edge-card relative focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary",
-        `edge-sport-${sport}`,
-        isLocked ? "bg-slate-800/70 border-slate-700 hover:bg-slate-700/70" : "",
-        isPreviewGame ? "ring-2 ring-edge-secondary ring-opacity-50" : ""
+        "relative focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary",
+        locked && "opacity-70 pointer-events-none",
+        isPreviewGame && "ring-2 ring-edge-secondary ring-opacity-50"
       )}
       tabIndex={0}
     >
       <CardContent className="p-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline" className={isLocked ? "text-slate-400" : ""}>
-                  {sport.toUpperCase()}
-                </Badge>
-                {isPreviewGame && (
-                  <Badge variant="secondary" className="flex gap-1 items-center">
-                    <Star className="w-3 h-3" />
-                    <span>Preview</span>
-                  </Badge>
-                )}
-              </div>
-              <h3 className={cn("font-bold text-lg", isLocked ? "text-slate-400" : "")}>
-                {awayTeam} @ {homeTeam}
-              </h3>
-              <div className={cn("flex items-center text-sm mt-1", isLocked ? "text-slate-400" : "text-muted-foreground")}>
-                <Clock className="w-3 h-3 mr-1" />
-                <span>{formattedDate}</span>
-              </div>
-            </div>
-            
-            {!isAdmin && isPremium && Math.abs(edge || 0) > 2 && !isPaid && !isPreviewGame && (
-              <Badge variant="secondary" className="flex gap-1 items-center">
-                <LockIcon className="w-3 h-3" />
-                <span>Premium</span>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{sport.toUpperCase()}</Badge>
+            {isPreviewGame && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Star className="w-3 h-3" />
+                <span>Preview</span>
               </Badge>
             )}
           </div>
-          
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div>
-              <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>
-                {isBaseball ? "Market ML Favorite" : "Market Spread"}
-              </div>
-              <div className={cn("font-medium", isLocked ? "text-slate-400" : "")}>
-                {formattedMarketOdds}
-              </div>
-            </div>
-            <div>
-              <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>Predicted Margin</div>
-              <div className={cn("font-medium", isLocked ? "text-slate-400" : "")}>
-                {predictedMargin !== null ? (
-                  predictedMargin > 0 
-                    ? `${homeTeam} by ${predictedMargin.toFixed(1)}` 
-                    : predictedMargin < 0 
-                      ? `${awayTeam} by ${Math.abs(predictedMargin).toFixed(1)}` 
-                      : "Even"
-                ) : (
-                  <span className="italic font-medium">Premium</span>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div className="mt-2">
-            <div className={cn("text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>Edge</div>
-            <div className={cn(
-              "font-bold text-lg flex items-center gap-1.5",
-              isLocked ? "text-slate-400" : ""
-            )}>
-              {edge !== null ? (
-                <>
-                  {isPositiveEdge ? (
-                    <>
-                      <ArrowUp className="w-4 h-4 text-edge-secondary" />
-                      <span className="text-edge-secondary">
-                        {edge.toFixed(1)} {isBaseball ? "pts" : "pts"}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDown className="w-4 h-4 text-edge-accent" />
-                      <span className="text-edge-accent">
-                        {edge.toFixed(1)} {isBaseball ? "pts" : "pts"}
-                      </span>
-                    </>
-                  )}
-                </>
-              ) : (
-                <span className="italic font-medium">Premium</span>
-              )}
-              
-              {confidence && (
-                <span className={cn("ml-auto text-sm", isLocked ? "text-slate-400" : "text-muted-foreground")}>
-                  {confidence}% confidence
-                </span>
-              )}
-            </div>
-          </div>
-          
-          {rawFactors && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className={cn(
-                    "mt-3 w-full", 
-                    !isAdmin && !isPaid && isPremium && !isPreviewGame && "opacity-70"
-                  )}
-                  disabled={!isAdmin && !isPaid && isPremium && !isPreviewGame}
-                >
-                  {!isAdmin && !isPaid && isPremium && !isPreviewGame ? "Upgrade to view details" : "View details"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>{awayTeam} @ {homeTeam} - Raw Factors</DialogTitle>
-                </DialogHeader>
-                <div className="mt-4 bg-muted p-4 rounded-md text-sm overflow-auto max-h-[400px]">
-                  <pre>{JSON.stringify(rawFactors, null, 2)}</pre>
+          {locked && <LockIcon className="w-5 h-5 text-slate-500" />}
+        </div>
+
+        <h3 className={cn("mt-2 text-lg font-bold", locked && "text-slate-400")}>
+          {awayTeam} @ {homeTeam}
+        </h3>
+        <div className={cn("flex items-center text-sm mt-1", locked ? "text-slate-400" : "text-muted-foreground")}>
+          <Clock className="w-4 h-4 mr-1" />
+          <span>{formattedDate}</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          {sport === "mlb" ? (
+            <>
+              <div>
+                <div className={cn("text-sm", locked ? "text-slate-400" : "text-muted-foreground")}>
+                  Actual Market Odds
                 </div>
-              </DialogContent>
-            </Dialog>
+                <div className={cn("font-medium", locked && "text-slate-400")}>
+                  {fmtML(marketMoneyline)}
+                </div>
+              </div>
+              <div>
+                <div className={cn("text-sm", locked ? "text-slate-400" : "text-muted-foreground")}>
+                  Predicted Odds
+                </div>
+                <div className={cn("font-medium", locked && "text-slate-400")}>
+                  {fmtML(predictedOdds)}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* logic for spreads/margins in other sports */}
+            </>
           )}
         </div>
+
+        <div className="mt-4">
+          <div className={cn("text-sm", locked ? "text-slate-400" : "text-muted-foreground")} >
+            Edge
+          </div>
+          <div className="flex items-center text-lg font-bold">
+            {hasEdge ? (
+              <>
+                {positive ? (
+                  <ArrowUp className="w-5 h-5 text-edge-secondary" />
+                ) : (
+                  <ArrowDown className="w-5 h-5 text-edge-accent" />
+                )}
+                <span className={positive ? "text-edge-secondary" : "text-edge-accent"}>
+                  {edgePct!.toFixed(1)}%
+                </span>
+              </>
+            ) : (
+              <span className="italic">N/A</span>
+            )}
+            {confidencePct != null && (
+              <span className={cn("ml-auto text-sm", locked ? "text-slate-400" : "text-muted-foreground")}>
+                {confidencePct.toFixed(0)}% confidence
+              </span>
+            )}
+          </div>
+        </div>
       </CardContent>
-      
-      {/* Locked overlay for premium content - Don't show for admin users */}
-      {!isAdmin && isLocked && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center 
-                      backdrop-blur-sm bg-black/30 rounded-lg transition
-                      hover:bg-black/15 z-10">
-          <LockIcon className="h-6 w-6 text-slate-500 opacity-70 mb-1" />
-          <span className="italic text-slate-400 font-medium">Premium</span>
-          <Button 
-            variant="default" 
-            size="sm"
-            className="mt-3 opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
-            onClick={() => window.location.href = '/pricing'}
-          >
-            Unlock game
-          </Button>
+
+      {locked && (
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-10">
+          <LockIcon className="w-6 h-6 text-slate-400 mb-2" />
+          <Button onClick={() => (window.location.href = "/pricing")}>Unlock</Button>
         </div>
       )}
     </Card>
