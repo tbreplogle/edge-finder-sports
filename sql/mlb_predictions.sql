@@ -4,7 +4,7 @@
 \i sql/create_mlb_predictions_table.sql
 
 -- 2) Compute raw ratings per team,
---    joining 7‑day team hitting stats for today to get hs.home_runs & hs.avg
+--    joining 7‑day team hitting stats for the exact game date
 WITH ratings AS (
   SELECT
     pm.matchup_id,
@@ -23,11 +23,12 @@ WITH ratings AS (
     ) AS rating,
     pm.pitcher_role
   FROM pitching_matchups pm
+  JOIN mlb_matchups m
+    ON m.matchup_id = pm.matchup_id
   JOIN mlb_team_hitting_stats hs
-    ON hs.matchup_id    = pm.matchup_id
-   AND hs.team_id       = pm.team_id
+    ON hs.team_id        = pm.team_id
+   AND hs.game_date      = m.game_date
    AND hs.timeframe_days = 7
-   AND hs.game_date     = CURRENT_DATE
 ),
 
 -- 3) Adjust for home/away
@@ -95,11 +96,11 @@ capped_money AS (
     rating,
     adjusted_rating,
     win_pct,
-    GREATEST(LEAST(raw_moneyline, 500), -500) AS moneyline
+    GREATEST( LEAST(raw_moneyline, 500), -500 ) AS moneyline
   FROM final
 )
 
--- 8) Upsert into your predictions table
+-- 8) Upsert into predictions table
 INSERT INTO mlb_predictions
   (matchup_id, team_id, rating, adjusted_rating, win_pct, moneyline, created_at)
 SELECT
