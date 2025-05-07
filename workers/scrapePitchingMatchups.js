@@ -137,13 +137,13 @@ async function scrapePitchingMatchups() {
       ] = nums;
 
       const ip   = parseFloat(ip_s)  || 0;
-      const h    = parseInt(h_s,10)  || 0;
-      const r    = parseInt(r_s,10)  || 0;
-      const er   = parseInt(er_s,10) || 0;
-      const so   = parseInt(so_s,10) || 0;
-      const bb   = parseInt(bb_s,10) || 0;
-      const hr   = parseInt(hr_s,10) || 0;
-      const pit  = parseInt(pit_s,10)|| 0;
+      const h    = parseFloat(h_s)   || 0;
+      const r    = parseFloat(r_s)   || 0;
+      const er   = parseFloat(er_s)  || 0;
+      const so   = parseFloat(so_s)  || 0;
+      const bb   = parseFloat(bb_s)  || 0;
+      const hr   = parseFloat(hr_s)  || 0;
+      const pit  = parseFloat(pit_s) || 0;
       const pip  = parseFloat(pip_s) || 0;
       const gbfb = parseFloat(gbfb_s)|| 0;
 
