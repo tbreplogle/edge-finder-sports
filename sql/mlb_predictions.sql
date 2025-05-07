@@ -67,19 +67,19 @@ WITH
 
   -- e) Convert to moneyline
   final AS (
-    SELECT
-      w.matchup_id,
-      w.team_id,
-      w.rating,
-      w.adjusted_rating,
-      w.win_pct,
-      CASE
-        WHEN w.win_pct > 0.5
-          THEN ROUND((1 / w.win_pct - 1) * -100)
-        ELSE ROUND((1 / w.win_pct) * 100 - 100)
-      END AS moneyline
-    FROM win_probs w
-  )
+  SELECT
+    w.matchup_id,
+    w.team_id,
+    w.rating,
+    w.adjusted_rating,
+    w.win_pct,
+    CASE
+      WHEN w.win_pct > 0.5
+        THEN ROUND( -100.0 / ((1.0/w.win_pct) - 1.0) )
+      ELSE ROUND( (1.0/w.win_pct) * 100.0 - 100.0 )
+    END AS moneyline
+  FROM win_probs w
+)
 
 -- 3) Upsert today’s predictions
 INSERT INTO mlb_predictions
