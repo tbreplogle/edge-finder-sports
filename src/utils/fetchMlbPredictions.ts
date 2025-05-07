@@ -53,9 +53,9 @@ function calculateImpliedProbability(odds: number): number {
 
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
   try {
-    // Use proper type parameters for the Supabase queries
+    // Fix: Use correct typing for Supabase queries
     const { data: predictionsData, error: predictionsError } = await supabase
-      .from<"mlb_predictions", MlbPrediction>("mlb_predictions")
+      .from("mlb_predictions")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -66,7 +66,7 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
     const typedPredictions: MlbPrediction[] = predictionsData;
     
     const { data: matchupsData, error: matchupsError } = await supabase
-      .from<"mlb_matchups", MlbMatchup>("mlb_matchups")
+      .from("mlb_matchups")
       .select("*");
 
     if (matchupsError) throw matchupsError;

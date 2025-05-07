@@ -1,3 +1,4 @@
+
 import { GameProps } from "@/components/GameCard";
 
 // Function to generate sample MLB data for testing when API is unavailable
