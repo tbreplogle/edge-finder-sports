@@ -1,7 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { LiveScores } from "@/components/LiveScores";
 import { FeaturedGame } from "@/components/FeaturedGame";
 import { SportTabs } from "@/components/SportTabs";
 import { CalendarIcon, ArrowDownUp } from "lucide-react";
@@ -109,6 +109,7 @@ const Dashboard = () => {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     // Check authentication status from localStorage
@@ -118,6 +119,7 @@ const Dashboard = () => {
         const user = JSON.parse(userStr);
         setIsAuthenticated(true);
         setIsPremium(user.role === "premium" || user.is_admin === true);
+        setIsAdmin(user.is_admin === true);
       } catch (e) {
         console.error("Error parsing user data:", e);
       }
@@ -150,7 +152,7 @@ const Dashboard = () => {
         predictedMargin: null, // We'll use moneyline instead
         edge: prediction.edge_pct ? prediction.edge_pct * 100 : null, // Convert to percentage points
         confidence: prediction.predicted_implied_pct ? Math.round(prediction.predicted_implied_pct * 100) : null,
-        isPremium: Math.abs(prediction.edge_pct || 0) > 0.02, // Make edges > 2% premium
+        isPremium: !isAdmin && Math.abs(prediction.edge_pct || 0) > 0.02, // Make edges > 2% premium, but admins see all
         homeMoneyline: prediction.moneyline,
         awayMoneyline: null, // This would need to come from another source
         marketMoneyline: prediction.market_ml
@@ -271,7 +273,7 @@ const Dashboard = () => {
                       <GameCard 
                         key={game.id} 
                         {...game} 
-                        isPremium={!isPremium && game.isPremium}
+                        isPremium={(isPremium || isAdmin) ? false : game.isPremium}
                       />
                     ))}
                   </div>
@@ -282,7 +284,7 @@ const Dashboard = () => {
           
           <div className="space-y-6">
             <FeaturedGame />
-            <LiveScores />
+            {/* LiveScores component removed as requested */}
           </div>
         </div>
       </div>
