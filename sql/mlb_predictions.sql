@@ -3,35 +3,32 @@
 -- 1) Ensure table exists
 \i sql/create_mlb_predictions_table.sql
 
--- 2) Compute raw ratings per team,
---    joining 7‑day team hitting stats for the exact game date
+-- 2) Compute raw ratings per team (capped at 143),
+--    joining in each team’s 7‑day hitting HR & BA for the exact game date
 WITH ratings AS (
   SELECT
     pm.matchup_id,
     pm.team_id,
-    GREATEST(
-      0,
-      LEAST(
-        56.74
-        +  0.108  * hs.home_runs    -- batters' HR over last 7 days
-        -  0.0934 * pm.hr            -- pitchers' HR allowed
-        + 334.9  * hs.avg           -- batters' BA over last 7 days
-        +  0.188  * pm.era_plus
-        -  61.98  * pm.whip,
-        162
-      )
+    LEAST(
+      56.74
+      +  0.108  * hs.home_runs    -- hitters’ HR over last 7 days
+      -  0.0934 * pm.hr            -- pitchers’ HR allowed
+      + 334.9  * hs.avg           -- hitters’ BA over last 7 days
+      +  0.188  * pm.era_plus
+      -  61.98  * pm.whip,
+      143
     ) AS rating,
     pm.pitcher_role
   FROM pitching_matchups pm
   JOIN mlb_matchups m
-    ON m.matchup_id = pm.matchup_id
+    ON pm.matchup_id = m.matchup_id
   JOIN mlb_team_hitting_stats hs
     ON hs.team_id        = pm.team_id
    AND hs.game_date      = m.game_date
    AND hs.timeframe_days = 7
 ),
 
--- 3) Adjust for home/away
+-- 3) Adjust ratings for home vs away
 adjusted AS (
   SELECT
     r.*,
@@ -43,7 +40,7 @@ adjusted AS (
   FROM ratings r
 ),
 
--- 4) Compute raw win probabilities
+-- 4) Pair home & away to compute win_pct
 win_probs AS (
   SELECT
     a.matchup_id,
@@ -54,53 +51,30 @@ win_probs AS (
     (
       (a.adjusted_rating - a.adjusted_rating * b.adjusted_rating)
       / (a.adjusted_rating + b.adjusted_rating - 2 * a.adjusted_rating * b.adjusted_rating)
-    ) AS raw_win_pct
+    ) AS win_pct
   FROM adjusted a
   JOIN adjusted b
     ON a.matchup_id = b.matchup_id
    AND a.pitcher_role <> b.pitcher_role
 ),
 
--- 5) Cap win_pct at 0.88
-capped_win AS (
-  SELECT
-    matchup_id,
-    team_id,
-    rating,
-    adjusted_rating,
-    LEAST(raw_win_pct, 0.88) AS win_pct
-  FROM win_probs
-),
-
--- 6) Translate to raw moneyline
+-- 5) Convert win_pct into moneyline
 final AS (
   SELECT
-    c.matchup_id,
-    c.team_id,
-    c.rating,
-    c.adjusted_rating,
-    c.win_pct,
+    w.matchup_id,
+    w.team_id,
+    w.rating,
+    w.adjusted_rating,
+    w.win_pct,
     CASE
-      WHEN c.win_pct > 0.5
-        THEN ROUND((1 / c.win_pct - 1) * -100)
-      ELSE ROUND((1 / c.win_pct) * 100 - 100)
-    END AS raw_moneyline
-  FROM capped_win c
-),
-
--- 7) Cap moneyline between -500 and 500
-capped_money AS (
-  SELECT
-    matchup_id,
-    team_id,
-    rating,
-    adjusted_rating,
-    win_pct,
-    GREATEST( LEAST(raw_moneyline, 500), -500 ) AS moneyline
-  FROM final
+      WHEN w.win_pct > 0.5
+        THEN ROUND((1 / w.win_pct - 1) * -100)
+      ELSE ROUND((1 / w.win_pct) * 100 - 100)
+    END AS moneyline
+  FROM win_probs w
 )
 
--- 8) Upsert into predictions table
+-- 6) Upsert into mlb_predictions
 INSERT INTO mlb_predictions
   (matchup_id, team_id, rating, adjusted_rating, win_pct, moneyline, created_at)
 SELECT
@@ -111,7 +85,7 @@ SELECT
   win_pct,
   moneyline,
   now()
-FROM capped_money
+FROM final
 ON CONFLICT (matchup_id, team_id)
 DO UPDATE SET
   rating          = EXCLUDED.rating,
