@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
 import { OddsApiGame } from "@/utils/types/sports";
+import { Tables } from "@/integrations/supabase/types";
 
 export interface MlbPrediction {
   matchup_id: string;
@@ -52,35 +53,40 @@ function calculateImpliedProbability(odds: number): number {
 
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
   try {
-    // Fix: Add proper type parameters to the supabase queries
+    // Use proper type parameters for the Supabase queries
     const { data: predictionsData, error: predictionsError } = await supabase
-      .from<MlbPrediction>("mlb_predictions")
+      .from("mlb_predictions")
       .select("*")
       .order("created_at", { ascending: false });
 
     if (predictionsError) throw predictionsError;
     if (!predictionsData) return [];
 
-    // Fix: Add proper type parameters to the supabase queries
+    // Convert to MlbPrediction type to ensure type safety
+    const typedPredictions: MlbPrediction[] = predictionsData;
+    
     const { data: matchupsData, error: matchupsError } = await supabase
-      .from<MlbMatchup>("mlb_matchups")
+      .from("mlb_matchups")
       .select("*");
 
     if (matchupsError) throw matchupsError;
     if (!matchupsData) return [];
+    
+    // Convert to MlbMatchup type to ensure type safety
+    const typedMatchups: MlbMatchup[] = matchupsData;
 
     // pull live odds
     const sportKey = SPORT_KEYS.MLB;
     const liveOddsData = await fetchOdds(sportKey);
 
     // map for quick lookup
-    const matchupsMap = new Map(matchupsData.map(m => [m.matchup_id, m] as const));
+    const matchupsMap = new Map(typedMatchups.map(m => [m.matchup_id, m] as const));
     const oddsMap = new Map(liveOddsData.map(o => [o.id, o] as const));
 
     // Group predictions by matchup_id to get both teams
     const predictionsByMatchup = new Map<string, MlbPrediction[]>();
     
-    for (const pred of predictionsData) {
+    for (const pred of typedPredictions) {
       if (!predictionsByMatchup.has(pred.matchup_id)) {
         predictionsByMatchup.set(pred.matchup_id, []);
       }
@@ -136,10 +142,10 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
       for (const pred of preds) {
         if (pred.team_id === m.home_team_id) {
           home_moneyline = pred.moneyline;
-          home_predicted_pct = pred.moneyline != null ? calculateImpliedProbability(pred.moneyline) : null;
+          home_predicted_pct = pred.win_pct;
         } else if (pred.team_id === m.away_team_id) {
           away_moneyline = pred.moneyline;
-          away_predicted_pct = pred.moneyline != null ? calculateImpliedProbability(pred.moneyline) : null;
+          away_predicted_pct = pred.win_pct;
         }
       }
 

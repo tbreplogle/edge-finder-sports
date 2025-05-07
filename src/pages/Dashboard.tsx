@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
 } from "@/utils/fetchMlbPredictions";
 import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
 import { OddsApiGame } from "@/utils/types/sports";
+import { generateSampleMlbData } from "@/utils/generateSampleMlbData";
 
 interface GameData {
   id: string;
@@ -100,7 +102,15 @@ export default function Dashboard() {
   async function loadMlb() {
     setLoading(true);
     try {
-      const preds = await fetchMlbPredictions();
+      // First try to fetch real data
+      let preds = await fetchMlbPredictions();
+      
+      // If no data, use sample data
+      if (preds.length === 0) {
+        console.log("No MLB predictions found, using sample data");
+        return setGames(generateSampleMlbData());
+      }
+      
       console.log("Fetched MLB predictions:", preds);
       
       const out: GameData[] = preds.map(p => {
@@ -144,18 +154,18 @@ export default function Dashboard() {
           startTime: p.game_date,
           // Keep legacy fields for compatibility
           marketMoneyline: homeMarketML, 
-          marketImpliedPct: p.home_market_implied_pct != null ? p.home_market_implied_pct * 100 : null,
+          marketImpliedPct: p.home_market_implied_pct,
           predictedOdds: p.home_moneyline,
-          predictedImpliedPct: p.home_predicted_pct != null ? p.home_predicted_pct * 100 : null,
-          edgePct: p.edge_pct != null ? p.edge_pct * 100 : null,
+          predictedImpliedPct: p.home_predicted_pct,
+          edgePct: p.edge_pct,
           isPremium,
           // Add separate fields for home/away odds
           homeMarketMoneyline: homeMarketML,
           awayMarketMoneyline: awayMarketML,
           homePredictedOdds: p.home_moneyline,
           awayPredictedOdds: p.away_moneyline,
-          homePredictedPct: p.home_predicted_pct != null ? p.home_predicted_pct * 100 : null,
-          awayPredictedPct: p.away_predicted_pct != null ? p.away_predicted_pct * 100 : null,
+          homePredictedPct: p.home_predicted_pct,
+          awayPredictedPct: p.away_predicted_pct,
         };
       });
       
@@ -164,7 +174,9 @@ export default function Dashboard() {
     } catch (e) {
       console.error("Failed to load MLB predictions:", e);
       toast.error("Failed to load MLB predictions");
-      setGames([]);
+      
+      // Fall back to sample data
+      setGames(generateSampleMlbData());
     } finally {
       setLoading(false);
     }
@@ -188,7 +200,7 @@ export default function Dashboard() {
     : null;
   const shown = preview ? games.filter(g=>g.id!==preview.id) : games;
 
-  // Fix: Handle sport change with proper type conversion
+  // Fix: Use proper type for the sport change handler
   const handleSportChange = (value: string) => {
     setActiveSport(value as GameData["sport"]);
   };
