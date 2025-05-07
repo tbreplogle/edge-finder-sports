@@ -64,7 +64,7 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
     if (matchupsError) throw new Error(`Error fetching MLB matchups: ${matchupsError.message}`);
 
     // Fetch live odds data
-    const sportKey = SPORT_KEYS.MLB; // Fixed: Changed mlb to MLB to match the SPORT_KEYS object
+    const sportKey = SPORT_KEYS.MLB; 
     const liveOddsData = await fetchOdds(sportKey);
 
     // Create a map of matchups by matchup_id
@@ -127,8 +127,8 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
       }
 
       // Calculate implied probabilities
-      const predictedImpliedPct = prediction.moneyline ? calculateImpliedProbability(prediction.moneyline) : null;
-      const marketImpliedPct = marketMoneyline ? calculateImpliedProbability(marketMoneyline) : null;
+      const predictedImpliedPct = prediction.moneyline ? calculateImpliedProbability(prediction.moneyline) / 100 : null;
+      const marketImpliedPct = marketMoneyline ? calculateImpliedProbability(marketMoneyline) / 100 : null;
       
       // Calculate edge percentage
       let edgePct = null;

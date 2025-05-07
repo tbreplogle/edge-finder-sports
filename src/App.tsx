@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -47,7 +48,7 @@ function App() {
             {/* Redirect any unknown routes to home page */}
             <Route path="*" element={<NotFound />} />
             
-            {/* Add MLB Dashboard route */}
+            {/* MLB Dashboard route */}
             <Route path="/mlb-dashboard" element={<MlbDashboard />} />
           </Routes>
         </BrowserRouter>
