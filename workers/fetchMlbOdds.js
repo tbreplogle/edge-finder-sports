@@ -14,7 +14,7 @@ const DEBUG = process.env.DEBUG === 'true';
  * Fetches MLB moneyline odds from the Odds API
  * @returns {Promise<Array>} Array of games with odds data
  */
-async function fetchMlbOdds() {
+export async function fetchMlbOdds() {
   try {
     console.log('Fetching MLB odds data from the-odds-api...');
     const response = await axios.get(`${ODDS_API_URL}/${SPORT_KEY}/odds`, {
@@ -44,7 +44,7 @@ async function fetchMlbOdds() {
  * @param {Object} game - A game object from the Odds API 
  * @returns {Object|null} Mapped game with team IDs or null if mapping failed
  */
-function mapTeamIds(game) {
+export function mapTeamIds(game) {
   try {
     const homeTeamMapping = getTeamMappingByName(game.home_team);
     const awayTeamMapping = getTeamMappingByName(game.away_team);
@@ -97,7 +97,7 @@ function mapTeamIds(game) {
  * @param {Array} games - Array of mapped games with team IDs
  * @returns {Promise<Array>} Games with matchup_ids added where available
  */
-async function findMatchupIds(games) {
+export async function findMatchupIds(games) {
   try {
     // Get all matchups to do local joining
     const { data: matchups, error } = await supabase
@@ -139,7 +139,7 @@ async function findMatchupIds(games) {
  * @param {Array} games - Array of games with odds data
  * @returns {Promise<Array>} Result of the upsert operation
  */
-async function upsertOdds(games) {
+export async function upsertOdds(games) {
   try {
     console.log(`→ Upserting ${games.length} odds records to database...`);
     
@@ -164,7 +164,7 @@ async function upsertOdds(games) {
  * @param {string} errorMessage - Error message if any
  * @param {Object} stats - Statistics about the scrape
  */
-async function logScrapeHistory(success, errorMessage = null, stats = {}) {
+export async function logScrapeHistory(success, errorMessage = null, stats = {}) {
   try {
     const record = {
       action_name: ACTION_NAME,
