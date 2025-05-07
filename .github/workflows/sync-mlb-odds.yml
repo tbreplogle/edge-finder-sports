@@ -1,0 +1,63 @@
+
+name: Sync MLB Odds
+
+on:
+  schedule:
+    # Run every morning at 8 AM Central Time (1 PM UTC)
+    - cron: '0 13 * * *'
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  sync-odds:
+    runs-on: ubuntu-latest
+    
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd workers
+        npm ci
+    
+    - name: Sync MLB Odds
+      run: |
+        cd workers
+        node fetchMlbOdds.js
+    
+    - name: Post to Slack on failure
+      if: failure()
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "❌ MLB Odds sync failed in ${{ github.repository }}",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "❌ *MLB Odds sync failed*"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Repository: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\nSee: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

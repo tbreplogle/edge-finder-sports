@@ -9,6 +9,64 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      mlb_market_odds: {
+        Row: {
+          away_ml: number | null
+          away_team_id: number | null
+          game_date: string
+          game_id: string
+          game_time_utc: string
+          home_ml: number | null
+          home_team_id: number | null
+          matchup_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          away_ml?: number | null
+          away_team_id?: number | null
+          game_date: string
+          game_id: string
+          game_time_utc: string
+          home_ml?: number | null
+          home_team_id?: number | null
+          matchup_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          away_ml?: number | null
+          away_team_id?: number | null
+          game_date?: string
+          game_id?: string
+          game_time_utc?: string
+          home_ml?: number | null
+          home_team_id?: number | null
+          matchup_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mlb_market_odds_away_team_id_fkey"
+            columns: ["away_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "mlb_market_odds_home_team_id_fkey"
+            columns: ["home_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams_mlb"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "mlb_market_odds_matchup_id_fkey"
+            columns: ["matchup_id"]
+            isOneToOne: false
+            referencedRelation: "mlb_matchups"
+            referencedColumns: ["matchup_id"]
+          },
+        ]
+      }
       mlb_matchups: {
         Row: {
           away_team: string
@@ -280,6 +338,33 @@ export type Database = {
             referencedColumns: ["team_id"]
           },
         ]
+      }
+      scrape_history: {
+        Row: {
+          action_name: string
+          created_at: string
+          error_message: string | null
+          id: string
+          stats: Json | null
+          success: boolean
+        }
+        Insert: {
+          action_name: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          stats?: Json | null
+          success: boolean
+        }
+        Update: {
+          action_name?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          stats?: Json | null
+          success?: boolean
+        }
+        Relationships: []
       }
       teams_mlb: {
         Row: {
