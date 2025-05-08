@@ -51,11 +51,11 @@ async function fetchOddsApi() {
   console.log('🕵️ Fetching MLB odds from the-odds-api...');
   const res = await axios.get(`${ODDS_API_URL}/${SPORT_KEY}/odds`, {
     params: {
-      apiKey:    ODDS_API_KEY,
-      regions:   'us',
-      markets:   'h2h',
-      oddsFormat:'american',
-      dateFormat:'iso'
+      apiKey:     ODDS_API_KEY,
+      regions:    'us',
+      markets:    'h2h',
+      oddsFormat: 'american',
+      dateFormat: 'iso'
     }
   });
   if (!Array.isArray(res.data)) {
@@ -83,22 +83,20 @@ function mapTeamIds(game) {
     away_ml = a?.price ?? null;
   }
 
-  // Convert commence_time → CT date + 12h time
+  // UTC → CT (CDT is UTC−5 in May). Then build:
+  //  • game_date: YYYY-MM-DD in CT
+  //  • game_time_ct: full ISO timestamp in CT for DB ingestion
   const utc = new Date(game.commence_time);
-  const ctDate = utc.toLocaleDateString('en-CA', { // en-CA yields YYYY-MM-DD
-    timeZone: 'America/Chicago'
-  });
-  const ctTime = utc.toLocaleTimeString('en-US', {
-    timeZone: 'America/Chicago',
-    hour:     'numeric',
-    minute:   '2-digit',
-    hour12:   true
-  });
+  const ct = new Date(utc.getTime() - 5 * 60 * 60 * 1000);
+  
+  const game_date    = ct.toISOString().slice(0, 10);
+  const game_time_ct = ct.toISOString(); // e.g. "2025-05-08T12:10:00.000Z"
 
   return {
+    game_id,
     game_id:       game.id,
-    game_date:     ctDate,
-    game_time_ctd: ctTime,
+    game_date,
+    game_time_ct,
     home_team_id:  home.team_id,
     away_team_id:  away.team_id,
     home_ml,
@@ -154,7 +152,7 @@ export async function fetchAndSyncMlbOdds() {
 
     const mapped = raw.map(mapTeamIds).filter(x => x !== null);
     stats.mapped  = mapped.length;
-    if (!mapped.length) throw new Error('No games could be mapped to team_ids');
+    if (!mapped.length) throw new Error('No games mapped to team_ids');
 
     const enriched = await findMatchupIds(mapped);
     stats.with_matchup = enriched.filter(g => g.matchup_id).length;
@@ -172,11 +170,7 @@ export async function fetchAndSyncMlbOdds() {
   }
 }
 
-// Immediately run and surface errors
 (async () => {
   const result = await fetchAndSyncMlbOdds();
-  if (!result.success) {
-    process.exit(1);
-  }
-  process.exit(0);
+  process.exit(result.success ? 0 : 1);
 })();
