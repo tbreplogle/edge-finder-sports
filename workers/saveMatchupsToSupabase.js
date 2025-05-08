@@ -3,14 +3,25 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 
 async function main() {
   if (!(await testConnection())) {
-    console.error('Supabase connection failed')
-    process.exit(1)
+    console.error('Supabase connection failed'); process.exit(1)
   }
   try {
-    const matchups = await scrapeTodayMatchups()
-    if (!matchups.length) throw new Error('No matchups found')
-    const { data, error } = await supabase.from('mlb_matchups').upsert(matchups, { onConflict: ['matchup_id'] }).select()
+    const raw = await scrapeTodayMatchups()
+    if (!raw.length) throw new Error('No matchups found')
+
+    const cleaned = raw.map(r => ({
+      matchup_id: r.matchup_id,
+      game_id: r.game_id,
+      away_team: r.away_team,
+      home_team: r.home_team,
+      game_date: r.game_date,
+      away_team_id: r.away_team_id ?? null,
+      home_team_id: r.home_team_id ?? null
+    }))
+
+    const { data, error } = await supabase.from('mlb_matchups').upsert(cleaned, { onConflict: ['matchup_id'] }).select()
     if (error) throw error
+
     createScrapeReport({ success: true, timestamp: new Date().toISOString(), stats: { matchups: data.length } })
     process.exit(0)
   } catch (err) {
