@@ -73,7 +73,6 @@ function mapTeamIds(game) {
     return null;
   }
 
-  // Extract moneylines
   let home_ml = null, away_ml = null;
   const market = game.bookmakers?.[0]?.markets.find(m => m.key === 'h2h');
   if (market) {
@@ -83,17 +82,14 @@ function mapTeamIds(game) {
     away_ml = a?.price ?? null;
   }
 
-  // UTC → CT (CDT is UTC−5 in May). Then build:
-  //  • game_date: YYYY-MM-DD in CT
-  //  • game_time_ct: full ISO timestamp in CT for DB ingestion
+  // Convert UTC → CDT (UTC−5) then produce CT date + ISO timestamp
   const utc = new Date(game.commence_time);
-  const ct = new Date(utc.getTime() - 5 * 60 * 60 * 1000);
-  
+  const ct  = new Date(utc.getTime() - 5 * 60 * 60 * 1000);
+
   const game_date    = ct.toISOString().slice(0, 10);
   const game_time_ct = ct.toISOString(); // e.g. "2025-05-08T12:10:00.000Z"
 
   return {
-    game_id,
     game_id:       game.id,
     game_date,
     game_time_ct,
@@ -116,10 +112,10 @@ async function findMatchupIds(games) {
     map.set(`${m.home_team_id}_${m.away_team_id}_${m.game_date}`, m.matchup_id);
   });
 
-  return games.map(g => {
-    const key = `${g.home_team_id}_${g.away_team_id}_${g.game_date}`;
-    return { ...g, matchup_id: map.get(key) ?? null };
-  });
+  return games.map(g => ({
+    ...g,
+    matchup_id: map.get(`${g.home_team_id}_${g.away_team_id}_${g.game_date}`) ?? null
+  }));
 }
 
 async function upsertOdds(games) {
@@ -135,14 +131,17 @@ async function upsertOdds(games) {
 
 async function logHistory(success, error_message = null, stats = {}) {
   console.log(`📝 Logging scrape history: success=${success}`);
-  await supabase
-    .from('scrape_history')
-    .insert({ action_name: ACTION_NAME, success, error_message, stats });
+  await supabase.from('scrape_history').insert({
+    action_name: ACTION_NAME,
+    success,
+    error_message,
+    stats
+  });
 }
 
 export async function fetchAndSyncMlbOdds() {
   console.log(`🏁 Starting MLB odds sync at ${new Date().toISOString()}`);
-  const stats = { fetched:0, mapped:0, with_matchup:0, upserted:0 };
+  const stats = { fetched: 0, mapped: 0, with_matchup: 0, upserted: 0 };
 
   try {
     if (!(await testConnection())) throw new Error('Database connection failed');
@@ -154,11 +153,11 @@ export async function fetchAndSyncMlbOdds() {
     stats.mapped  = mapped.length;
     if (!mapped.length) throw new Error('No games mapped to team_ids');
 
-    const enriched = await findMatchupIds(mapped);
+    const enriched     = await findMatchupIds(mapped);
     stats.with_matchup = enriched.filter(g => g.matchup_id).length;
 
-    const upserted = await upsertOdds(enriched);
-    stats.upserted = upserted.length;
+    const upserted     = await upsertOdds(enriched);
+    stats.upserted     = upserted.length;
 
     await logHistory(true, null, stats);
     console.log('🎉 MLB odds sync completed', stats);
@@ -170,7 +169,9 @@ export async function fetchAndSyncMlbOdds() {
   }
 }
 
-(async () => {
-  const result = await fetchAndSyncMlbOdds();
-  process.exit(result.success ? 0 : 1);
-})();
+// Run immediately if called directly
+if (import.meta.url === import.meta.main) {
+  fetchAndSyncMlbOdds()
+    .then(res => process.exit(res.success ? 0 : 1))
+    .catch(() => process.exit(1));
+}
