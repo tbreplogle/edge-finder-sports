@@ -1,91 +1,174 @@
-import puppeteer from 'puppeteer'
-import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js'
+// workers/scrapeMatchupIds.js
+import puppeteer from 'puppeteer';
+import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
 
-const DEBUG = process.env.DEBUG === 'true'
-const TZ = 'America/Chicago'
+const DEBUG = process.env.DEBUG === 'true';
 
+/**
+ * Hard‑coded map from the scraped team label to your teams_mlb.team_id
+ */
 const TEAM_NAME_TO_ID = {
-  'WASHINGTON': 24, 'ATLANTA': 17, 'TAMPA BAY': 9, 'BOSTON': 29, 'COLORADO': 22,
-  'MILWAUKEE': 14, 'KANSAS CITY': 11, 'MINNESOTA': 10, 'ST. LOUIS': 27, 'CHI. CUBS': 16,
-  'NY YANKEES': 8, 'MIAMI': 6, 'ATHLETICS': 7, 'LA ANGELS': 4, 'ARIZONA': 13,
-  'CLEVELAND': 2, 'CINCINNATI': 23, 'PHILADELPHIA': 26, 'TEXAS': 28, 'DETROIT': 25,
-  'HOUSTON': 19, 'CHI. WHITE SOX': 15, 'BALTIMORE': 30, 'PITTSBURGH': 3,
-  'SAN FRANCISCO': 12, 'SAN DIEGO': 18, 'LA DODGERS': 21, 'SEATTLE': 1, 'TORONTO': 5,
-  'NY METS': 20
+  // home‑teams
+  'WASHINGTON':    24,
+  'ATLANTA':       17,
+  'TAMPA BAY':     9,
+  'BOSTON':        29,
+  'COLORADO':      22,
+  'MILWAUKEE':     14,
+  'KANSAS CITY':   11,
+  'MINNESOTA':     10,
+  'ST. LOUIS':     27,
+  'CHI. CUBS':     16,
+  'NY YANKEES':    8,
+  'MIAMI':         6,
+  'ATHLETICS':     7,
+  'LA ANGELS':     4,
+  'ARIZONA':       13,
+
+  // away‑teams
+  'CLEVELAND':     2,
+  'CINCINNATI':    23,
+  'PHILADELPHIA':  26,
+  'TEXAS':         28,
+  'DETROIT':       25,
+  'HOUSTON':       19,
+  'CHI. WHITE SOX':15,
+  'BALTIMORE':     30,
+  'PITTSBURGH':    3,
+  'SAN FRANCISCO': 12,
+  'SAN DIEGO':     18,
+  'LA DODGERS':    21,
+  'SEATTLE':       1,
+  'TORONTO':       5,
+  'NY METS':       20
+};
+
+async function scrapeTodayMatchups() {
+  console.log("→ Launching browser and navigating to Covers.com MLB matchups…");
+  const browser = await puppeteer.launch({
+    args: ["--no-sandbox","--disable-setuid-sandbox"],
+    headless: "new"
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width:1920, height:1080 });
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+  );
+  await page.goto("https://www.covers.com/sports/mlb/matchups", {
+    waitUntil: "networkidle2", timeout: 60000
+  });
+
+  // let React finish rendering
+  await page.waitForSelector("a.matchup-btn-link", { timeout: 30000 });
+  await page.waitForTimeout(1000);
+
+  const matchups = await page.$$eval("article.gamebox", games =>
+    games.map(game => {
+      const link = game.querySelector("a.matchup-btn-link");
+      if (!link) return null;
+
+      // 1) Extract ID from the URL
+      const m = link.href.match(/\/matchup\/(\d+)$/);
+      if (!m) return null;
+      const matchup_id = m[1];
+      const game_id    = matchup_id; // or whatever logic you prefer
+
+      // 2) Pull the "Away @ Home" text and split
+      const teamsText = game
+        .querySelector("strong.text-uppercase")
+        ?.innerText
+        .trim()
+        .toUpperCase();
+      if (!teamsText || !teamsText.includes("@")) return null;
+      const [away_team, home_team] = teamsText
+        .split("@")
+        .map(t => t.replace(/\u202F/g," ").trim()); // normalize whitespace
+
+      // 3) Parse the date
+      const dateText = game
+        .querySelector("strong.preGame-status")
+        ?.innerText
+        .trim();
+      const dt = dateText
+        ? new Date(`${dateText} ${new Date().getFullYear()}`)
+        : null;
+      const game_date = dt ? dt.toISOString().slice(0,10) : null;
+
+      return { game_id, matchup_id, away_team, home_team, game_date };
+    })
+    .filter(x => x !== null)
+  );
+
+  await browser.close();
+  console.log(`→ Scraped ${matchups.length} games.`);
+  if (DEBUG) console.log(JSON.stringify(matchups, null, 2));
+  return matchups;
 }
 
-function safeParseDate(txt) {
-  if (!txt) return new Date().toLocaleDateString('en-CA', { timeZone: TZ })
-  try {
-    const year = new Date().getFullYear()
-    const dt = new Date(`${txt} ${year}`)
-    if (!Number.isNaN(dt.getTime())) {
-      return dt.toLocaleDateString('en-CA', { timeZone: TZ })
-    }
-  } catch (_) { }
-  return new Date().toLocaleDateString('en-CA', { timeZone: TZ })
-}
-
-export async function scrapeTodayMatchups() {
-  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'], headless: 'new' })
-  const page = await browser.newPage()
-  await page.setViewport({ width: 1920, height: 1080 })
-  await page.setUserAgent('Mozilla/5.0')
-  await page.goto('https://www.covers.com/sports/mlb/matchups', { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForSelector('a.matchup-btn-link', { timeout: 30000 })
-  await page.waitForTimeout(1000)
-
-  const results = await page.$$eval('article.gamebox', nodes =>
-    nodes.map(n => {
-      const href = n.querySelector('a.matchup-btn-link')?.href ?? ''
-      const idMatch = href.match(/\/matchup\/(\d+)$/)
-      if (!idMatch) return null
-      const teams = n.querySelector('strong.text-uppercase')?.innerText.trim().toUpperCase() ?? ''
-      if (!teams.includes('@')) return null
-      const [away_team, home_team] = teams.split('@').map(t => t.replace(/\u202F/g, ' ').trim())
-      const raw_date_text = n.querySelector('strong.preGame-status')?.innerText.trim() ?? ''
-      return { game_id: idMatch[1], matchup_id: idMatch[1], away_team, home_team, raw_date_text }
-    }).filter(Boolean)
-  )
-
-  await browser.close()
-
-  const parsed = results.map(r => ({
-    ...r,
-    game_date: safeParseDate(r.raw_date_text)
-  }))
-
-  if (DEBUG) console.log(JSON.stringify(parsed, null, 2))
-  return parsed
-}
-
-export async function scrapeAndSaveTodayMatchups() {
+async function scrapeAndSaveTodayMatchups() {
+  console.log("Starting MLB matchup scraper…");
   if (!(await testConnection())) {
-    console.error('Supabase connection failed'); process.exit(1)
+    console.error("❌ Supabase connection failed, aborting.");
+    process.exit(1);
   }
+
   try {
-    const scraped = await scrapeTodayMatchups()
-    if (!scraped.length) throw new Error('No matchups found')
-    const ready = scraped.map(m => ({
-      matchup_id: m.matchup_id,
-      game_id: m.game_id,
-      away_team: m.away_team,
-      home_team: m.home_team,
-      game_date: m.game_date,
-      away_team_id: TEAM_NAME_TO_ID[m.away_team] ?? null,
-      home_team_id: TEAM_NAME_TO_ID[m.home_team] ?? null
-    }))
-    const { data, error } = await supabase.from('mlb_matchups').upsert(ready, { onConflict: ['matchup_id'] }).select()
-    if (error) throw error
-    createScrapeReport({ success: true, timestamp: new Date().toISOString(), stats: { matchups: data.length } })
-    return { success: true, matchups: data }
+    const matchups = await scrapeTodayMatchups();
+
+    if (matchups.length === 0) {
+      console.warn("⚠️  No matchups found today — nothing to insert.");
+      createScrapeReport({
+        success: false,
+        error: "No matchups found",
+        timestamp: new Date().toISOString(),
+        stats: { matchups: 0 }
+      });
+      return { success: false, error: "No matchups found", matchups: [] };
+    }
+
+    // enrich with the FK IDs
+    const enriched = matchups.map(m => ({
+      ...m,
+      away_team_id: TEAM_NAME_TO_ID[m.away_team]   ?? null,
+      home_team_id: TEAM_NAME_TO_ID[m.home_team]   ?? null
+    }));
+
+    console.log(`→ Upserting ${enriched.length} records to Supabase…`);
+    const { data, error } = await supabase
+      .from("mlb_matchups")
+      .upsert(enriched, { onConflict: ["matchup_id"] })
+      .select();
+
+    if (error) throw error;
+
+    console.log(`✅ Saved ${data.length} rows.`);
+    createScrapeReport({
+      success: true,
+      timestamp: new Date().toISOString(),
+      stats: { matchups: data.length },
+      matchups: data
+    });
+
+    return { success: true, matchups: data };
+
   } catch (err) {
-    console.error(err.message)
-    createScrapeReport({ success: false, error: err.message, timestamp: new Date().toISOString(), stats: { matchups: 0 } })
-    return { success: false, error: err.message, matchups: [] }
+    console.error("❌ Error in scraper:", err.message);
+    createScrapeReport({
+      success: false,
+      error: err.message,
+      timestamp: new Date().toISOString(),
+      stats: { matchups: 0 }
+    });
+    return { success: false, error: err.message, matchups: [] };
   }
 }
 
-if (import.meta.url.endsWith('scrapeMatchupIds.js')) {
-  scrapeAndSaveTodayMatchups().then(() => process.exit(0)).catch(() => process.exit(1))
+// Export the functions
+export { scrapeTodayMatchups, scrapeAndSaveTodayMatchups };
+
+// Run if this script is executed directly
+if (import.meta.url.endsWith("scrapeMatchupIds.js")) {
+  scrapeAndSaveTodayMatchups()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
 }
