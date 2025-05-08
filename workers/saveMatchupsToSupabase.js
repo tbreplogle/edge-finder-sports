@@ -1,6 +1,23 @@
 // workers/saveMatchupsToSupabase.js
-import { scrapeTodayMatchups } from './scrapeMatchupIds.js';
+import * as matchupScraper from './scrapeMatchupIds.js';
 import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
+
+/**
+ * Choose the scrape function that actually exists in scrapeMatchupIds.js
+ *  - Prefer scrapeTodayMatchups
+ *  - Fallback to scrapeAndSaveTodayMatchups
+ */
+const scrapeFn =
+  matchupScraper.scrapeTodayMatchups ??
+  matchupScraper.scrapeAndSaveTodayMatchups;
+
+if (typeof scrapeFn !== 'function') {
+  console.error(
+    '❌ Neither scrapeTodayMatchups nor scrapeAndSaveTodayMatchups was exported ' +
+      'from scrapeMatchupIds.js – cannot continue.'
+  );
+  process.exit(1);
+}
 
 async function main() {
   console.log('⏳ Starting MLB matchup scraper…');
@@ -14,15 +31,15 @@ async function main() {
   try {
     // 2) Scrape today’s matchups
     console.log('🕵️‍♂️  Scraping today’s MLB matchups…');
-    const rawMatchups = await scrapeTodayMatchups();
+    const rawMatchups = await scrapeFn();
 
     // 3) Always assign a game_date (default to today‑CT if missing)
     const todayCT = new Date().toLocaleDateString('en-CA', {
-      timeZone: 'America/Chicago'
+      timeZone: 'America/Chicago',
     }); // YYYY‑MM‑DD
     const matchups = rawMatchups.map(m => ({
       ...m,
-      game_date: m.game_date || todayCT
+      game_date: m.game_date || todayCT,
     }));
 
     console.log(`→ Upserting ${matchups.length} records to Supabase…`);
@@ -34,20 +51,19 @@ async function main() {
     if (error) throw error;
 
     console.log(`✅ Upserted ${data.length} rows.`);
-    createScrapeReport({
+    await createScrapeReport({
       success: true,
       timestamp: new Date().toISOString(),
-      stats: { matchups: data.length }
+      stats: { matchups: data.length },
     });
     process.exit(0);
-
   } catch (err) {
     console.error('❌ Error in scraper:', err.message);
-    createScrapeReport({
+    await createScrapeReport({
       success: false,
       error: err.message,
       timestamp: new Date().toISOString(),
-      stats: { matchups: 0 }
+      stats: { matchups: 0 },
     });
     process.exit(1);
   }
