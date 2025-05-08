@@ -1,72 +1,32 @@
+
 // workers/saveMatchupsToSupabase.js
-import * as matchupScraper from './scrapeMatchupIds.js';
-import { supabase, testConnection, createScrapeReport } from './lib/supabaseClient.js';
+import { scrapeAndSaveTodayMatchups } from './scrapeMatchupIds.js';
 
 /**
- * Choose the scrape function that actually exists in scrapeMatchupIds.js
- *  - Prefer scrapeTodayMatchups
- *  - Fallback to scrapeAndSaveTodayMatchups
+ * Main function to scrape and save MLB matchups to Supabase
  */
-const scrapeFn =
-  matchupScraper.scrapeTodayMatchups ??
-  matchupScraper.scrapeAndSaveTodayMatchups;
-
-if (typeof scrapeFn !== 'function') {
-  console.error(
-    '❌ Neither scrapeTodayMatchups nor scrapeAndSaveTodayMatchups was exported ' +
-      'from scrapeMatchupIds.js – cannot continue.'
-  );
-  process.exit(1);
-}
-
 async function main() {
-  console.log('⏳ Starting MLB matchup scraper…');
-
-  // 1) Ensure we can talk to Supabase
-  if (!(await testConnection())) {
-    console.error('❌ Supabase connection failed, aborting.');
-    process.exit(1);
-  }
-
+  console.log('Starting MLB matchup scraper...');
+  
   try {
-    // 2) Scrape today’s matchups
-    console.log('🕵️‍♂️  Scraping today’s MLB matchups…');
-    const rawMatchups = await scrapeFn();
-
-    // 3) Always assign a game_date (default to today‑CT if missing)
-    const todayCT = new Date().toLocaleDateString('en-CA', {
-      timeZone: 'America/Chicago',
-    }); // YYYY‑MM‑DD
-    const matchups = rawMatchups.map(m => ({
-      ...m,
-      game_date: m.game_date || todayCT,
-    }));
-
-    console.log(`→ Upserting ${matchups.length} records to Supabase…`);
-    const { data, error } = await supabase
-      .from('mlb_matchups')
-      .upsert(matchups, { onConflict: ['matchup_id'] })
-      .select();
-
-    if (error) throw error;
-
-    console.log(`✅ Upserted ${data.length} rows.`);
-    await createScrapeReport({
-      success: true,
-      timestamp: new Date().toISOString(),
-      stats: { matchups: data.length },
-    });
-    process.exit(0);
-  } catch (err) {
-    console.error('❌ Error in scraper:', err.message);
-    await createScrapeReport({
-      success: false,
-      error: err.message,
-      timestamp: new Date().toISOString(),
-      stats: { matchups: 0 },
-    });
+    // Scrape and save matchups
+    console.log('Scraping and saving today\'s MLB matchups...');
+    const result = await scrapeAndSaveTodayMatchups();
+    
+    if (result.success) {
+      console.log(`✅ Successfully scraped and saved ${result.matchups.length} MLB matchups`);
+      return result.matchups;
+    } else {
+      console.error('❌ Failed to save MLB matchups:', result.error);
+      return [];
+    }
+  } catch (error) {
+    console.error('Error in MLB matchups scraper:', error);
     process.exit(1);
   }
 }
 
-main();
+// Run the script
+main()
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1));
