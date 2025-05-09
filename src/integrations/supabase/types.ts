@@ -9,13 +9,37 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      mlb_daily_history: {
+        Row: {
+          archived_at: string
+          hist_pk: string
+          id: string | null
+          payload: Json
+          source_table: string
+        }
+        Insert: {
+          archived_at?: string
+          hist_pk?: string
+          id?: string | null
+          payload: Json
+          source_table: string
+        }
+        Update: {
+          archived_at?: string
+          hist_pk?: string
+          id?: string | null
+          payload?: Json
+          source_table?: string
+        }
+        Relationships: []
+      }
       mlb_market_odds: {
         Row: {
           away_ml: number | null
           away_team_id: number | null
           game_date: string
           game_id: string
-          game_time_utc: string
+          game_time_ct: string
           home_ml: number | null
           home_team_id: number | null
           matchup_id: string | null
@@ -26,7 +50,7 @@ export type Database = {
           away_team_id?: number | null
           game_date: string
           game_id: string
-          game_time_utc: string
+          game_time_ct: string
           home_ml?: number | null
           home_team_id?: number | null
           matchup_id?: string | null
@@ -37,7 +61,7 @@ export type Database = {
           away_team_id?: number | null
           game_date?: string
           game_id?: string
-          game_time_utc?: string
+          game_time_ct?: string
           home_ml?: number | null
           home_team_id?: number | null
           matchup_id?: string | null
@@ -93,7 +117,7 @@ export type Database = {
           away_team: string
           away_team_id: number | null
           created_at: string
-          game_date: string
+          game_date: string | null
           game_id: string
           home_team: string
           home_team_id: number | null
@@ -103,7 +127,7 @@ export type Database = {
           away_team: string
           away_team_id?: number | null
           created_at?: string
-          game_date: string
+          game_date?: string | null
           game_id: string
           home_team: string
           home_team_id?: number | null
@@ -113,7 +137,7 @@ export type Database = {
           away_team?: string
           away_team_id?: number | null
           created_at?: string
-          game_date?: string
+          game_date?: string | null
           game_id?: string
           home_team?: string
           home_team_id?: number | null
@@ -413,6 +437,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      archive_mlb_daily_data: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       get_mlb_team_stats: {
         Args: Record<PropertyKey, never>
         Returns: Json

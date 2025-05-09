@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("time");
   const [admin, setAdmin] = useState(false);
+  const [featuredGame, setFeaturedGame] = useState<ProcessedMlbPrediction | null>(null);
 
   useEffect(() => {
     const u = localStorage.getItem("user");
@@ -55,11 +57,29 @@ export default function Dashboard() {
       setLoading(true);
       try {
         const rows = await fetchMlbPredictions();
-        setGames(sortGames(rows, sortKey));
+        
+        // Find the game with the highest absolute edge value
+        if (rows.length > 0) {
+          const highestEdgeGame = [...rows].sort((a, b) => {
+            const edgeA = Math.max(Math.abs(a.home_edge_pct ?? 0), Math.abs(a.away_edge_pct ?? 0));
+            const edgeB = Math.max(Math.abs(b.home_edge_pct ?? 0), Math.abs(b.away_edge_pct ?? 0));
+            return edgeB - edgeA;
+          })[0];
+          
+          setFeaturedGame(highestEdgeGame);
+          
+          // Remove the featured game from the regular list
+          const filteredGames = rows.filter(game => game.matchup_id !== highestEdgeGame.matchup_id);
+          setGames(sortGames(filteredGames, sortKey));
+        } else {
+          setGames([]);
+          setFeaturedGame(null);
+        }
       } catch (e) {
         console.error(e);
         toast.error("Failed to load MLB predictions");
         setGames([]);
+        setFeaturedGame(null);
       } finally {
         setLoading(false);
       }
@@ -77,6 +97,18 @@ export default function Dashboard() {
         </div>
 
         <SportTabs activeTab="mlb" onTabChange={() => {}} />
+
+        {featuredGame && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-4">Game of the Day</h2>
+            <div className="max-w-3xl">
+              {/* Create a simplified version of FeaturedGame component for the dashboard */}
+              <div className="bg-gradient-to-r from-edge-primary/80 to-edge-secondary/20 rounded-lg overflow-hidden">
+                <GameCard {...featuredGame} isAdmin={admin} isFeatured={true} />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between my-4">
           <h2 className="text-xl font-semibold">MLB Games</h2>
