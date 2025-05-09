@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -14,9 +13,32 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 
+// Define the interface that MlbPredictionsTable expects
+interface MlbPredictionDisplay {
+  matchup_id: string;
+  game_id: string;
+  home_team: string;
+  away_team: string;
+  game_date: string;
+  game_time_ct: string;
+  home_market_ml: number | null;
+  away_market_ml: number | null;
+  home_market_pct: number | null;
+  away_market_pct: number | null;
+  home_pred_pct: number | null;
+  away_pred_pct: number | null;
+  home_pred_ml: number | null;
+  away_pred_ml: number | null;
+  home_edge_pct: number | null;
+  away_edge_pct: number | null;
+  home_pitcher: string | null;
+  away_pitcher: string | null;
+  updated_at: string;
+}
+
 const MlbDashboard = () => {
   const { toast } = useToast();
-  const [predictions, setPredictions] = useState<ProcessedMlbPrediction[]>([]);
+  const [predictions, setPredictions] = useState<MlbPredictionDisplay[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [generatedDate, setGeneratedDate] = useState<string | null>(null);
@@ -31,7 +53,15 @@ const MlbDashboard = () => {
 
     try {
       const mlbPredictions = await fetchMlbPredictions();
-      setPredictions(mlbPredictions);
+      
+      // Map the predictions to match the expected MlbPredictionDisplay interface
+      const formattedPredictions: MlbPredictionDisplay[] = mlbPredictions.map(prediction => ({
+        ...prediction,
+        game_date: new Date(prediction.game_time_ct).toISOString().split('T')[0],
+        updated_at: new Date().toISOString()
+      }));
+      
+      setPredictions(formattedPredictions);
       
       // Set the generated date to today's date
       setGeneratedDate(format(new Date(), "MMM d, yyyy"));
