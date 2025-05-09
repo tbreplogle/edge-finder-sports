@@ -13,6 +13,10 @@ const ADMIN_EMAIL = "tbreplogle@gmail.com";
 // Hard-coded password for development purposes only - this should be removed in production
 const ADMIN_PASSWORD = "1234"; 
 
+// Demo user credentials
+const DEMO_EMAIL = "6969@gmail.com";
+const DEMO_PASSWORD = "6969";
+
 export async function authenticateUser(
   email: string, 
   password: string, 
@@ -31,6 +35,27 @@ export async function authenticateUser(
         role: "admin",
         name: "Admin User",
         is_admin: true
+      };
+      
+      if (rememberMe) {
+        localStorage.setItem("user", JSON.stringify(userData));
+        localStorage.setItem("rememberLogin", "true");
+      } else {
+        localStorage.setItem("user", JSON.stringify(userData));
+        localStorage.removeItem("rememberLogin");
+      }
+      
+      return { userData, error: null };
+    }
+    
+    // Check for demo login
+    if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
+      // Create demo user data
+      const userData: UserData = {
+        email: DEMO_EMAIL,
+        role: "premium",
+        name: "Demo User",
+        is_admin: false
       };
       
       if (rememberMe) {
