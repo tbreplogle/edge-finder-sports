@@ -1,276 +1,93 @@
-
-import { useState, useEffect } from "react";
-import { AppLayout } from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { FeaturedGame } from "@/components/FeaturedGame";
-import { SportTabs } from "@/components/SportTabs";
-import { CalendarIcon, ArrowDownUp } from "lucide-react";
-import { GameCard } from "@/components/GameCard";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
+import { CalendarIcon, ArrowDownUp } from "lucide-react";
 import { toast } from "sonner";
-import {
-  fetchMlbPredictions,
-  ProcessedMlbPrediction
-} from "@/utils/fetchMlbPredictions";
-import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
-import { OddsApiGame } from "@/utils/types/sports";
 
-interface GameData {
-  id: string;
-  sport: "nfl" | "ncaaf" | "ncaab" | "mlb";
-  homeTeam: string;
-  awayTeam: string;
-  startTime: string;
-  marketMoneyline?: number | null;
-  marketImpliedPct?: number | null;
-  predictedOdds?: number | null;
-  predictedImpliedPct?: number | null;
-  edgePct?: number | null;
-  isPremium?: boolean;
-  isPreviewGame?: boolean;
-  // Add separate fields for home/away odds
-  homeMarketMoneyline?: number | null;
-  awayMarketMoneyline?: number | null;
-  homePredictedOdds?: number | null;
-  awayPredictedOdds?: number | null;
-  homePredictedPct?: number | null;
-  awayPredictedPct?: number | null;
-}
+import { AppLayout } from "@/components/AppLayout";
+import { SportTabs } from "@/components/SportTabs";
+import { Button } from "@/components/ui/button";
+import { GameCard } from "@/components/GameCard";
+import { FeaturedGame } from "@/components/FeaturedGame";
 
-const sampleGames: GameData[] = [
-  { id: "1", sport: "nfl", homeTeam: "Chiefs",  awayTeam: "Eagles", startTime: "2024-09-08T19:20:00", edgePct: 1.2 },
-  { id: "2", sport: "ncaaf", homeTeam: "Alabama",awayTeam: "Georgia",startTime: "2024-09-14T15:30:00", edgePct: 0.9 },
-  { id: "3", sport: "ncaab", homeTeam: "Duke",   awayTeam: "UNC",    startTime: "2024-11-28T21:00:00", edgePct: 1.5 },
-];
+import { fetchMlbPredictions, ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
+
+/* ─────────────────────────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
-  const [activeSport, setActiveSport] = useState<GameData["sport"]>("mlb");
-  const [games, setGames]         = useState<GameData[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [sortOrder, setSortOrder] = useState<"asc"|"desc">("desc");
-  const [isAdmin, setIsAdmin]     = useState(false);
-  const [isPaid, setIsPaid]       = useState(false);
-  const [liveOdds, setLiveOdds]   = useState<OddsApiGame[]>([]);
+  const [games,  setGames]   = useState<ProcessedMlbPrediction[]>([]);
+  const [loading,setLoading] = useState(true);
+  const [dir,    setDir]     = useState<"asc"|"desc">("desc");
+  const [admin,  setAdmin]   = useState(false);
 
-  useEffect(() => {
+  /* who am I */
+  useEffect(()=>{
     const u = localStorage.getItem("user");
     if (u) {
+      try { setAdmin(JSON.parse(u).is_admin === true); }
+      catch { /* noop */ }
+    }
+  },[]);
+
+  /* load MLB predictions once */
+  useEffect(()=>{
+    async function go() {
+      setLoading(true);
       try {
-        const user = JSON.parse(u);
-        setIsAdmin(user.is_admin === true);
-        setIsPaid(user.role === "premium" || user.is_admin === true);
-        console.log("User data:", { isAdmin: user.is_admin, role: user.role, isPaid });
-      } catch (e) {
-        console.error("Error parsing user data:", e);
-      }
-    } else {
-      console.log("No user data found in localStorage");
+        const rows = await fetchMlbPredictions();
+        setGames(sort(rows,dir));
+      } catch(e:any){
+        console.error(e);
+        toast.error("Failed to load MLB predictions");
+      } finally { setLoading(false); }
     }
-    
-    // Fetch live odds for the current sport
-    async function getLiveOdds() {
-      let sportKey = "";
-      switch (activeSport) {
-        case "mlb": sportKey = SPORT_KEYS.MLB; break;
-        case "nfl": sportKey = SPORT_KEYS.NFL; break;
-        case "ncaaf": sportKey = SPORT_KEYS.NCAAF; break;
-        case "ncaab": sportKey = SPORT_KEYS.NCAAB; break;
-      }
-      if (sportKey) {
-        try {
-          const odds = await fetchOdds(sportKey);
-          setLiveOdds(odds);
-          console.log(`Fetched ${odds.length} live odds for ${activeSport}`);
-        } catch (e) {
-          console.error(`Error fetching odds for ${activeSport}:`, e);
-        }
-      }
-    }
+    go();
+  },[]);               // run once
 
-    getLiveOdds();
-
-    if (activeSport === "mlb") {
-      loadMlb();
-    } else {
-      const filtered = sampleGames.filter(g => g.sport === activeSport);
-      setGames(sort(filtered));
-      setLoading(false);
-    }
-  }, [activeSport]);
-
-  async function loadMlb() {
-    setLoading(true);
-    try {
-      // Directly fetch MLB predictions from the API
-      const preds = await fetchMlbPredictions();
-      
-      // If no data, show empty state
-      if (preds.length === 0) {
-        console.log("No MLB predictions found");
-        setGames([]);
-        setLoading(false);
-        return;
-      }
-      
-      console.log("Fetched MLB predictions:", preds);
-      
-      const out: GameData[] = preds.map(p => {
-        // Find matching live odds if available
-        const liveGame = liveOdds.find(g => 
-          g.id === p.game_id || 
-          (g.home_team === p.home_team && g.away_team === p.away_team)
-        );
-        
-        // Get market ML from live odds if available
-        let homeMarketML = p.home_market_ml;
-        let awayMarketML = p.away_market_ml;
-        
-        if (liveGame && (!homeMarketML || !awayMarketML)) {
-          const bookmaker = liveGame.bookmakers?.[0];
-          if (bookmaker) {
-            const h2h = bookmaker.markets.find(m => m.key === "h2h");
-            if (h2h) {
-              const homeOutcome = h2h.outcomes.find(o => o.name === p.home_team);
-              const awayOutcome = h2h.outcomes.find(o => o.name === p.away_team);
-              
-              if (homeOutcome) {
-                homeMarketML = homeOutcome.price;
-              }
-              
-              if (awayOutcome) {
-                awayMarketML = awayOutcome.price;
-              }
-            }
-          }
-        }
-        
-        // Premium if edge is greater than 2% (absolute value) and user is not admin
-        const isPremium = Math.abs(p.edge_pct || 0) > 0.02;
-        
-        return {
-          id: p.matchup_id,
-          sport: "mlb" as const,
-          homeTeam: p.home_team,
-          awayTeam: p.away_team,
-          startTime: p.game_date,
-          // Keep legacy fields for compatibility
-          marketMoneyline: homeMarketML, 
-          marketImpliedPct: p.home_market_implied_pct,
-          predictedOdds: p.home_moneyline,
-          predictedImpliedPct: p.home_predicted_pct,
-          edgePct: p.edge_pct,
-          isPremium,
-          // Add separate fields for home/away odds
-          homeMarketMoneyline: homeMarketML,
-          awayMarketMoneyline: awayMarketML,
-          homePredictedOdds: p.home_moneyline,
-          awayPredictedOdds: p.away_moneyline,
-          homePredictedPct: p.home_predicted_pct,
-          awayPredictedPct: p.away_predicted_pct,
-        };
-      });
-      
-      console.log("Processed game data:", out);
-      setGames(sort(out));
-    } catch (e) {
-      console.error("Failed to load MLB predictions:", e);
-      toast.error("Failed to load MLB predictions");
-      
-      // Show empty state on error
-      setGames([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function sort(list: GameData[]) {
-    return [...list].sort((a, b) => {
-      const ea = Math.abs(a.edgePct || 0),
-            eb = Math.abs(b.edgePct || 0);
-      return sortOrder === "desc" ? eb - ea : ea - eb;
+  /* re‑sort when direction flips */
+  function sort(list:ProcessedMlbPrediction[], d:"asc"|"desc"){
+    return [...list].sort((a,b)=>{
+      const ae = Math.max(Math.abs(a.home_edge_pct||0),Math.abs(a.away_edge_pct||0));
+      const be = Math.max(Math.abs(b.home_edge_pct||0),Math.abs(b.away_edge_pct||0));
+      return d==="desc" ? be-ae : ae-be;
     });
   }
-
-  function toggleSort() {
-    setSortOrder(o => o === "desc" ? "asc" : "desc");
-    setGames(sort(games));
-  }
-
-  const preview = !isAdmin && !isPaid
-    ? [...games].sort((a,b)=>Math.abs(b.edgePct||0)-Math.abs(a.edgePct||0))[0]
-    : null;
-  const shown = preview ? games.filter(g=>g.id!==preview.id) : games;
-
-  // Fix: Use proper type for the sport change handler
-  const handleSportChange = (value: string) => {
-    setActiveSport(value as GameData["sport"]);
-  };
+  const toggle = ()=> setDir(d=>d==="asc"?"desc":"asc");
 
   return (
     <AppLayout>
       <div className="container mx-auto py-8 space-y-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          <div className="md:col-span-2">
-            <h1 className="text-3xl font-bold">Today's Predictions</h1>
-            <div className="flex items-center text-muted-foreground my-2">
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              <span>{format(new Date(), "EEEE, MMMM d")}</span>
-            </div>
-
-            <SportTabs activeTab={activeSport} onTabChange={handleSportChange} />
-
-            <div className="flex justify-between items-center mt-4 mb-2">
-              <h2 className="text-xl font-semibold">{activeSport.toUpperCase()} Games</h2>
-              <Button variant="outline" size="sm" onClick={toggleSort} className="flex items-center gap-1">
-                <ArrowDownUp className="h-4 w-4" />
-                {sortOrder==="desc" ? "Highest" : "Lowest"} Edge
-              </Button>
-            </div>
-
-            {loading ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {[1,2,3,4].map(i=>(
-                  <div key={i} className="h-40 bg-muted rounded-lg animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              <>
-                {games.length === 0 ? (
-                  <div className="p-8 text-center border rounded-lg bg-muted">
-                    <p className="text-muted-foreground">No {activeSport.toUpperCase()} games available at this time</p>
-                  </div>
-                ) : (
-                  <>
-                    {preview && (
-                      <div className="mb-4">
-                        <h3 className="font-medium mb-1">Preview Game</h3>
-                        <GameCard 
-                          {...preview} 
-                          isAdmin={isAdmin} 
-                          isPaid={isPaid} 
-                          isPreviewGame
-                        />
-                      </div>
-                    )}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {shown.map(g=>(
-                        <GameCard 
-                          key={g.id} 
-                          {...g} 
-                          isAdmin={isAdmin} 
-                          isPaid={isPaid} 
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-          <div className="space-y-6">
-            <FeaturedGame />
-          </div>
+        <h1 className="text-3xl font-bold">Today's Predictions</h1>
+        <div className="flex items-center text-muted-foreground">
+          <CalendarIcon className="w-4 h-4 mr-2"/>
+          <span>{format(new Date(),"EEEE, MMMM d")}</span>
         </div>
+
+        <SportTabs activeTab="mlb" onTabChange={()=>{}}/>
+
+        <div className="flex items-center justify-between my-4">
+          <h2 className="text-xl font-semibold">MLB Games</h2>
+          <Button variant="outline" size="sm" onClick={()=>{toggle(); setGames(sort(games,dir==="asc"?"desc":"asc"));}}>
+            <ArrowDownUp className="w-4 h-4 mr-1"/>{dir==="desc"?"Highest":"Lowest"} Edge
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="grid md:grid-cols-2 gap-4">
+            {Array.from({length:4}).map((_,i)=>(
+              <div key={i} className="h-44 bg-muted rounded-lg animate-pulse"/>
+            ))}
+          </div>
+        ) : games.length===0 ? (
+          <p className="text-muted-foreground">No MLB games available.</p>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            {games.map(g=>(
+              <GameCard key={g.matchup_id} {...g} isAdmin={admin}/>
+            ))}
+          </div>
+        )}
+
+        <FeaturedGame />
       </div>
     </AppLayout>
   );
