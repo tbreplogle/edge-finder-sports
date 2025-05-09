@@ -1,191 +1,109 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { fetchOdds, SPORT_KEYS } from "@/utils/oddsApi";
-import { OddsApiGame } from "@/utils/types/sports";
-import { Tables } from "@/integrations/supabase/types";
 
-export interface MlbPrediction {
-  matchup_id: string;
-  team_id: number;
-  moneyline: number | null;
-  rating: number | null;
-  adjusted_rating: number | null;
-  win_pct: number | null;
-  created_at: string;
+/* ────────────────────────────────────────────────────────────────────────────
+   helpers
+   ────────────────────────────────────────────────────────────────────────── */
+function mlToPct(ml: number | null): number | null {
+  if (ml == null) return null;
+  return ml > 0
+    ? 100 / (ml + 100)
+    : Math.abs(ml) / (Math.abs(ml) + 100);
 }
 
-export interface MlbMatchup {
-  matchup_id: string;
-  game_id: string;
-  home_team: string;
-  away_team: string;
-  game_date: string;
-  home_team_id: number | null;
-  away_team_id: number | null;
+function pctToMl(p: number | null): number | null {
+  if (p == null) return null;
+  return p > 0.5
+    ? -Math.round((p / (1 - p)) * 100)
+    :  Math.round(((1 - p) / p) * 100);
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   type
+   ────────────────────────────────────────────────────────────────────────── */
 export interface ProcessedMlbPrediction {
   matchup_id: string;
-  game_id: string;
+  game_id:   string;
   home_team: string;
   away_team: string;
-  game_date: string;
-  home_moneyline: number | null;
-  away_moneyline: number | null;
-  home_market_ml: number | null;
-  away_market_ml: number | null;
-  home_predicted_pct: number | null;
-  away_predicted_pct: number | null;
-  home_market_implied_pct: number | null;
-  away_market_implied_pct: number | null;
-  edge_pct: number | null;
-  updated_at: string;
+  game_time_ct: string;      // ISO in central‑time
+
+  home_market_ml:  number | null;
+  away_market_ml:  number | null;
+  home_market_pct: number | null;
+  away_market_pct: number | null;
+
+  home_pred_pct:   number | null;
+  away_pred_pct:   number | null;
+  home_pred_ml:    number | null;
+  away_pred_ml:    number | null;
+
+  home_edge_pct:   number | null;   // pred – market
+  away_edge_pct:   number | null;
 }
 
-// Calculate implied probability (0–1) from a moneyline.
-function calculateImpliedProbability(odds: number): number {
-  if (odds > 0) {
-    return 100 / (odds + 100);
-  } else {
-    return Math.abs(odds) / (Math.abs(odds) + 100);
-  }
-}
-
+/* ────────────────────────────────────────────────────────────────────────────
+   main fetcher
+   ────────────────────────────────────────────────────────────────────────── */
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
-  try {
-    // Fix: Use correct typing for Supabase queries
-    const { data: predictionsData, error: predictionsError } = await supabase
-      .from("mlb_predictions")
-      .select("*")
-      .order("created_at", { ascending: false });
+  /* 1) get most‑recent rows in mlb_predictions (team level) */
+  const { data: predRows, error: predErr } = await supabase
+    .from("mlb_predictions")
+    .select("matchup_id, team_id, win_pct, created_at")
+    .order("created_at", { ascending: false });
 
-    if (predictionsError) throw predictionsError;
-    if (!predictionsData || !Array.isArray(predictionsData)) return [];
+  if (predErr) throw new Error(predErr.message);
 
-    // Use type assertion to ensure we're working with the right type
-    const typedPredictions = predictionsData as unknown as MlbPrediction[];
-    
-    const { data: matchupsData, error: matchupsError } = await supabase
-      .from("mlb_matchups")
-      .select("*");
+  /* keep first (latest) row per (matchup_id,team_id) */
+  const predMap = new Map<string, number>();  // key = matchup_team
+  predRows.forEach(r => {
+    const k = `${r.matchup_id}_${r.team_id}`;
+    if (!predMap.has(k)) predMap.set(k, r.win_pct ?? null);
+  });
 
-    if (matchupsError) throw matchupsError;
-    if (!matchupsData || !Array.isArray(matchupsData)) return [];
-    
-    // Use type assertion to ensure we're working with the right type
-    const typedMatchups = matchupsData as unknown as MlbMatchup[];
+  /* 2) join market odds + names + time */
+  const { data: oddsRows, error: oddsErr } = await supabase
+    .from("mlb_market_odds")
+    .select(`matchup_id, game_id, game_time_ct,
+             home_team_id, away_team_id,
+             home_ml, away_ml`);
 
-    // pull live odds
-    const sportKey = SPORT_KEYS.MLB;
-    const liveOddsData = await fetchOdds(sportKey);
+  if (oddsErr) throw new Error(oddsErr.message);
 
-    // map for quick lookup
-    const matchupsMap = new Map(typedMatchups.map(m => [m.matchup_id, m] as const));
-    const oddsMap = new Map(liveOddsData.map(o => [o.id, o] as const));
+  const { data: muRows, error: muErr } = await supabase
+    .from("mlb_matchups")
+    .select("matchup_id, home_team, away_team");
 
-    // Group predictions by matchup_id to get both teams
-    const predictionsByMatchup = new Map<string, MlbPrediction[]>();
-    
-    for (const pred of typedPredictions) {
-      if (!predictionsByMatchup.has(pred.matchup_id)) {
-        predictionsByMatchup.set(pred.matchup_id, []);
-      }
-      
-      const existingPreds = predictionsByMatchup.get(pred.matchup_id)!;
-      
-      // Check if we already have a prediction for this team
-      const teamPredIndex = existingPreds.findIndex(p => p.team_id === pred.team_id);
-      
-      if (teamPredIndex === -1) {
-        // No prediction for this team yet, add it
-        existingPreds.push(pred);
-      } else if (new Date(pred.created_at) > new Date(existingPreds[teamPredIndex].created_at)) {
-        // Newer prediction for this team, replace it
-        existingPreds[teamPredIndex] = pred;
-      }
-    }
+  if (muErr) throw new Error(muErr.message);
+  const muMap = new Map(muRows.map(m => [m.matchup_id, m]));
 
-    const out: ProcessedMlbPrediction[] = [];
+  /* 3) build output */
+  return oddsRows.map(o => {
+    const mu = muMap.get(o.matchup_id);
+    const homePredPct = predMap.get(`${o.matchup_id}_${o.home_team_id}`) ?? null;
+    const awayPredPct = predMap.get(`${o.matchup_id}_${o.away_team_id}`) ?? null;
 
-    for (const [matchupId, preds] of predictionsByMatchup.entries()) {
-      const m = matchupsMap.get(matchupId);
-      if (!m) continue;
+    const homeMktPct = mlToPct(o.home_ml);
+    const awayMktPct = mlToPct(o.away_ml);
 
-      // find live-API game by id or team names
-      const liveGame = oddsMap.get(m.game_id)
-        ?? Array.from(oddsMap.values()).find(g =>
-             (g.home_team === m.home_team && g.away_team === m.away_team)
-          );
+    return {
+      matchup_id      : o.matchup_id,
+      game_id         : o.game_id,
+      home_team       : mu?.home_team ?? "",
+      away_team       : mu?.away_team ?? "",
+      game_time_ct    : o.game_time_ct,
 
-      // Extract market ML for both teams
-      let home_market_ml: number | null = null;
-      let away_market_ml: number | null = null;
-      
-      if (liveGame) {
-        const bm = liveGame.bookmakers?.[0];
-        const h2h = bm?.markets.find(x => x.key === "h2h");
-        if (h2h) {
-          const homeO = h2h.outcomes.find(o => o.name === m.home_team);
-          const awayO = h2h.outcomes.find(o => o.name === m.away_team);
-          
-          if (homeO) home_market_ml = homeO.price;
-          if (awayO) away_market_ml = awayO.price;
-        }
-      }
+      home_market_ml  : o.home_ml,
+      away_market_ml  : o.away_ml,
+      home_market_pct : homeMktPct,
+      away_market_pct : awayMktPct,
 
-      // Process predictions for each team
-      let home_moneyline: number | null = null;
-      let away_moneyline: number | null = null;
-      let home_predicted_pct: number | null = null;
-      let away_predicted_pct: number | null = null;
-      
-      for (const pred of preds) {
-        if (pred.team_id === m.home_team_id) {
-          home_moneyline = pred.moneyline;
-          // Store win_pct as a decimal (0-1) value
-          home_predicted_pct = pred.win_pct ? pred.win_pct / 100 : null;
-        } else if (pred.team_id === m.away_team_id) {
-          away_moneyline = pred.moneyline;
-          // Store win_pct as a decimal (0-1) value
-          away_predicted_pct = pred.win_pct ? pred.win_pct / 100 : null;
-        }
-      }
+      home_pred_pct   : homePredPct,
+      away_pred_pct   : awayPredPct,
+      home_pred_ml    : pctToMl(homePredPct),
+      away_pred_ml    : pctToMl(awayPredPct),
 
-      const home_market_implied_pct = home_market_ml != null ? calculateImpliedProbability(home_market_ml) : null;
-      const away_market_implied_pct = away_market_ml != null ? calculateImpliedProbability(away_market_ml) : null;
-
-      // Calculate edge as the difference between predicted and market for the higher probability team
-      let edge_pct: number | null = null;
-      
-      if (home_predicted_pct != null && home_market_implied_pct != null) {
-        edge_pct = (home_predicted_pct - home_market_implied_pct) * 100;
-      } else if (away_predicted_pct != null && away_market_implied_pct != null) {
-        edge_pct = (away_predicted_pct - away_market_implied_pct) * 100;
-      }
-
-      out.push({
-        matchup_id: matchupId,
-        game_id: m.game_id,
-        home_team: m.home_team,
-        away_team: m.away_team,
-        game_date: m.game_date,
-        home_moneyline,
-        away_moneyline,
-        home_market_ml,
-        away_market_ml,
-        home_predicted_pct,
-        away_predicted_pct,
-        home_market_implied_pct,
-        away_market_implied_pct,
-        edge_pct,
-        updated_at: preds[0]?.created_at || new Date().toISOString()
-      });
-    }
-
-    return out;
-  }
-  catch (e) {
-    console.error("fetchMlbPredictions error:", e);
-    return [];
-  }
+      home_edge_pct   : (homePredPct!=null && homeMktPct!=null) ? homePredPct - homeMktPct : null,
+      away_edge_pct   : (awayPredPct!=null && awayMktPct!=null) ? awayPredPct - awayMktPct : null
+    };
+  });
 }
