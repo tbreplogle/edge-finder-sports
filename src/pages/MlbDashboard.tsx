@@ -2,11 +2,13 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Calendar, RefreshCw, Info } from "lucide-react";
+import { Calendar, RefreshCw, Info, Trophy } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { MlbPredictionsTable } from "@/components/admin/MlbPredictionsTable";
 import { fetchMlbPredictions, ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
+import { findHighestEdgePrediction } from "@/lib/utils";
+import { GameCard } from "@/components/GameCard";
 import {
   Alert,
   AlertDescription,
@@ -43,6 +45,7 @@ const MlbDashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [generatedDate, setGeneratedDate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [featuredGame, setFeaturedGame] = useState<ProcessedMlbPrediction | null>(null);
 
   const fetchData = async (skipLoading = false) => {
     if (!skipLoading) {
@@ -54,8 +57,19 @@ const MlbDashboard = () => {
     try {
       const mlbPredictions = await fetchMlbPredictions();
       
+      // Find the game with the highest edge to feature
+      const featured = findHighestEdgePrediction(mlbPredictions);
+      
+      // Filter out the featured game from regular predictions
+      const regularPredictions = featured 
+        ? mlbPredictions.filter(p => p.matchup_id !== featured.matchup_id)
+        : mlbPredictions;
+      
+      // Set the featured game
+      setFeaturedGame(featured || null);
+      
       // Map the predictions to match the expected MlbPredictionDisplay interface
-      const formattedPredictions: MlbPredictionDisplay[] = mlbPredictions.map(prediction => ({
+      const formattedPredictions: MlbPredictionDisplay[] = regularPredictions.map(prediction => ({
         ...prediction,
         game_date: new Date(prediction.game_time_ct).toISOString().split('T')[0],
         updated_at: new Date().toISOString()
@@ -94,9 +108,12 @@ const MlbDashboard = () => {
   return (
     <AppLayout isAuthenticated={isAuthenticated}>
       <div className="container py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">MLB Predictions Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+              MLB Predictions
+              <span className="text-edge-secondary">Dashboard</span>
+            </h1>
             <p className="text-muted-foreground">
               MLB games with predicted odds and market edges
             </p>
@@ -119,6 +136,21 @@ const MlbDashboard = () => {
             </Button>
           </div>
         </div>
+
+        {/* Game of the Day section */}
+        {featuredGame && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy className="h-5 w-5 text-edge-secondary" />
+              <h2 className="text-xl font-bold">Game of the Day</h2>
+            </div>
+            <GameCard 
+              {...featuredGame} 
+              isAdmin={true}
+              isFeatured={true}
+            />
+          </div>
+        )}
         
         <Alert className="mb-6 bg-muted">
           <Info className="h-4 w-4" />
@@ -134,7 +166,10 @@ const MlbDashboard = () => {
             <p className="text-muted-foreground">Loading MLB predictions...</p>
           </div>
         ) : (
-          <MlbPredictionsTable predictions={predictions} isLoading={false} />
+          <div>
+            <h2 className="text-xl font-bold mb-4">All MLB Games</h2>
+            <MlbPredictionsTable predictions={predictions} isLoading={false} />
+          </div>
         )}
 
         <div className="mt-8 p-4 border rounded-lg bg-card">
