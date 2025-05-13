@@ -1,34 +1,46 @@
--- sql/mlb_predictions.sql
+-- ============================================
+--  mlb_predictions.sql   (run with psql -f …)
+-- --------------------------------------------
+--  • raw rating (0‑143) from pitching + 7‑day hitting
+--  • home/away adjustment
+--  • Elo‑style win‑probability
+--  • clamp to 12 %‑88 %
+--  • convert to American money‑line
+--  • UPSERT into mlb_predictions
+-- ============================================
 
--- 1) Ensure table exists
-\i sql/create_mlb_predictions_table.sql
+-- 0) make sure the table exists
+\i sql/create_mlb_predictions_table.sql     -- ← path to your DDL
 
--- 2) Compute raw ratings per team (capped at 143),
---    joining in each team’s 7‑day hitting HR & BA for the exact game date
+-- -------------------------------------------------------------------
+-- 1) raw rating, joined with SAME‑DATE 7‑day team‑hitting stats
+-- -------------------------------------------------------------------
 WITH ratings AS (
   SELECT
     pm.matchup_id,
     pm.team_id,
     LEAST(
       56.74
-      +  0.108  * hs.home_runs    -- hitters’ HR over last 7 days
-      -  0.0934 * pm.hr            -- pitchers’ HR allowed
-      + 334.9  * hs.avg           -- hitters’ BA over last 7 days
+      +  0.108  * hs.home_runs          -- last‑7‑day team HR
+      -  0.0934 * pm.hr                 -- pitcher HR allowed
+      + 334.9  * hs.avg                 -- last‑7‑day BA
       +  0.188  * pm.era_plus
       -  61.98  * pm.whip,
-      143
-    ) AS rating,
+      143                                -- hard cap
+    )                        AS rating,
     pm.pitcher_role
   FROM pitching_matchups pm
   JOIN mlb_matchups m
-    ON pm.matchup_id = m.matchup_id
+        ON m.matchup_id = pm.matchup_id
   JOIN mlb_team_hitting_stats hs
-    ON hs.team_id        = pm.team_id
-   AND hs.game_date      = m.game_date
-   AND hs.timeframe_days = 7
+        ON hs.team_id        = pm.team_id
+       AND hs.game_date      = m.game_date
+       AND hs.timeframe_days = 7
 ),
 
--- 3) Adjust ratings for home vs away
+-- -------------------------------------------------------------------
+-- 2) home / away adjustment (same scaling you used before)
+-- -------------------------------------------------------------------
 adjusted AS (
   SELECT
     r.*,
@@ -40,25 +52,36 @@ adjusted AS (
   FROM ratings r
 ),
 
--- 4) Pair home & away to compute win_pct
+-- -------------------------------------------------------------------
+-- 3) pair home vs away → Elo logistic win%  (clamped 0.12‑0.88)
+-- -------------------------------------------------------------------
 win_probs AS (
   SELECT
     a.matchup_id,
     a.team_id,
     a.rating,
     a.adjusted_rating,
-    b.adjusted_rating AS opp_adjusted_rating,
-    (
-      (a.adjusted_rating - a.adjusted_rating * b.adjusted_rating)
-      / (a.adjusted_rating + b.adjusted_rating - 2 * a.adjusted_rating * b.adjusted_rating)
-    ) AS win_pct
+    b.adjusted_rating                    AS opp_adjusted_rating,
+    /* ----------------------------------------------
+       Elo logistic:   1 / ( 1 + 10^((RB‑RA)/S) )
+       S = 400 by default
+       ---------------------------------------------- */
+    GREATEST(
+      0.12,                              -- lower bound
+      LEAST(
+        0.88,                            -- upper bound
+        1.0 / (1.0 + POWER(10.0, (b.adjusted_rating - a.adjusted_rating)/400.0))
+      )
+    )                                   AS win_pct
   FROM adjusted a
   JOIN adjusted b
-    ON a.matchup_id = b.matchup_id
-   AND a.pitcher_role <> b.pitcher_role
+    ON b.matchup_id   = a.matchup_id
+   AND b.pitcher_role <> a.pitcher_role
 ),
 
--- 5) Convert win_pct into moneyline (Excel formula) and cap to [-500,500]
+-- -------------------------------------------------------------------
+-- 4) convert win% → American odds (probToMoneyline)
+-- -------------------------------------------------------------------
 final AS (
   SELECT
     w.matchup_id,
@@ -66,23 +89,28 @@ final AS (
     w.rating,
     w.adjusted_rating,
     w.win_pct,
-    LEAST(
-      500,
-      GREATEST(
-        -500,
-        CASE
-          WHEN w.win_pct > 0.5
-            THEN ROUND(-100 * w.win_pct / (1 - w.win_pct))
-          ELSE ROUND(100 / w.win_pct - 100)
-        END
-      )
-    ) AS moneyline
+    CASE
+      WHEN w.win_pct >= 0.5
+        /* favourite: negative price */
+        THEN -ROUND( (w.win_pct / (1 - w.win_pct)) * 100 )
+      ELSE
+        /* under‑dog: positive price */
+        ROUND( ((1 - w.win_pct) / w.win_pct) * 100 )
+    END                             AS moneyline
   FROM win_probs w
 )
 
--- 6) Upsert into mlb_predictions
+-- -------------------------------------------------------------------
+-- 5) UPSERT
+-- -------------------------------------------------------------------
 INSERT INTO mlb_predictions
-  (matchup_id, team_id, rating, adjusted_rating, win_pct, moneyline, created_at)
+  (matchup_id,
+   team_id,
+   rating,
+   adjusted_rating,
+   win_pct,
+   moneyline,
+   created_at)
 SELECT
   matchup_id,
   team_id,
@@ -90,12 +118,12 @@ SELECT
   adjusted_rating,
   win_pct,
   moneyline,
-  now()
+  NOW()
 FROM final
 ON CONFLICT (matchup_id, team_id)
-DO UPDATE SET
-  rating          = EXCLUDED.rating,
-  adjusted_rating = EXCLUDED.adjusted_rating,
-  win_pct         = EXCLUDED.win_pct,
-  moneyline       = EXCLUDED.moneyline,
-  created_at      = EXCLUDED.created_at;
+DO UPDATE
+  SET rating          = EXCLUDED.rating,
+      adjusted_rating = EXCLUDED.adjusted_rating,
+      win_pct         = EXCLUDED.win_pct,
+      moneyline       = EXCLUDED.moneyline,
+      created_at      = EXCLUDED.created_at;
