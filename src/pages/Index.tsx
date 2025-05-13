@@ -4,6 +4,8 @@ import { MatchupTicker } from '@/components/MatchupTicker';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { accessRulesRouter } from "./routes/accessRules";
+app.use("/api/access-rules", accessRulesRouter);
 export default function Index() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
