@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { MlbPredictionsTable } from "@/components/admin/MlbPredictionsTable";
+import { MlbPredictionDisplay } from "@/utils/types/sports";
 
 type SortKey = "time" | "edge_desc" | "edge_asc";
 
@@ -102,6 +104,13 @@ export default function MlbDashboard() {
   /* -------- ui helpers -------- */
   const todayStr = format(new Date(), "MMM d, yyyy");
 
+  // Convert ProcessedMlbPrediction[] to MlbPredictionDisplay[] by adding missing fields
+  const predictionDisplays: MlbPredictionDisplay[] = rest.map(pred => ({
+    ...pred,
+    game_date: format(new Date(pred.game_time_ct), 'yyyy-MM-dd'),
+    updated_at: new Date().toISOString()
+  }));
+
   return (
     <AppLayout>
       <div className="container py-8 space-y-10">
@@ -153,12 +162,17 @@ export default function MlbDashboard() {
             </div>
 
             <GameCard
-              {...featured}
+              id={featured.game_id}
               sport="mlb"
+              homeTeam={featured.home_team}
+              awayTeam={featured.away_team}
+              startTime={featured.game_time_ct}
               variant="featured"
               isAdmin={isAdmin}
               isPaid={isPaid}
               isPremium={!isPaid && !isAdmin}
+              // Pass all additional properties for reference
+              {...featured}
             />
           </section>
         )}
@@ -172,13 +186,18 @@ export default function MlbDashboard() {
             </div>
 
             <GameCard
-              {...earliest}
+              id={earliest.game_id}
               sport="mlb"
+              homeTeam={earliest.home_team}
+              awayTeam={earliest.away_team}
+              startTime={earliest.game_time_ct}
               isPreviewGame
               variant="regular"
               isAdmin={isAdmin}
               isPaid={isPaid}
               isPremium={false}
+              // Pass all additional properties for reference
+              {...earliest}
             />
           </section>
         )}
@@ -201,7 +220,7 @@ export default function MlbDashboard() {
             Loading…
           </div>
         ) : isPaid || isAdmin ? (
-          <MlbPredictionsTable predictions={rest} isLoading={false} />
+          <MlbPredictionsTable predictions={predictionDisplays} isLoading={false} />
         ) : (
           <div className="bg-card border rounded-lg p-8 text-center">
             <Lock className="w-10 h-10 mx-auto text-muted-foreground mb-4" />

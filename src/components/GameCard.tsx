@@ -7,60 +7,105 @@ import { ArrowUp, ArrowDown, Clock, LockIcon, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface GameProps {
-  id: string;
+  // Core identifier
+  id?: string;
+  matchup_id?: string;
+  game_id?: string;
+  
+  // Sport type
   sport?: "nfl" | "ncaaf" | "ncaab" | "mlb";
-  homeTeam: string;
-  awayTeam: string;
-  startTime: string;
+  
+  // Team information (support both formats)
+  homeTeam?: string;
+  awayTeam?: string;
+  home_team?: string;
+  away_team?: string;
+  
+  // Time information (support both formats)
+  startTime?: string;
+  game_time_ct?: string;
+  
+  // Odds & market information
   marketMoneyline?: number | null;
   marketImpliedPct?: number | null;
   predictedOdds?: number | null;
   predictedImpliedPct?: number | null;
   edgePct?: number | null;
+  
+  // Team-specific odds fields
+  home_market_ml?: number | null;
+  away_market_ml?: number | null;
+  home_market_pct?: number | null;
+  away_market_pct?: number | null;
+  home_pred_ml?: number | null;
+  away_pred_ml?: number | null;
+  home_pred_pct?: number | null;
+  away_pred_pct?: number | null;
+  home_edge_pct?: number | null;
+  away_edge_pct?: number | null;
+  
+  // Additional information
+  home_pitcher?: string | null;
+  away_pitcher?: string | null;
+  
+  // Display & access control
   isPremium?: boolean;
   isPreviewGame?: boolean;
   isAdmin: boolean;
   isPaid: boolean;
-  /** highlight style for dashboard "Game of the Day" */  
   variant?: "regular" | "featured";
-
-  /*  split–odds fields  */
-  homeMarketMoneyline?: number | null;
-  awayMarketMoneyline?: number | null;
-  homePredictedOdds?: number | null;
-  awayPredictedOdds?: number | null;
-  homePredictedPct?: number | null;
-  awayPredictedPct?: number | null;
 }
 
 export function GameCard({
-  sport = "mlb", // Provide a default value for sport
+  // Use default values and handle both property naming formats
+  sport = "mlb",
   homeTeam,
   awayTeam,
+  home_team,
+  away_team,
   startTime,
+  game_time_ct,
+  
+  // Market data
   marketMoneyline,
   marketImpliedPct,
   predictedOdds,
   predictedImpliedPct,
   edgePct,
+  
+  // Team-specific odds
+  home_market_ml,
+  away_market_ml,
+  home_market_pct,
+  away_market_pct,
+  home_pred_ml,
+  away_pred_ml,
+  home_pred_pct,
+  away_pred_pct,
+  home_edge_pct,
+  away_edge_pct,
+  
+  // Display flags
   isPremium = false,
   isPreviewGame = false,
   isAdmin,
   isPaid,
   variant = "regular",
-  /* split odds */
-  homeMarketMoneyline,
-  awayMarketMoneyline,
-  homePredictedOdds,
-  awayPredictedOdds,
-  homePredictedPct,
-  awayPredictedPct,
 }: GameProps) {
   const [open, setOpen] = useState(false);
 
+  // Set actual team names, supporting both property naming styles
+  const actualHomeTeam = homeTeam || home_team || "Home Team";
+  const actualAwayTeam = awayTeam || away_team || "Away Team";
+  
+  // Set actual time, supporting both property formats
+  const gameTime = startTime || game_time_ct || new Date().toISOString();
+
   const locked = !isAdmin && isPremium && !isPaid;
-  const hasEdge = edgePct != null;
-  const positive = hasEdge && edgePct! > 0;
+  
+  // Use team-specific edge if available, otherwise use general edge
+  const hasEdge = home_edge_pct != null || away_edge_pct != null || edgePct != null;
+  const positive = hasEdge && (home_edge_pct! > 0 || edgePct! > 0); // Oversimplified but works for display
 
   const fmtML = (v?: number | null) =>
     v == null ? "N/A" : v > 0 ? `+${v}` : `${v}`;
@@ -105,7 +150,7 @@ export function GameCard({
             locked && "text-slate-400"
           )}
         >
-          {awayTeam} @ {homeTeam}
+          {actualAwayTeam} @ {actualHomeTeam}
         </h3>
 
         {/* ---------- time ---------- */}
@@ -116,7 +161,7 @@ export function GameCard({
           )}
         >
           <Clock className="w-4 h-4 mr-1" />
-          {new Date(startTime).toLocaleString("en-US", {
+          {new Date(gameTime).toLocaleString("en-US", {
             weekday: "short",
             month: "short",
             day: "numeric",
@@ -151,25 +196,25 @@ export function GameCard({
           <div
             className={cn("font-medium", locked && "text-slate-400 text-sm")}
           >
-            {awayTeam}
+            {actualAwayTeam}
           </div>
           <div className="text-center">
             <div className={locked ? "text-slate-400" : ""}>
-              {fmtML(awayMarketMoneyline ?? marketMoneyline)}
+              {fmtML(away_market_ml ?? marketMoneyline)}
             </div>
-            {awayMarketMoneyline != null && (
+            {away_market_ml != null && (
               <div className="text-xs text-muted-foreground">
-                {fmtPct(marketImpliedPct)}
+                {fmtPct(away_market_pct ?? marketImpliedPct)}
               </div>
             )}
           </div>
           <div className="text-center">
             <div className={locked ? "text-slate-400" : ""}>
-              {fmtML(awayPredictedOdds ?? predictedOdds)}
+              {fmtML(away_pred_ml ?? predictedOdds)}
             </div>
-            {awayPredictedPct != null && (
+            {away_pred_pct != null && (
               <div className="text-xs text-muted-foreground">
-                {fmtPct(awayPredictedPct)}
+                {fmtPct(away_pred_pct)}
               </div>
             )}
           </div>
@@ -178,14 +223,16 @@ export function GameCard({
             <div
               className={cn(
                 "flex items-center justify-center font-bold",
-                edgePct != null && !positive && "text-edge-accent",
-                edgePct != null && positive && "text-edge-secondary"
+                away_edge_pct != null && away_edge_pct < 0 && "text-edge-accent",
+                away_edge_pct != null && away_edge_pct > 0 && "text-edge-secondary",
+                away_edge_pct == null && edgePct != null && !positive && "text-edge-accent",
+                away_edge_pct == null && edgePct != null && positive && "text-edge-secondary"
               )}
             >
-              {edgePct != null ? (
+              {away_edge_pct != null || edgePct != null ? (
                 <>
-                  {positive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
-                  {edgePct.toFixed(1)}%
+                  {(away_edge_pct ?? edgePct)! > 0 ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
+                  {Math.abs((away_edge_pct ?? edgePct)!).toFixed(1)}%
                 </>
               ) : (
                 "N/A"
@@ -197,16 +244,16 @@ export function GameCard({
           <div
             className={cn("font-medium", locked && "text-slate-400 text-sm")}
           >
-            {homeTeam}
+            {actualHomeTeam}
           </div>
           <div className="text-center">
             <div className={locked ? "text-slate-400" : ""}>
-              {fmtML(homeMarketMoneyline ?? marketMoneyline)}
+              {fmtML(home_market_ml ?? marketMoneyline)}
             </div>
           </div>
           <div className="text-center">
             <div className={locked ? "text-slate-400" : ""}>
-              {fmtML(homePredictedOdds ?? predictedOdds)}
+              {fmtML(home_pred_ml ?? predictedOdds)}
             </div>
           </div>
           {variant === "featured" && <div></div>}

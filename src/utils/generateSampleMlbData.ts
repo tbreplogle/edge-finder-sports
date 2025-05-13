@@ -1,13 +1,14 @@
 
-import { CardProps } from "@/components/GameCard";
+import { GameProps } from "@/components/GameCard";
 
 // Function to generate sample MLB data for testing when API is unavailable
-export function generateSampleMlbData(): CardProps[] {
+export function generateSampleMlbData(): GameProps[] {
   const today = new Date();
   const todayDateStr = today.toISOString().split('T')[0];
   
-  const sampleGames: CardProps[] = [
+  const sampleGames: GameProps[] = [
     {
+      id: "685100",
       matchup_id: "685100",
       game_id: "685100",
       home_team: "PHI",
@@ -26,9 +27,10 @@ export function generateSampleMlbData(): CardProps[] {
       home_pitcher: "Wheeler",
       away_pitcher: "Gore",
       isAdmin: false,
-      isFeatured: false
+      isPaid: false
     },
     {
+      id: "685101",
       matchup_id: "685101",
       game_id: "685101",
       home_team: "TOR",
@@ -47,9 +49,10 @@ export function generateSampleMlbData(): CardProps[] {
       home_pitcher: "Berrios",
       away_pitcher: "Houck",
       isAdmin: false,
-      isFeatured: false
+      isPaid: false
     },
     {
+      id: "685102",
       matchup_id: "685102",
       game_id: "685102",
       home_team: "LAA",
@@ -68,9 +71,10 @@ export function generateSampleMlbData(): CardProps[] {
       home_pitcher: "Sandoval",
       away_pitcher: "Skubal",
       isAdmin: false,
-      isFeatured: false
+      isPaid: false
     },
     {
+      id: "685103",
       matchup_id: "685103",
       game_id: "685103",
       home_team: "SF",
@@ -89,7 +93,7 @@ export function generateSampleMlbData(): CardProps[] {
       home_pitcher: "Webb",
       away_pitcher: "Freeland",
       isAdmin: false,
-      isFeatured: false
+      isPaid: false
     }
   ];
   

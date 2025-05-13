@@ -74,18 +74,37 @@ export interface MlbPrediction {
   edge?: number;
 }
 
-
 // --- newly added for fetchMlbPredictions.ts ---
 export interface ProcessedMlbPrediction {
   matchup_id: string;
   game_id: string;
   home_team: string;
   away_team: string;
+  game_time_ct: string;
+
+  home_market_ml: number | null;
+  away_market_ml: number | null;
+  home_market_pct: number | null;
+  away_market_pct: number | null;
+
+  home_pred_pct: number | null;
+  away_pred_pct: number | null;
+  home_pred_ml: number | null;
+  away_pred_ml: number | null;
+
+  home_edge_pct: number | null;
+  away_edge_pct: number | null;
+
+  home_pitcher: string | null;
+  away_pitcher: string | null;
+  
+  // These fields are needed for MlbPredictionDisplay compatibility
+  game_date?: string;
+  updated_at?: string;
+}
+
+// Display format for MLB predictions in tables
+export interface MlbPredictionDisplay extends ProcessedMlbPrediction {
   game_date: string;
-  moneyline: number | null;
-  market_ml: number | null;
-  market_implied_pct: number | null;
-  predicted_implied_pct: number | null;
-  edge_pct: number | null;
   updated_at: string;
 }

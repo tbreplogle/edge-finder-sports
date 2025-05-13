@@ -8,7 +8,6 @@ import { AppLayout } from "@/components/AppLayout";
 import { SportTabs } from "@/components/SportTabs";
 import { Button } from "@/components/ui/button";
 import { GameCard } from "@/components/GameCard";
-import { FeaturedGame } from "@/components/FeaturedGame";
 import { ProcessedMlbPrediction, fetchMlbPredictions } from "@/utils/fetchMlbPredictions";
 import { PremiumBanner } from "@/components/PremiumBanner";
 
@@ -111,12 +110,16 @@ export default function Dashboard() {
             <div className="max-w-5xl mx-auto">
               {/* Always show featured game with full details */}
               <GameCard 
-                {...featuredGame} 
-                sport="mlb" 
+                id={featuredGame.game_id}
+                sport="mlb"
+                homeTeam={featuredGame.home_team}
+                awayTeam={featuredGame.away_team}
+                startTime={featuredGame.game_time_ct}
                 isAdmin={admin} 
                 isPaid={isPaid}
                 isPremium={!isPaid && !admin} 
                 variant="featured"
+                {...featuredGame}
               />
             </div>
           </div>
@@ -149,12 +152,16 @@ export default function Dashboard() {
           <div className="grid md:grid-cols-2 gap-4">
             {games.map(g => (
               <GameCard 
-                key={g.matchup_id} 
-                {...g}
+                key={g.matchup_id}
+                id={g.game_id}
                 sport="mlb"
+                homeTeam={g.home_team}
+                awayTeam={g.away_team}
+                startTime={g.game_time_ct}
                 isAdmin={admin} 
                 isPaid={isPaid}
-                isPremium={!isPaid && !admin} 
+                isPremium={!isPaid && !admin}
+                {...g}
               />
             ))}
           </div>
