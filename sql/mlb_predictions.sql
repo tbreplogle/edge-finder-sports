@@ -1,4 +1,4 @@
-give me the full new code to paste inplace of this one AND MAKE MORE CHANGES IF NECCASRY TO MAKE THIS MORE ACCURATE FROM WHAT YOU FOUND FROM YOUR RESEARC:-- ============================================
+
 --  mlb_predictions.sql   (run with psql -f …)
 -- --------------------------------------------
 --  • raw rating (0‑143) from pitching + 7‑day hitting
