@@ -17,6 +17,7 @@ export interface TickerGame {
   predicted_margin?: number;
   predicted_total?: number | null;
   show_prediction?: boolean;
+  matchup_id?: string; // Added for consistency with GameProps
 }
 
 export interface TickerDay {
@@ -72,6 +73,7 @@ export interface MlbPrediction {
   market_home_ml?: number;
   market_away_ml?: number;
   edge?: number;
+  matchup_id?: string; // Added for consistency
 }
 
 // --- newly added for fetchMlbPredictions.ts ---

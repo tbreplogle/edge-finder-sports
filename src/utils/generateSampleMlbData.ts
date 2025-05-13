@@ -9,11 +9,15 @@ export function generateSampleMlbData(): GameProps[] {
   const sampleGames: GameProps[] = [
     {
       id: "685100",
-      matchup_id: "685100",
+      sport: "mlb",
+      homeTeam: "PHI",
+      awayTeam: "WSH",
+      startTime: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
       game_id: "685100",
+      matchup_id: "685100",
       home_team: "PHI",
       away_team: "WSH",
-      game_time_ct: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
+      game_time_ct: `${todayDateStr}T21:45:00Z`,
       home_market_ml: -150,
       away_market_ml: +130,
       home_market_pct: 0.60,
@@ -31,11 +35,15 @@ export function generateSampleMlbData(): GameProps[] {
     },
     {
       id: "685101",
-      matchup_id: "685101",
+      sport: "mlb",
+      homeTeam: "TOR",
+      awayTeam: "BOS",
+      startTime: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
       game_id: "685101",
+      matchup_id: "685101",
       home_team: "TOR",
       away_team: "BOS",
-      game_time_ct: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
+      game_time_ct: `${todayDateStr}T22:07:00Z`,
       home_market_ml: -120,
       away_market_ml: +110,
       home_market_pct: 0.545,
@@ -53,11 +61,15 @@ export function generateSampleMlbData(): GameProps[] {
     },
     {
       id: "685102",
-      matchup_id: "685102",
+      sport: "mlb",
+      homeTeam: "LAA",
+      awayTeam: "DET",
+      startTime: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
       game_id: "685102",
+      matchup_id: "685102",
       home_team: "LAA",
       away_team: "DET",
-      game_time_ct: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
+      game_time_ct: `${todayDateStr}T00:38:00Z`,
       home_market_ml: 150,
       away_market_ml: -170,
       home_market_pct: 0.40,
@@ -75,11 +87,15 @@ export function generateSampleMlbData(): GameProps[] {
     },
     {
       id: "685103",
-      matchup_id: "685103",
+      sport: "mlb",
+      homeTeam: "SF",
+      awayTeam: "COL",
+      startTime: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
       game_id: "685103",
+      matchup_id: "685103",
       home_team: "SF",
       away_team: "COL",
-      game_time_ct: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
+      game_time_ct: `${todayDateStr}T01:45:00Z`,
       home_market_ml: -200,
       away_market_ml: +180,
       home_market_pct: 0.667,

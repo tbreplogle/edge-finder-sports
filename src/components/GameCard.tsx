@@ -23,6 +23,8 @@ export interface GameProps {
   isPaid: boolean;
   /** highlight style for dashboard "Game of the Day" */  
   variant?: "regular" | "featured";
+  /** Flag to identify if this is a featured game */
+  isFeatured?: boolean;
 
   /*  split–odds fields  */
   homeMarketMoneyline?: number | null;
@@ -31,6 +33,25 @@ export interface GameProps {
   awayPredictedOdds?: number | null;
   homePredictedPct?: number | null;
   awayPredictedPct?: number | null;
+  
+  /* MLB specific fields */
+  matchup_id?: string;
+  game_id?: string; 
+  home_team?: string;
+  away_team?: string;
+  game_time_ct?: string;
+  home_market_ml?: number | null;
+  away_market_ml?: number | null;
+  home_market_pct?: number | null;
+  away_market_pct?: number | null;
+  home_pred_ml?: number | null;
+  away_pred_ml?: number | null;
+  home_pred_pct?: number | null;
+  away_pred_pct?: number | null;
+  home_edge_pct?: number | null;
+  away_edge_pct?: number | null;
+  home_pitcher?: string | null;
+  away_pitcher?: string | null;
 }
 
 export function GameCard({
@@ -225,3 +246,4 @@ export function GameCard({
     </Card>
   );
 }
+
