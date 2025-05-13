@@ -70,7 +70,7 @@ win_probs AS (
       0.12,                              -- lower bound
       LEAST(
         0.88,                            -- upper bound
-        1.0 / (1.0 + POWER(10.0, (b.adjusted_rating - a.adjusted_rating)/400.0))
+        1.0 / (1.0 + POWER(10.0, (b.adjusted_rating - a.adjusted_rating)/70.0))
       )
     )                                   AS win_pct
   FROM adjusted a
