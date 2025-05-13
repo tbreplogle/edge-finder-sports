@@ -48,7 +48,7 @@ export function UserMenu({ showAdminTab = true }: UserMenuProps) {
             </DropdownMenuLabel>
 
             <DropdownMenuItem
-              onClick={() => navigate("/admin/access-control")}
+              onClick={() => navigate("/admin/logic")}
               className="bg-edge-secondary/10 text-edge-secondary hover:bg-edge-secondary/20"
             >
               Logic Lab
