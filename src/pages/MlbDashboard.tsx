@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Calendar, RefreshCw, Info, Trophy } from "lucide-react";
+import { Calendar, RefreshCw, Info, Trophy, Lock } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { MlbPredictionsTable } from "@/components/admin/MlbPredictionsTable";
