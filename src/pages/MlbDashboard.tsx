@@ -14,6 +14,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { PremiumBanner } from "@/components/PremiumBanner";
 
 // Define the interface that MlbPredictionsTable expects
 interface MlbPredictionDisplay {
@@ -46,6 +47,22 @@ const MlbDashboard = () => {
   const [generatedDate, setGeneratedDate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [featuredGame, setFeaturedGame] = useState<ProcessedMlbPrediction | null>(null);
+  const [isPaid, setIsPaid] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check user status
+  useEffect(() => {
+    const u = localStorage.getItem("user");
+    if (u) {
+      try {
+        const userData = JSON.parse(u);
+        setIsAdmin(userData.is_admin === true);
+        setIsPaid(userData.role === "premium" || userData.is_admin === true);
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    }
+  }, []);
 
   const fetchData = async (skipLoading = false) => {
     if (!skipLoading) {
@@ -137,20 +154,26 @@ const MlbDashboard = () => {
           </div>
         </div>
 
-        {/* Game of the Day section */}
+        {/* Game of the Day section - always visible to everyone */}
         {featuredGame && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="h-5 w-5 text-edge-secondary" />
               <h2 className="text-xl font-bold">Game of the Day</h2>
             </div>
-            <GameCard 
-              {...featuredGame} 
-              isAdmin={true}
-              isFeatured={true}
-            />
+            <div className="max-w-5xl mx-auto">
+              <GameCard 
+                {...featuredGame} 
+                isAdmin={isAdmin}
+                isFeatured={true}
+                isPremium={false} // Featured game is always accessible
+              />
+            </div>
           </div>
         )}
+        
+        {/* Show premium banner for non-premium users */}
+        {!isPaid && !isAdmin && <PremiumBanner />}
         
         <Alert className="mb-6 bg-muted">
           <Info className="h-4 w-4" />
@@ -168,7 +191,20 @@ const MlbDashboard = () => {
         ) : (
           <div>
             <h2 className="text-xl font-bold mb-4">All MLB Games</h2>
-            <MlbPredictionsTable predictions={predictions} isLoading={false} />
+            {isPaid || isAdmin ? (
+              <MlbPredictionsTable predictions={predictions} isLoading={false} />
+            ) : (
+              <div className="bg-card border rounded-lg p-8 text-center">
+                <Lock className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-xl font-medium mb-2">Premium Content Locked</h3>
+                <p className="text-muted-foreground mb-4">
+                  Upgrade to a premium account to see all MLB predictions and detailed analytics.
+                </p>
+                <Button onClick={() => window.location.href = "/pricing"}>
+                  Upgrade Now
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

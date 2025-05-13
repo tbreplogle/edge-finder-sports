@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppLayout } from "@/components/AppLayout";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { GameCard } from "@/components/GameCard";
 import { FeaturedGame } from "@/components/FeaturedGame";
 import { ProcessedMlbPrediction, fetchMlbPredictions } from "@/utils/fetchMlbPredictions";
+import { PremiumBanner } from "@/components/PremiumBanner";
 
 /* sort helpers ------------------------------------------------------------ */
 type SortKey = "time" | "edgeHigh" | "edgeLow";
@@ -43,12 +44,18 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("time");
   const [admin, setAdmin] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
   const [featuredGame, setFeaturedGame] = useState<ProcessedMlbPrediction | null>(null);
 
+  // Check if user is admin or paid user
   useEffect(() => {
     const u = localStorage.getItem("user");
     if (u) {
-      try { setAdmin(JSON.parse(u).is_admin === true); } catch { /* noop */ }
+      try {
+        const userData = JSON.parse(u);
+        setAdmin(userData.is_admin === true);
+        setIsPaid(userData.role === "premium" || userData.is_admin === true);
+      } catch { /* noop */ }
     }
   }, []);
 
@@ -101,14 +108,20 @@ export default function Dashboard() {
         {featuredGame && (
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-4">Game of the Day</h2>
-            <div className="max-w-3xl">
-              {/* Create a simplified version of FeaturedGame component for the dashboard */}
-              <div className="bg-gradient-to-r from-edge-primary/80 to-edge-secondary/20 rounded-lg overflow-hidden">
-                <GameCard {...featuredGame} isAdmin={admin} isFeatured={true} />
-              </div>
+            <div className="max-w-5xl mx-auto">
+              {/* Always show featured game with full details */}
+              <GameCard 
+                {...featuredGame} 
+                isAdmin={admin} 
+                isFeatured={true} 
+                isPremium={false} // Featured game is always accessible
+              />
             </div>
           </div>
         )}
+
+        {/* Show premium banner for non-paid users */}
+        {!isPaid && !admin && <PremiumBanner />}
 
         <div className="flex items-center justify-between my-4">
           <h2 className="text-xl font-semibold">MLB Games</h2>
@@ -133,12 +146,15 @@ export default function Dashboard() {
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {games.map(g => (
-              <GameCard key={g.matchup_id} {...g} isAdmin={admin} />
+              <GameCard 
+                key={g.matchup_id} 
+                {...g} 
+                isAdmin={admin} 
+                isPremium={!isPaid && !admin} // Lock content for non-premium/non-admin users
+              />
             ))}
           </div>
         )}
-
-        <FeaturedGame />
       </div>
     </AppLayout>
   );
