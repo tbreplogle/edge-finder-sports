@@ -1,4 +1,3 @@
-
 export function sanitizePrediction(prediction: any, userRole?: string | null) {
   // Allow admins and paid users to access all premium data
   if (userRole === 'premium' || userRole === 'admin') {
