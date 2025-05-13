@@ -1,4 +1,4 @@
-src/components/GameCard.tsx
+
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,7 +21,7 @@ export interface GameProps {
   isPreviewGame?: boolean;
   isAdmin: boolean;
   isPaid: boolean;
-  /** highlight style for dashboard “Game of the Day” */  
+  /** highlight style for dashboard "Game of the Day" */  
   variant?: "regular" | "featured";
 
   /*  split–odds fields  */
