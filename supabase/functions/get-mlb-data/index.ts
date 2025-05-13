@@ -2,7 +2,7 @@
 // This is an edge function to get MLB data for the admin preview dashboard
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders } from '../utils/cors';
+import { corsHeaders } from '../utils/cors.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
