@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -47,6 +46,7 @@ const MlbDashboard = () => {
   const [generatedDate, setGeneratedDate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [featuredGame, setFeaturedGame] = useState<ProcessedMlbPrediction | null>(null);
+  const [previewGame, setPreviewGame] = useState<ProcessedMlbPrediction | null>(null);
   const [isPaid, setIsPaid] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -74,16 +74,42 @@ const MlbDashboard = () => {
     try {
       const mlbPredictions = await fetchMlbPredictions();
       
+      if (mlbPredictions.length === 0) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      
       // Find the game with the highest edge to feature
       const featured = findHighestEdgePrediction(mlbPredictions);
       
-      // Filter out the featured game from regular predictions
-      const regularPredictions = featured 
-        ? mlbPredictions.filter(p => p.matchup_id !== featured.matchup_id)
-        : mlbPredictions;
+      // Sort games by game_time_ct to find earliest game
+      const sortedByTime = [...mlbPredictions].sort((a, b) => 
+        new Date(a.game_time_ct).getTime() - new Date(b.game_time_ct).getTime()
+      );
       
       // Set the featured game
       setFeaturedGame(featured || null);
+      
+      // Set the preview game (earliest game, unless it's the same as featured)
+      if (sortedByTime.length > 0) {
+        if (featured && sortedByTime[0].matchup_id === featured.matchup_id) {
+          // If earliest game is the same as featured, use the next earliest game
+          setPreviewGame(sortedByTime.length > 1 ? sortedByTime[1] : null);
+        } else {
+          // Otherwise use the earliest game
+          setPreviewGame(sortedByTime[0]);
+        }
+      } else {
+        setPreviewGame(null);
+      }
+      
+      // Filter out the featured and preview games from regular predictions
+      const regularPredictions = mlbPredictions.filter(p => 
+        (featured && p.matchup_id === featured.matchup_id) || 
+        (previewGame && p.matchup_id === previewGame.matchup_id) ? 
+        false : true
+      );
       
       // Map the predictions to match the expected MlbPredictionDisplay interface
       const formattedPredictions: MlbPredictionDisplay[] = regularPredictions.map(prediction => ({
@@ -154,7 +180,7 @@ const MlbDashboard = () => {
           </div>
         </div>
 
-        {/* Game of the Day section - always visible to everyone */}
+        {/* Game of the Day section - visible but lockable */}
         {featuredGame && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
@@ -166,7 +192,25 @@ const MlbDashboard = () => {
                 {...featuredGame} 
                 isAdmin={isAdmin}
                 isFeatured={true}
-                isPremium={false} // Featured game is always accessible
+                isPremium={!isPaid && !isAdmin} // Lock for non-premium, non-admin users
+              />
+            </div>
+          </div>
+        )}
+        
+        {/* Preview Game - always accessible to everyone */}
+        {previewGame && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Info className="h-5 w-5" />
+              <h2 className="text-xl font-bold">Free Preview Game</h2>
+            </div>
+            <div className="max-w-5xl mx-auto">
+              <GameCard 
+                {...previewGame} 
+                isAdmin={isAdmin}
+                isFeatured={false}
+                isPremium={false} // Never locked
               />
             </div>
           </div>
@@ -221,7 +265,6 @@ const MlbDashboard = () => {
               <div className="flex items-center gap-1 mb-1">
                 <p><strong>Predicted Odds:</strong> From mlb_predictions.moneyline</p>
               </div>
-              <p><strong>Actual Market Odds:</strong> From live odds API</p>
               <p><strong>Market/Predicted Implied %:</strong> Conversion from odds to win probability</p>
               <p><strong>Edge %:</strong> Difference between predicted and market implied percentages</p>
             </div>
