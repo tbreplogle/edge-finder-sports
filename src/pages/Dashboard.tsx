@@ -112,9 +112,11 @@ export default function Dashboard() {
               {/* Always show featured game with full details */}
               <GameCard 
                 {...featuredGame} 
+                sport="mlb" 
                 isAdmin={admin} 
-                isFeatured={true} 
-                isPremium={false} // Featured game is always accessible
+                isPaid={isPaid}
+                isPremium={!isPaid && !admin} 
+                variant="featured"
               />
             </div>
           </div>
@@ -148,9 +150,11 @@ export default function Dashboard() {
             {games.map(g => (
               <GameCard 
                 key={g.matchup_id} 
-                {...g} 
+                {...g}
+                sport="mlb"
                 isAdmin={admin} 
-                isPremium={!isPaid && !admin} // Lock content for non-premium/non-admin users
+                isPaid={isPaid}
+                isPremium={!isPaid && !admin} 
               />
             ))}
           </div>

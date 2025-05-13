@@ -154,6 +154,7 @@ export default function MlbDashboard() {
 
             <GameCard
               {...featured}
+              sport="mlb"
               variant="featured"
               isAdmin={isAdmin}
               isPaid={isPaid}
@@ -172,6 +173,7 @@ export default function MlbDashboard() {
 
             <GameCard
               {...earliest}
+              sport="mlb"
               isPreviewGame
               variant="regular"
               isAdmin={isAdmin}

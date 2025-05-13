@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 export interface GameProps {
   id: string;
-  sport: "nfl" | "ncaaf" | "ncaab" | "mlb";
+  sport?: "nfl" | "ncaaf" | "ncaab" | "mlb";
   homeTeam: string;
   awayTeam: string;
   startTime: string;
@@ -20,7 +21,7 @@ export interface GameProps {
   isPreviewGame?: boolean;
   isAdmin: boolean;
   isPaid: boolean;
-  /** highlight style for dashboard “Game of the Day” */  
+  /** highlight style for dashboard "Game of the Day" */  
   variant?: "regular" | "featured";
 
   /*  split–odds fields  */
@@ -33,7 +34,7 @@ export interface GameProps {
 }
 
 export function GameCard({
-  sport,
+  sport = "mlb", // Provide a default value for sport
   homeTeam,
   awayTeam,
   startTime,
