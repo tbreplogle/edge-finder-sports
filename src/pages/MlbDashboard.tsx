@@ -17,9 +17,8 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { PremiumBanner } from "@/components/PremiumBanner";
-const access = usePageAccess("mlb_dashboard");         // ★ add
-if (access === "none") return null;                    // show nothing / or redirect
-const isLocked = access !== "full";                    // helper
+import { usePageAccess } from "@/lib/usePageAccess";           // ★ NEW
+
 // -----------------------------------------------------------------------------
 // Table‑view interface (unchanged)
 // -----------------------------------------------------------------------------
@@ -47,6 +46,9 @@ interface MlbPredictionDisplay {
 
 const MlbDashboard = () => {
   const { toast } = useToast();
+  const access = usePageAccess("mlb_dashboard");      // ★ visibility rule
+  if (access === "none") return null;                 // could redirect if you prefer
+  const isLocked = access !== "full";
 
   // ---------------------------------------------------------------------------
   // Local state
@@ -62,8 +64,7 @@ const MlbDashboard = () => {
   const [previewGame, setPreviewGame] =
     useState<ProcessedMlbPrediction | null>(null);
 
-  const [isPaid, setIsPaid] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);      // still needed for GameCard props
 
   // ---------------------------------------------------------------------------
   // Auth stub – reads localStorage (replace with real auth)
@@ -74,7 +75,6 @@ const MlbDashboard = () => {
     try {
       const user = JSON.parse(stored);
       setIsAdmin(user.is_admin === true);
-      setIsPaid(user.role === "premium" || user.is_admin === true);
     } catch (err) {
       console.error("Error parsing user data:", err);
     }
@@ -149,7 +149,7 @@ const MlbDashboard = () => {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <AppLayout isAuthenticated={true /* layout still expects this */}>
+    <AppLayout isAuthenticated>
       <div className="container py-8">
         {/* ---------- header ---------- */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -176,10 +176,7 @@ const MlbDashboard = () => {
               <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
             </Button>
 
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-            >
+            <Button variant="outline" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span>{generatedDate || todayFormatted}</span>
             </Button>
@@ -196,24 +193,20 @@ const MlbDashboard = () => {
 
             <div className="max-w-5xl mx-auto">
               <GameCard
-                /* generic props */
                 id={featuredGame.matchup_id}
                 sport="mlb"
                 homeTeam={featuredGame.home_team}
                 awayTeam={featuredGame.away_team}
                 startTime={featuredGame.game_time_ct}
-                /* role / variant */
                 isAdmin={isAdmin}
-                isPremium={false}          // always free to view
+                isPremium={false}
                 variant="featured"
-                /* odds + percentages */
                 homeMarketMoneyline={featuredGame.home_market_ml}
                 awayMarketMoneyline={featuredGame.away_market_ml}
                 homePredictedOdds={featuredGame.home_pred_ml}
                 awayPredictedOdds={featuredGame.away_pred_ml}
                 homePredictedPct={featuredGame.home_pred_pct}
                 awayPredictedPct={featuredGame.away_pred_pct}
-                /* edge for arrow colouring */
                 edgePct={
                   Math.max(
                     featuredGame.home_edge_pct ?? 0,
@@ -225,7 +218,7 @@ const MlbDashboard = () => {
           </section>
         )}
 
-        {/* ---------- preview game (free teaser) ---------- */}
+        {/* ---------- preview game ---------- */}
         {previewGame && (
           <section className="mb-8">
             <div className="flex items-center gap-2 mb-4">
@@ -255,7 +248,7 @@ const MlbDashboard = () => {
           </section>
         )}
 
-        {/* upsell banner */}
+        {/* upsell banner (only if locked) */}
         {isLocked && <PremiumBanner />}
 
         {/* info alert */}
@@ -268,38 +261,30 @@ const MlbDashboard = () => {
           </AlertDescription>
         </Alert>
 
-        {/* main table */}
+        {/* main table / locked card */}
         {loading ? (
           <div className="text-center py-12">
             <RefreshCw className="h-10 w-10 animate-spin mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">Loading MLB predictions…</p>
           </div>
-        ) : (
+        ) : access === "full" ? (
           <div>
             <h2 className="text-xl font-bold mb-4">All MLB Games</h2>
-
-            {access === "full" ? (
-              <MlbPredictionsTable
-                predictions={predictions}
-                isLoading={false}
-              />
-            ) : (
-              <div className="bg-card border rounded-lg p-8 text-center">
-                <Lock className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-xl font-medium mb-2">
-                  Premium Content Locked
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  Upgrade to a premium account to see all MLB predictions and
-                  detailed analytics.
-                </p>
-                <Button
-                  onClick={() => (window.location.href = "/pricing")}
-                >
-                  Upgrade Now
-                </Button>
-              </div>
-            )}
+            <MlbPredictionsTable predictions={predictions} isLoading={false} />
+          </div>
+        ) : (
+          <div className="bg-card border rounded-lg p-8 text-center">
+            <Lock className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-xl font-medium mb-2">
+              Premium Content Locked
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Upgrade to a premium account to see all MLB predictions and
+              detailed analytics.
+            </p>
+            <Button onClick={() => (window.location.href = "/pricing")}>
+              Upgrade Now
+            </Button>
           </div>
         )}
 
@@ -316,12 +301,12 @@ const MlbDashboard = () => {
 
             <div className="text-xs text-muted-foreground">
               <p>
-                <strong>Predicted Odds:</strong> from{" "}
-                <code>mlb_predictions.moneyline</code>
+                <strong>Predicted Odds:</strong>{" "}
+                from <code>mlb_predictions.moneyline</code>
               </p>
               <p>
-                <strong>Market / Predicted Implied %:</strong> win‑probability
-                conversion
+                <strong>Market / Predicted Implied %:</strong>{" "}
+                win‑probability conversion
               </p>
               <p>
                 <strong>Edge %:</strong> difference between predicted and market
