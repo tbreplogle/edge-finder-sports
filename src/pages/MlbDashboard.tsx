@@ -17,7 +17,9 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { PremiumBanner } from "@/components/PremiumBanner";
-
+const access = usePageAccess("mlb_dashboard");         // ★ add
+if (access === "none") return null;                    // show nothing / or redirect
+const isLocked = access !== "full";                    // helper
 // -----------------------------------------------------------------------------
 // Table‑view interface (unchanged)
 // -----------------------------------------------------------------------------
@@ -254,7 +256,7 @@ const MlbDashboard = () => {
         )}
 
         {/* upsell banner */}
-        {!isPaid && !isAdmin && <PremiumBanner />}
+        {isLocked && <PremiumBanner />}
 
         {/* info alert */}
         <Alert className="mb-6 bg-muted">
@@ -276,7 +278,7 @@ const MlbDashboard = () => {
           <div>
             <h2 className="text-xl font-bold mb-4">All MLB Games</h2>
 
-            {isPaid || isAdmin ? (
+            {access === "full" ? (
               <MlbPredictionsTable
                 predictions={predictions}
                 isLoading={false}
