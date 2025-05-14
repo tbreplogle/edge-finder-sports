@@ -179,6 +179,7 @@ async function scrapePitchingMatchups() {
       const era = ip > 0 ? +((er / ip) * 9).toFixed(2) : null;
       const era_plus = era ? Math.round((100 * 4.1) / era) : null;
       const whip = ip > 0 ? +(((bb + h) / ip).toFixed(3)) : null;
+      console.log({ matchup_id, game_id, role, pitcher_name });
 
       rows.push({
         game_id,
