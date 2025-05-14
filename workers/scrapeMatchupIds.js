@@ -1,10 +1,11 @@
 /* workers/scrapeMatchupIds.js
-   ═══════════════════════════════════════════════════════════════════
-   • Scrapes today’s MLB matchup IDs from Covers.com
-   • Upserts into mlb_matchups
-   • Uses the system Google Chrome installed by the workflow
-   • Provides a scoreboard‑page fallback in case the matchups page is empty
-   ═══════════════════════════════════════════════════════════════════ */
+   ────────────────────────────────────────────────────────────
+   Scrapes today’s MLB matchup IDs from Covers.com and upserts
+   them into your Supabase `mlb_matchups` table.
+   – Auto-scrolls once to force lazy content to render
+   – Falls back to the scoreboard page on any timeout / 0-result
+   – Uses the system Google Chrome (workflow installs it)
+   ──────────────────────────────────────────────────────────── */
 
 import puppeteer from "puppeteer";
 import {
@@ -15,7 +16,7 @@ import {
 
 const DEBUG = process.env.DEBUG === "true";
 
-/** Covers label → teams_mlb.team_id */
+/* label → team_id (teams_mlb.alt_name) */
 const TEAM_NAME_TO_ID = {
   WASHINGTON: 24, ATLANTA: 17, "TAMPA BAY": 9,  BOSTON: 29,
   COLORADO: 22,   MILWAUKEE: 14, "KANSAS CITY": 11, MINNESOTA: 10,
@@ -27,40 +28,42 @@ const TEAM_NAME_TO_ID = {
   SEATTLE: 1,     TORONTO: 5,    "NY METS": 20,
 };
 
-/* ────────────────────────────────────────────────────────────────── */
-/* scrape one URL (matchups OR scoreboard)                           */
-/* ────────────────────────────────────────────────────────────────── */
+/*─────────────────────────────────────────────────────────────*/
 async function scrapeFromUrl(page, url) {
   console.log(`→ Opening ${url}`);
   await page.goto(url, { waitUntil: "networkidle2", timeout: 60_000 });
 
-  /* wait for *either* link or article – whichever appears first       */
-  await Promise.race([
-    page.waitForSelector("a.matchup-btn-link", { timeout: 30_000 }),
-    page.waitForSelector("article.gamebox", { timeout: 30_000 }),
-  ]);
+  /* kick the page to render lazy content */
+  await page.evaluate(() => window.scrollBy(0, 250));
+
+  try {
+    await page.waitForSelector("article.gamebox", { timeout: 15_000 });
+  } catch {
+    /* no game boxes; return empty list so caller can fall back */
+    console.warn("⚠️  No game boxes rendered (timeout)");
+    return [];
+  }
 
   const games = await page.$$eval("article.gamebox", (nodes) =>
     nodes.map((node) => {
-      const link = node.querySelector('a[href*="/matchup/"]');
-      if (!link) return null;
-
-      const m = link.href.match(/\/matchup\/(\d+)$/);
+      const a = node.querySelector('a[href*="/matchup/"]');
+      if (!a) return null;
+      const m = a.href.match(/\/matchup\/(\d+)$/);
       if (!m) return null;
 
       const matchup_id = m[1];
-      const game_id = matchup_id; // 1‑to‑1 mapping
+      const game_id = matchup_id; // 1-to-1
 
       const label = node
         .querySelector("strong.text-uppercase")
         ?.innerText.trim()
         .toUpperCase();
       if (!label || !label.includes("@")) return null;
-
       const [away_team, home_team] = label
         .split("@")
         .map((s) => s.replace(/\u202F/g, " ").trim());
 
+      /* pre-game time → date string */
       const dateText = node
         .querySelector("strong.preGame-status")
         ?.innerText.trim();
@@ -77,9 +80,7 @@ async function scrapeFromUrl(page, url) {
   return games.filter(Boolean);
 }
 
-/* ────────────────────────────────────────────────────────────────── */
-/* 1 — Scrape today’s matchups                                        */
-/* ────────────────────────────────────────────────────────────────── */
+/*─────────────────────────────────────────────────────────────*/
 async function scrapeTodayMatchups() {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -88,22 +89,21 @@ async function scrapeTodayMatchups() {
     headless: "new",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
-
   const page = await browser.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
   await page.setUserAgent(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
   );
 
-  /* primary source: classic matchups page                               */
-  const matchupsUrl = `https://www.covers.com/sport/baseball/mlb/matchups?selectedDate=${today}`;
-  let games = await scrapeFromUrl(page, matchupsUrl);
+  const primary =
+    `https://www.covers.com/sport/baseball/mlb/matchups?selectedDate=${today}`;
+  let games = await scrapeFromUrl(page, primary);
 
-  /* fallback to the scoreboard page if nothing was returned (rare)      */
+  /* scoreboard fallback */
   if (games.length === 0) {
-    console.warn("Matchups page returned 0 results, falling back → scoreboard");
-    const scoreboardUrl = `https://www.covers.com/sport/baseball/mlb/scoreboard?selectedDate=${today}`;
-    games = await scrapeFromUrl(page, scoreboardUrl);
+    const fallback =
+      `https://www.covers.com/sport/baseball/mlb/scoreboard?selectedDate=${today}`;
+    games = await scrapeFromUrl(page, fallback);
   }
 
   await browser.close();
@@ -112,17 +112,15 @@ async function scrapeTodayMatchups() {
   return games;
 }
 
-/* ────────────────────────────────────────────────────────────────── */
-/* 2 — Enrich, upsert, report                                         */
-/* ────────────────────────────────────────────────────────────────── */
+/*─────────────────────────────────────────────────────────────*/
 export async function scrapeAndSaveTodayMatchups() {
   console.log("⏳ MLB matchup scraper starting…");
-  if (!(await testConnection())) throw new Error("Supabase not reachable");
+  if (!(await testConnection())) throw new Error("Supabase unreachable");
 
   try {
     const scraped = await scrapeTodayMatchups();
 
-    if (scraped.length === 0) {
+    if (!scraped.length) {
       await createScrapeReport({
         success: false,
         error: "No matchups found",
@@ -143,7 +141,6 @@ export async function scrapeAndSaveTodayMatchups() {
       .from("mlb_matchups")
       .upsert(rows, { onConflict: ["matchup_id"] })
       .select();
-
     if (error) throw error;
 
     await createScrapeReport({
@@ -167,17 +164,15 @@ export async function scrapeAndSaveTodayMatchups() {
   }
 }
 
-/* ────────────────────────────────────────────────────────────────── */
-/* 3 — CLI entry‑point                                                */
-/* ────────────────────────────────────────────────────────────────── */
+/*─────────────────────────────────────────────────────────────*/
 if (import.meta.url.endsWith("scrapeMatchupIds.js")) {
   scrapeAndSaveTodayMatchups()
     .then((res) => {
       console.log(JSON.stringify(res, null, 2));
       process.exit(res.success ? 0 : 1);
     })
-    .catch((err) => {
-      console.error(err);
+    .catch((e) => {
+      console.error(e);
       process.exit(1);
     });
 }
