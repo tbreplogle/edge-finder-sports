@@ -66,9 +66,10 @@ async function scrapePitchingMatchups() {
   console.log(→ Found ${games.length} games to scrape);
 
   /* 2. launch Puppeteer --------------------------------------------------- */
-  const browser = await puppeteer.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    headless: "new",
+ const browser = await puppeteer.launch({
+   headless: 'new',
+   channel : 'chrome',                            // ← use system Chrome
+   args    : ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
