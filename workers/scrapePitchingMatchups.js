@@ -10,7 +10,7 @@ import {
 
 const DEBUG = process.env.DEBUG === "true";
 
-/** Covers tab text → team_id (matches teams_mlb.alt_name) */
+/* Covers tab text → team_id (matches teams_mlb.alt_name) */
 const TEAM_ALT_NAME_TO_ID = {
   SEATTLE: 1,
   CLEVELAND: 2,
@@ -24,7 +24,7 @@ const TEAM_ALT_NAME_TO_ID = {
   MINNESOTA: 10,
   "KANSAS CITY": 11,
   "SF GIANTS": 12,
-  "SAN FRANCISCO": 12, // alt covers label
+  "SAN FRANCISCO": 12, // alt Covers label
   ARIZONA: 13,
   MILWAUKEE: 14,
   "CHI. WHITE SOX": 15,
@@ -49,21 +49,23 @@ const TEAM_ALT_NAME_TO_ID = {
 /* Main scraper                                                               */
 /* -------------------------------------------------------------------------- */
 async function scrapePitchingMatchups() {
-  /* 1. fetch today’s matchup + game IDs ------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* 1. pull today’s games FROM mlb_market_odds (always has game_id)        */
+  /* ---------------------------------------------------------------------- */
   const today = new Date().toISOString().slice(0, 10);
-  const { data: games, error: fetchErr } = await supabase
-    .from("mlb_matchups")
+  const { data: games, error } = await supabase
+    .from("mlb_market_odds")
     .select("matchup_id, game_id")
     .eq("game_date", today);
 
-  if (fetchErr) throw new Error(`Could not load matchups: ${fetchErr.message}`);
+  if (error) throw new Error(`Could not load games: ${error.message}`);
   if (!games.length) {
-    console.warn("⚠️  No matchups for today");
+    console.warn("⚠️  No games with market odds found for today");
     return [];
   }
   console.log(`→ Found ${games.length} games to scrape`);
 
-  /* 2. launch Puppeteer ----------------------------------------------------- */
+  /* 2. launch Puppeteer --------------------------------------------------- */
   const browser = await puppeteer.launch({
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
     headless: "new",
@@ -71,12 +73,12 @@ async function scrapePitchingMatchups() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
   await page.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
   );
 
   const rows = [];
 
-  /* 3. loop through matchups ------------------------------------------------ */
+  /* 3. loop through matchups --------------------------------------------- */
   for (const { matchup_id, game_id } of games) {
     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
     console.log(`→ Loading ${url}`);
@@ -88,45 +90,45 @@ async function scrapePitchingMatchups() {
     for (const role of ["away", "home"]) {
       const tab = role === "away" ? "#away-team-last-5" : "#home-team-last-5";
 
-      /* Team name / id ------------------------------------------------------ */
-      let team_name = null,
-        team_id = null;
+      /* ---- team name / id ---------------------------------------------- */
+      let team_name = null;
+      let team_id = null;
       try {
         team_name = await page.$eval(
           `a[href="${tab}"]`,
-          (el) => el.innerText.trim().toUpperCase()
+          (el) => el.innerText.trim().toUpperCase(),
         );
         team_id = TEAM_ALT_NAME_TO_ID[team_name] ?? null;
         if (!team_id)
           console.warn(`⚠️  No team_id mapping for "${team_name}"`);
       } catch {
         console.warn(
-          `⚠️  Could not read team name for ${role} side of ${matchup_id}`
+          `⚠️  Could not read team name for ${role} side of ${matchup_id}`,
         );
       }
 
-      /* Pitcher name -------------------------------------------------------- */
+      /* ---- pitcher name -------------------------------------------------- */
       let pitcher_name = null;
       try {
         pitcher_name = await page.$eval(
           `${tab} a.anchor-with-border`,
-          (el) => el.innerText.trim()
+          (el) => el.innerText.trim(),
         );
       } catch {
         console.warn(
-          `⚠️  Could not read ${role} pitcher for matchup ${matchup_id}`
+          `⚠️  Could not read ${role} pitcher for matchup ${matchup_id}`,
         );
         continue;
       }
 
-      /* Stat row ------------------------------------------------------------ */
+      /* ---- stats row ----------------------------------------------------- */
       const trHandles = await page.$$(`${tab} table tr`);
       let statRow = null;
       for (const tr of trHandles) {
         try {
           const txt = await tr.$eval(
             "td b",
-            (b) => b.innerText.trim().toLowerCase()
+            (b) => b.innerText.trim().toLowerCase(),
           );
           if (txt.includes("last") && txt.includes("avg")) {
             statRow = tr;
@@ -141,14 +143,14 @@ async function scrapePitchingMatchups() {
         continue;
       }
 
-      /* Extract 10 numeric cells ------------------------------------------- */
+      /* ---- extract numeric cells ---------------------------------------- */
       const allB = await statRow.$$eval("td b", (bs) =>
-        bs.map((b) => b.innerText.trim())
+        bs.map((b) => b.innerText.trim()),
       );
       const nums = allB.slice(1);
       if (nums.length < 10) {
         console.warn(
-          `⚠️  unexpected # columns (${nums.length}) for ${role} of ${matchup_id}`
+          `⚠️  unexpected # columns (${nums.length}) for ${role} of ${matchup_id}`,
         );
         continue;
       }
@@ -179,6 +181,16 @@ async function scrapePitchingMatchups() {
       const era = ip > 0 ? +((er / ip) * 9).toFixed(2) : null;
       const era_plus = era ? Math.round((100 * 4.1) / era) : null;
       const whip = ip > 0 ? +(((bb + h) / ip).toFixed(3)) : null;
+
+      /* ---- debug row ----------------------------------------------------- */
+      if (DEBUG) {
+        console.log({
+          game_id,
+          matchup_id,
+          role,
+          pitcher_name,
+        });
+      }
 
       rows.push({
         game_id,
