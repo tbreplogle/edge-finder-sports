@@ -1,87 +1,65 @@
-.github/workflows/mlb-predictions.yml:
+.github/workflows/sync-mlb-odds.yml:
 
-name: MLB Predictions
+name: Sync MLB Odds
 
-# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
 on:
   schedule:
-    - cron: '30 13 * * *'
-  workflow_dispatch:
+    # Run every morning at 8 AM Central Time (1 PM UTC)
+    - cron: '0 13 * * *'
+  workflow_dispatch: # Allow manual triggers
 
 jobs:
-  run-mlb-predictions:
+  sync-odds:
     runs-on: ubuntu-latest
-
+    
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      
     steps:
-      # 1) Check out your repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 2) Install psql client + network tools
-      - name: Install PostgreSQL client & network tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client traceroute dnsutils
-
-      # 3) Verify network connectivity to your Supabase host
-      - name: Verify database connectivity
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
-          echo "Testing connectivity to $DB_HOST:5432…"
-          # Force IPv4 with -4 flag
-          if nc -4 -zv $DB_HOST 5432 -w 5 > /dev/null 2>&1; then
-            echo "✅ Network connectivity to database verified"
-          else
-            echo "❌ Cannot connect to database server"
-            echo "Resolving $DB_HOST…"
-            # Force IPv4 resolution
-            nslookup -type=A $DB_HOST
-            echo "Tracing route to $DB_HOST (IPv4 only)…"
-            # Force IPv4 with -4 flag
-            traceroute -4 -m 15 $DB_HOST
-            exit 1
-          fi
-
-      # 4) Run your predictions SQL against Supabase
-      - name: Run MLB predictions SQL
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          echo "Running MLB predictions SQL…"
-          # Force IPv4 with -h option
-          PGHOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
-          PGPORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-          PGDATABASE=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
-          PGUSER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-          PGPASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
-          
-          # Use -h to force TCP connection and specify IPv4 address in /etc/hosts if needed
-          export PGSSLMODE=require
-          
-          # Get IPv4 address for the host
-          echo "Getting IPv4 address for $PGHOST..."
-          IPV4_ADDRESS=$(dig +short -t A $PGHOST | head -n 1)
-          
-          if [ -z "$IPV4_ADDRESS" ]; then
-            echo "❌ Could not resolve IPv4 address for $PGHOST"
-            exit 1
-          fi
-          
-          echo "Connecting using IPv4 address: $IPV4_ADDRESS"
-          
-          # Add the IPv4 address to /etc/hosts temporarily
-          echo "$IPV4_ADDRESS    $PGHOST" | sudo tee -a /etc/hosts
-          
-          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
-            --set=ON_ERROR_STOP=1 \
-            -f sql/mlb_predictions.sql || {
-              echo "❌ SQL execution failed"
-              echo "Testing basic connection…"
-              psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
-                -c "SELECT 1;" || echo "Could not connect at all"
-              exit 1
-            }
-          echo "✅ MLB predictions completed successfully"
-
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'workers/package.json'
+    
+    - name: Install dependencies
+      run: |
+        cd workers
+        npm install
+    
+    - name: Sync MLB Odds
+      run: |
+        cd workers
+        node fetchMlbOdds.js
+    
+    - name: Post to Slack on failure
+      if: failure()
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "❌ MLB Odds sync failed in ${{ github.repository }}",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "❌ *MLB Odds sync failed*"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Repository: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\nSee: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
