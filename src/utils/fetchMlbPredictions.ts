@@ -1,13 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
 
-/* helpers ----------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Helpers
+--------------------------------------------------------------------------- */
 const mlToPct = (ml: number | null): number | null =>
   ml == null ? null : ml > 0 ? 100 / (ml + 100) : Math.abs(ml) / (Math.abs(ml) + 100);
 
 const pctToMl = (p: number | null): number | null =>
-  p == null ? null : p > 0.5 ? -Math.round((p / (1 - p)) * 100) : Math.round(((1 - p) / p) * 100);
+  p == null
+    ? null
+    : p > 0.5
+    ? -Math.round((p / (1 - p)) * 100)
+    : Math.round(((1 - p) / p) * 100);
 
-/* type -------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Types
+--------------------------------------------------------------------------- */
 export interface ProcessedMlbPrediction {
   matchup_id: string;
   game_id: string;
@@ -32,69 +40,53 @@ export interface ProcessedMlbPrediction {
   away_pitcher: string | null;
 }
 
-/* fetcher ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------------
+   Fetcher
+--------------------------------------------------------------------------- */
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
-  const { data: pred, error: predErr } = await supabase
-    .from("mlb_predictions")
-    .select("matchup_id, team_id, win_pct, created_at")
-    .order("created_at", { ascending: false });
-  if (predErr) throw new Error(predErr.message);
+  /**
+   * This RPC/view aggregates market + predictive data per matchup_id:
+   *   - one row per game, even on double‑header days
+   *   - columns: matchup_id, game_id, game_time_ct, home_team, away_team,
+   *              home_ml / away_ml, win pct, pitchers, etc.
+   *
+   * If you created it under a different name, adjust the .rpc() call.
+   */
+  const { data, error } = await supabase.rpc("mlb_predictions_with_market");
+  if (error) throw new Error(error.message);
 
-  const latest = new Map<string, number>();
-  pred.forEach(r => {
-    const k = `${r.matchup_id}_${r.team_id}`;
-    if (!latest.has(k)) latest.set(k, r.win_pct ?? null);
-  });
+  return (data as any[]).map((r) => {
+    /* Fallbacks & conversions (if pct fields aren’t already in the view) ---- */
+    const homeMarketPct = r.home_market_pct ?? mlToPct(r.home_market_ml);
+    const awayMarketPct = r.away_market_pct ?? mlToPct(r.away_market_ml);
 
-  const { data: odds, error: oddsErr } = await supabase
-    .from("mlb_market_odds")
-    .select("matchup_id, game_id, game_time_ct, home_team_id, away_team_id, home_ml, away_ml");
-  if (oddsErr) throw new Error(oddsErr.message);
-
-  const { data: mus, error: muErr } = await supabase
-    .from("mlb_matchups")
-    .select("matchup_id, home_team, away_team");
-  if (muErr) throw new Error(muErr.message);
-  const muMap = new Map(mus.map(m => [m.matchup_id, m]));
-
-  const { data: pitch, error: pitErr } = await supabase
-    .from("pitching_matchups")
-    .select("matchup_id, pitcher_role, pitcher_name");
-  if (pitErr) throw new Error(pitErr.message);
-
-  const pitcherMap = new Map<string, string>();
-  pitch.forEach(p => pitcherMap.set(`${p.matchup_id}_${p.pitcher_role}`, p.pitcher_name));
-
-  return odds.map(o => {
-    const mu = muMap.get(o.matchup_id);
-    const hp = latest.get(`${o.matchup_id}_${o.home_team_id}`) ?? null;
-    const ap = latest.get(`${o.matchup_id}_${o.away_team_id}`) ?? null;
-
-    const homePct = mlToPct(o.home_ml);
-    const awayPct = mlToPct(o.away_ml);
+    const homePredPct = r.home_pred_pct ?? null;
+    const awayPredPct = r.away_pred_pct ?? null;
 
     return {
-      matchup_id: o.matchup_id,
-      game_id: o.game_id,
-      home_team: mu?.home_team ?? "",
-      away_team: mu?.away_team ?? "",
-      game_time_ct: o.game_time_ct,
+      matchup_id: r.matchup_id,
+      game_id: r.game_id,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      game_time_ct: r.game_time_ct,
 
-      home_market_ml: o.home_ml,
-      away_market_ml: o.away_ml,
-      home_market_pct: homePct,
-      away_market_pct: awayPct,
+      home_market_ml: r.home_market_ml,
+      away_market_ml: r.away_market_ml,
+      home_market_pct: homeMarketPct,
+      away_market_pct: awayMarketPct,
 
-      home_pred_pct: hp,
-      away_pred_pct: ap,
-      home_pred_ml: pctToMl(hp),
-      away_pred_ml: pctToMl(ap),
+      home_pred_pct: homePredPct,
+      away_pred_pct: awayPredPct,
+      home_pred_ml: pctToMl(homePredPct),
+      away_pred_ml: pctToMl(awayPredPct),
 
-      home_edge_pct: hp != null && homePct != null ? hp - homePct : null,
-      away_edge_pct: ap != null && awayPct != null ? ap - awayPct : null,
+      home_edge_pct:
+        homePredPct != null && homeMarketPct != null ? homePredPct - homeMarketPct : null,
+      away_edge_pct:
+        awayPredPct != null && awayMarketPct != null ? awayPredPct - awayMarketPct : null,
 
-      home_pitcher: pitcherMap.get(`${o.matchup_id}_home`) ?? null,
-      away_pitcher: pitcherMap.get(`${o.matchup_id}_away`) ?? null
-    };
+      home_pitcher: r.home_pitcher ?? null,
+      away_pitcher: r.away_pitcher ?? null,
+    } as ProcessedMlbPrediction;
   });
 }
