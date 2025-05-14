@@ -2,75 +2,45 @@ name: Daily MLB Matchup IDs Scraper
 
 on:
   schedule:
-    - cron: '0 13 * * *'          # 08 AM CT
-  workflow_dispatch:
+    - cron: '0 13 * * *'  # 8:00 AM CT (13:00 UTC)
+  workflow_dispatch:      # Allow manual triggering as well
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
-    env:
-      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
     steps:
-      ###################################################################
-      # checkout & Node
-      ###################################################################
-      - uses: actions/checkout@v4
-
-      - name: Setup Node 18
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-
-      ###################################################################
-      # npm cache
-      ###################################################################
-      - name: Restore npm cache
-        id: restore-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
-          restore-keys: |
-            linux-npm-
-
-      ###################################################################
-      # install deps (workers/)
-      ###################################################################
-      - name: Install JS deps (workers/)
-        working-directory: workers
-        env:
-          PUPPETEER_SKIP_DOWNLOAD: '1'
-        run: npm install --no-audit --no-fund
-
-      - name: Save npm cache
-        if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
-
-      ###################################################################
-      # run scrapers
-      ###################################################################
+          node-version: '18'
+      
+      - name: Install dependencies
+        working-directory: ./workers
+        run: npm install
+      
       - name: Scrape & save today's MLB matchups
-        working-directory: workers
-        run: node saveMatchupsToSupabase.js
+        run: node workers/saveMatchupsToSupabase.js
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DEBUG: 'true'
-
+      
       - name: Scrape and save pitching stats
-        working-directory: workers
-        run: node scrapePitchingMatchups.js
+        run: node workers/scrapePitchingMatchups.js
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DEBUG: 'false'
-
+      
       - name: Log matchup IDs
         run: |
           if [ -f "scrape-result.json" ]; then
+            echo "Scraped matchup IDs:"
             cat scrape-result.json
           else
             echo "No scrape-result.json file found"
           fi
+
