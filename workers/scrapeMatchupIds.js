@@ -45,9 +45,10 @@ const TEAM_NAME_TO_ID = {
 
 async function scrapeTodayMatchups() {
   console.log("→ Launching browser and navigating to Covers.com MLB matchups…");
-  const browser = await puppeteer.launch({
-    args: ["--no-sandbox","--disable-setuid-sandbox"],
-    headless: "new"
+ const browser = await puppeteer.launch({
+   headless: 'new',
+   channel : 'chrome',                            // ← use system Chrome
+   args    : ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
   await page.setViewport({ width:1920, height:1080 });
