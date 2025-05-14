@@ -1,40 +1,40 @@
-
 name: Sync MLB Odds
 
 on:
   schedule:
-    # Run every morning at 8 AM Central Time (1 PM UTC)
-    - cron: '0 13 * * *'
-  workflow_dispatch: # Allow manual triggers
+    - cron: "0 13 * * *"     # 8 AM CT
+  workflow_dispatch:
 
 jobs:
   sync-odds:
     runs-on: ubuntu-latest
-    
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: 'workers/package.json'
-    
+        node-version: "18"
+        cache: "npm"
+        cache-dependency-path: "workers/package.json"
+
+    # ---------- install ----------
     - name: Install dependencies
       run: |
         cd workers
-        npm install
-    
+        npm ci
+      env:
+        PUPPETEER_SKIP_DOWNLOAD: "true"
+
     - name: Sync MLB Odds
       run: |
         cd workers
         node fetchMlbOdds.js
-    
+
     - name: Post to Slack on failure
       if: failure()
       uses: slackapi/slack-github-action@v1.24.0
@@ -45,17 +45,12 @@ jobs:
             "blocks": [
               {
                 "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "❌ *MLB Odds sync failed*"
-                }
+                "text": { "type": "mrkdwn", "text": "❌ *MLB Odds sync failed*" }
               },
               {
                 "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Repository: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\nSee: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                }
+                "text": { "type": "mrkdwn",
+                  "text": "Repo: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" }
               }
             ]
           }
