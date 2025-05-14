@@ -1,46 +1,49 @@
-
 name: Daily MLB Matchup IDs Scraper
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # 8:00 AM CT (13:00 UTC)
-  workflow_dispatch:      # Allow manual triggering as well
+    - cron: "0 13 * * *"     # 8 AM CT
+  workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install dependencies
-        working-directory: ./workers
-        run: npm install
-      
-      - name: Scrape & save today's MLB matchups
-        run: node workers/saveMatchupsToSupabase.js
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          DEBUG: 'true'
-      
-      - name: Scrape and save pitching stats
-        run: node workers/scrapePitchingMatchups.js
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          DEBUG: 'false'
-      
-      - name: Log matchup IDs
-        run: |
-          if [ -f "scrape-result.json" ]; then
-            echo "Scraped matchup IDs:"
-            cat scrape-result.json
-          else
-            echo "No scrape-result.json file found"
-          fi
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18"
+
+    # ---------- install (skip Puppeteer download) ----------
+    - name: Install dependencies
+      working-directory: ./workers
+      run: npm ci
+      env:
+        PUPPETEER_SKIP_DOWNLOAD: "true"
+
+    - name: Scrape & save today's MLB matchups
+      run: node workers/saveMatchupsToSupabase.js
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        DEBUG: "true"
+
+    - name: Scrape and save pitching stats
+      run: node workers/scrapePitchingMatchups.js
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        DEBUG: "false"
+
+    - name: Log matchup IDs
+      run: |
+        if [ -f "scrape-result.json" ]; then
+          echo "Scraped matchup IDs:"
+          cat scrape-result.json
+        else
+          echo "No scrape-result.json file found"
+        fi
