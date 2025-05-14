@@ -1,36 +1,32 @@
-/* workers/saveMatchupsToSupabase.js
-   Kicks off the Covers‑ID scraper and writes rows to Supabase */
+// workers/saveMatchupsToSupabase.js
+import { scrapeAndSaveTodayMatchups } from './scrapeMatchupIds.js';
 
-import { scrapeAndSaveTodayMatchups } from "./scrapeMatchupIds.js";
-
-/* -------------------------------------------------------------------------- */
-/* Main                                                                       */
-/* -------------------------------------------------------------------------- */
+/**
+ * Main function to scrape and save MLB matchups to Supabase
+ */
 async function main() {
-  console.log("Starting MLB matchup scraper…");
-
+  console.log('Starting MLB matchup scraper...');
+  
   try {
-    console.log("Scraping and saving today’s MLB matchups…");
+    // Scrape and save matchups
+    console.log('Scraping and saving today\'s MLB matchups...');
     const result = await scrapeAndSaveTodayMatchups();
-
+    
     if (result.success) {
-      console.log(
-        `✅ Successfully scraped + saved ${result.matchups.length} MLB matchups`,
-      );
+      console.log(✅ Successfully scraped and saved ${result.matchups.length} MLB matchups);
       return result.matchups;
+    } else {
+      console.error('❌ Failed to save MLB matchups:', result.error);
+      return [];
     }
-
-    console.error("❌ Failed to save MLB matchups:", result.error);
-    return [];
-  } catch (err) {
-    console.error("❌ Error in MLB matchup scraper:", err);
+  } catch (error) {
+    console.error('Error in MLB matchups scraper:', error);
     process.exit(1);
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Run when called directly                                                   */
-/* -------------------------------------------------------------------------- */
+// Run the script
 main()
   .then(() => process.exit(0))
   .catch(() => process.exit(1));
+
