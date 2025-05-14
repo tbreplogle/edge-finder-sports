@@ -32,6 +32,17 @@ jobs:
 
     - name: Install JS deps
       run: |
+        cd workers               # omit if you’re already in that folder
+        npm install --no-audit --no-fund
+        # download Chrome only if it isn't cached yet
+        if [ ! -d "$HOME/.cache/puppeteer" ]; then
+          npx puppeteer@21.11.0 browsers install chrome
+        else
+          echo "✓ cached Chrome found"
+        fi
+
+    - name: Install JS deps
+      run: |
         cd workers
         npm ci --ignore-scripts
         if [ ! -d "$HOME/.cache/puppeteer" ]; then
