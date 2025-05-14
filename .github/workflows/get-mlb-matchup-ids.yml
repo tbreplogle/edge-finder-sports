@@ -2,7 +2,7 @@ name: Daily MLB Matchup IDs Scraper
 
 on:
   schedule:
-    - cron: '0 13 * * *'          # 08:00 AM CT (13:00 UTC)
+    - cron: '0 13 * * *'          # 08 AM CT
   workflow_dispatch:
 
 jobs:
@@ -10,75 +10,67 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SUPABASE_URL:             ${{ secrets.SUPABASE_URL }}
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
-    # ────────────────────────────────────────────────────────────────────
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      ###################################################################
+      # checkout & Node
+      ###################################################################
+      - uses: actions/checkout@v4
 
-    - name: Setup Node 18
-      uses: actions/setup-node@v4
-      with:
-        node-version: 18
+      - name: Setup Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-    # ────────────────────────────────────────────────────────────────────
-    # cache npm + headless Chrome
-    # ────────────────────────────────────────────────────────────────────
-    - name: Restore Node & Chrome caches
-      id: restore-cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-          ~/.cache/puppeteer
-        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
-        restore-keys: |
-          linux-puppeteer-
+      ###################################################################
+      # npm cache
+      ###################################################################
+      - name: Restore npm cache
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
 
-    # ────────────────────────────────────────────────────────────────────
-    # install once (workers/)
-    # ────────────────────────────────────────────────────────────────────
-    - name: Install JS deps (workers/)
-      working-directory: workers
-      run: |
-        npm install --no-audit --no-fund
-        if [ ! -d "$HOME/.cache/puppeteer" ]; then
-          npx puppeteer@21.11.0 browsers install chrome
-        else
-          echo "✓ cached Chrome found"
-        fi
+      ###################################################################
+      # install deps (workers/)
+      ###################################################################
+      - name: Install JS deps (workers/)
+        working-directory: workers
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: '1'
+        run: npm install --no-audit --no-fund
 
-    - name: Save Node & Chrome caches
-      if: steps.restore-cache.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-          ~/.cache/puppeteer
-        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
+      - name: Save npm cache
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
 
-    # ────────────────────────────────────────────────────────────────────
-    # run the two scrapers
-    # ────────────────────────────────────────────────────────────────────
-    - name: Scrape & save today's MLB matchups
-      working-directory: workers
-      run: node saveMatchupsToSupabase.js
-      env:
-        DEBUG: 'true'
+      ###################################################################
+      # run scrapers
+      ###################################################################
+      - name: Scrape & save today's MLB matchups
+        working-directory: workers
+        run: node saveMatchupsToSupabase.js
+        env:
+          DEBUG: 'true'
 
-    - name: Scrape and save pitching stats
-      working-directory: workers
-      run: node scrapePitchingMatchups.js
-      env:
-        DEBUG: 'false'
+      - name: Scrape and save pitching stats
+        working-directory: workers
+        run: node scrapePitchingMatchups.js
+        env:
+          DEBUG: 'false'
 
-    # ────────────────────────────────────────────────────────────────────
-    - name: Log matchup IDs
-      run: |
-        if [ -f "scrape-result.json" ]; then
-          cat scrape-result.json
-        else
-          echo "No scrape-result.json file found"
-        fi
+      - name: Log matchup IDs
+        run: |
+          if [ -f "scrape-result.json" ]; then
+            cat scrape-result.json
+          else
+            echo "No scrape-result.json file found"
+          fi
