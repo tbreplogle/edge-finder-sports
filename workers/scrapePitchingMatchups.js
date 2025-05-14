@@ -49,9 +49,7 @@ const TEAM_ALT_NAME_TO_ID = {
 /* Main scraper                                                               */
 /* -------------------------------------------------------------------------- */
 async function scrapePitchingMatchups() {
-  /* ---------------------------------------------------------------------- */
-  /* 1. pull today’s games FROM mlb_market_odds (always has game_id)        */
-  /* ---------------------------------------------------------------------- */
+  /* 1 — today’s games (market odds always has game_id) -------------------- */
   const today = new Date().toISOString().slice(0, 10);
   const { data: games, error } = await supabase
     .from("mlb_market_odds")
@@ -65,8 +63,9 @@ async function scrapePitchingMatchups() {
   }
   console.log(`→ Found ${games.length} games to scrape`);
 
-  /* 2. launch Puppeteer --------------------------------------------------- */
+  /* 2 — launch Puppeteer (use runner’s Chrome) ---------------------------- */
   const browser = await puppeteer.launch({
+    channel: "chrome", // ← KEY LINE: use system Google Chrome
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
     headless: "new",
   });
@@ -78,7 +77,7 @@ async function scrapePitchingMatchups() {
 
   const rows = [];
 
-  /* 3. loop through matchups --------------------------------------------- */
+  /* 3 — loop through matchups -------------------------------------------- */
   for (const { matchup_id, game_id } of games) {
     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
     console.log(`→ Loading ${url}`);
@@ -182,15 +181,7 @@ async function scrapePitchingMatchups() {
       const era_plus = era ? Math.round((100 * 4.1) / era) : null;
       const whip = ip > 0 ? +(((bb + h) / ip).toFixed(3)) : null;
 
-      /* ---- debug row ----------------------------------------------------- */
-      if (DEBUG) {
-        console.log({
-          game_id,
-          matchup_id,
-          role,
-          pitcher_name,
-        });
-      }
+      if (DEBUG) console.log({ game_id, matchup_id, role, pitcher_name });
 
       rows.push({
         game_id,
@@ -269,7 +260,9 @@ export async function scrapeAndSavePitchingMatchups() {
   }
 }
 
-/* Run directly ------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Run directly                                                               */
+/* -------------------------------------------------------------------------- */
 if (import.meta.url.endsWith("scrapePitchingMatchups.js")) {
   scrapeAndSavePitchingMatchups()
     .then(() => process.exit(0))
