@@ -2,62 +2,64 @@ name: Sync MLB Odds
 
 on:
   schedule:
-    # Run every morning at 8 AM Central Time (1 PM UTC)
-    - cron: '0 13 * * *'
-  workflow_dispatch: # Allow manual triggers
+    - cron: '0 13 * * *'   # 8 AM CT
+  workflow_dispatch:
 
 jobs:
   sync-odds:
     runs-on: ubuntu-latest
-    
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      
+
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
+    - uses: actions/setup-node@v4
       with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: 'workers/package.json'
-    
-    - name: Install dependencies
+        node-version: 18
+
+    # caching block
+    - name: Restore Node & Chrome caches
+      id: restore-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.cache/puppeteer
+        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
+        restore-keys: |
+          linux-puppeteer-
+
+    - name: Install JS deps
       run: |
         cd workers
-        npm install
-    
+        npm ci --ignore-scripts
+        if [ ! -d "$HOME/.cache/puppeteer" ]; then
+          npx puppeteer@21.11.0 browsers install chrome
+        fi
+
+    - name: Save Node & Chrome caches
+      if: steps.restore-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.cache/puppeteer
+        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
+
+    # main task
     - name: Sync MLB Odds
       run: |
         cd workers
         node fetchMlbOdds.js
-    
+
+    # slack failure notification (unchanged)
     - name: Post to Slack on failure
       if: failure()
       uses: slackapi/slack-github-action@v1.24.0
       with:
         payload: |
-          {
-            "text": "❌ MLB Odds sync failed in ${{ github.repository }}",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "❌ *MLB Odds sync failed*"
-                }
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Repository: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\nSee: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                }
-              }
-            ]
-          }
+          { "text": "❌ MLB Odds sync failed in ${{ github.repository }}" }
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
