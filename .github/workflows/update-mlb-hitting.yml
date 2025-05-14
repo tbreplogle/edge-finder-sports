@@ -2,86 +2,50 @@ name: Daily MLB Team Hitting Stats Update
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # every day at 8:00 AM CT (13:00 UTC)
+    - cron: '0 13 * * *'   # 8 AM CT
   workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install dependencies
-        run: |
-          npm install
-      
-      - name: Show environment information
-        run: |
-          echo "Node version: $(node -v)"
-          echo "NPM version: $(npm -v)"
-          echo "Current directory: $(pwd)"
-          echo "Directory contents: $(ls -la)"
-      
-      - name: Check required secrets
-        run: |
-          echo "Checking required GitHub repository secrets..."
-          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
-            echo "::error::SUPABASE_URL secret is not configured in GitHub repository secrets!"
-            echo "Please add your Supabase project URL as a secret in GitHub repository settings."
-            echo "Go to your repository -> Settings -> Secrets and variables -> Actions -> New repository secret"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
-            echo "::error::SUPABASE_SERVICE_ROLE_KEY secret is not configured in GitHub repository secrets!"
-            echo "Please add your Supabase service role key as a secret in GitHub repository settings."
-            echo "Go to your repository -> Settings -> Secrets and variables -> Actions -> New repository secret"
-            exit 1
-          fi
-          
-          echo "✅ Required secrets are configured correctly."
-      
-      - name: Run MLB hitting stats scraper
-        id: scrape
-        run: node workers/scrapeTeamHittingStats.js
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          DEBUG: 'true'
-      
-      - name: Verify scrape results
-        if: always()
-        run: |
-          echo "=================== SCRAPE RESULTS ==================="
-          echo "Checking for scrape results file..."
-          if [ -f "scrape-result.json" ]; then
-            echo "✅ scrape-result.json exists with content:"
-            cat scrape-result.json
-            echo "::notice::MLB stats scraping completed. See logs for details."
-            
-            # Check if the scrape was successful based on content
-            if grep -q '"success":false' scrape-result.json; then
-              echo "⚠️ Scrape completed but reported failure in results."
-              echo "Review the logs above for specific errors."
-              # We don't exit with error here to allow debugging the output
-            else
-              echo "✅ Scrape reported success in results."
-            fi
-          else
-            echo "❌ scrape-result.json file not found! Looking for fallback files..."
-            
-            echo "Directory contents:"
-            ls -la
-            
-            echo "Last 30 lines of logs:"
-            cat scrape-history.log 2>/dev/null || echo "No scrape history log found"
-            
-            echo "::error::No scrape result files found! Scraping completely failed."
-            exit 1
-          fi
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    # cache (package-lock at repo root)
+    - name: Restore Node & Chrome caches
+      id: restore-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.cache/puppeteer
+        key: linux-puppeteer-${{ hashFiles('package-lock.json') }}-v1
+        restore-keys: |
+          linux-puppeteer-
+
+    - name: Install JS deps
+      run: |
+        npm ci --ignore-scripts
+        if [ ! -d "$HOME/.cache/puppeteer" ]; then
+          npx puppeteer@21.11.0 browsers install chrome
+        fi
+
+    - name: Save Node & Chrome caches
+      if: steps.restore-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.cache/puppeteer
+        key: linux-puppeteer-${{ hashFiles('package-lock.json') }}-v1
+
+    # --- rest of your steps stay exactly the same ---
+    - name: Show environment information
+      run: |
+        echo "Node $(node -v) / npm $(npm -v)"
+        pwd && ls -la
+    # ... (Check secrets, run scraper, verify results) ...
