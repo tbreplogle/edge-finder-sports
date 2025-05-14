@@ -2,7 +2,7 @@ name: Daily MLB Team Hitting Stats Update
 
 on:
   schedule:
-    - cron: '0 13 * * *'          # every day at 08:00 AM CT (13:00 UTC)
+    - cron: '0 13 * * *'          # 08 AM CT
   workflow_dispatch:
 
 jobs:
@@ -10,88 +10,67 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # ────────────────────────────────────────────────────────────────────
-    # 0. Checkout + Node
-    # ────────────────────────────────────────────────────────────────────
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-    - name: Setup Node 18
-      uses: actions/setup-node@v4
-      with:
-        node-version: 18
+      ###################################################################
+      # npm cache
+      ###################################################################
+      - name: Restore npm cache
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
 
-    # ────────────────────────────────────────────────────────────────────
-    # 1. Restore / populate caches
-    #    • ~/.npm                → re-used across jobs
-    #    • ~/.cache/puppeteer    → headless Chrome download (≈ 120 MB)
-    #      key is *workers* /package-lock.json → regen only when libs change
-    # ────────────────────────────────────────────────────────────────────
-    - name: Restore Node & Chrome caches
-      id: restore-cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-          ~/.cache/puppeteer
-        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
-        restore-keys: |
-          linux-puppeteer-
+      ###################################################################
+      # install deps
+      ###################################################################
+      - name: Install JS deps (workers/)
+        working-directory: workers
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: '1'
+        run: npm install --no-audit --no-fund
 
-    # ────────────────────────────────────────────────────────────────────
-    # 2. Install JS deps (single step!)
-    # ────────────────────────────────────────────────────────────────────
-    - name: Install JS deps (workers/)
-      working-directory: workers
-      run: |
-        npm install --no-audit --no-fund
-        if [ ! -d "$HOME/.cache/puppeteer" ]; then
-          npx puppeteer@21.11.0 browsers install chrome
-        else
-          echo "✓ cached Chrome found"
-        fi
+      - name: Save npm cache
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
 
-    # ────────────────────────────────────────────────────────────────────
-    # 3. Re-save caches only if we missed
-    # ────────────────────────────────────────────────────────────────────
-    - name: Save Node & Chrome caches
-      if: steps.restore-cache.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-          ~/.cache/puppeteer
-        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
+      ###################################################################
+      # show env info
+      ###################################################################
+      - name: Show env info
+        run: |
+          echo "Node $(node -v) / npm $(npm -v)"
+          pwd && ls -la
 
-    # ────────────────────────────────────────────────────────────────────
-    # 4. Show environment information (optional)
-    # ────────────────────────────────────────────────────────────────────
-    - name: Show environment information
-      run: |
-        echo "Node $(node -v) / npm $(npm -v)"
-        pwd && ls -la
+      ###################################################################
+      # Run hitting-stats scraper
+      ###################################################################
+      - name: Run MLB hitting stats scraper
+        working-directory: workers
+        run: node scrapeTeamHittingStats.js
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DEBUG: 'true'
 
-    # ────────────────────────────────────────────────────────────────────
-    # 5. Run the hitting-stats scraper
-    # ────────────────────────────────────────────────────────────────────
-    - name: Run MLB hitting-stats scraper
-      working-directory: workers
-      run: node scrapeTeamHittingStats.js
-      env:
-        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        DEBUG: 'true'
-
-    # ────────────────────────────────────────────────────────────────────
-    # 6. Verify / surface results (unchanged)
-    # ────────────────────────────────────────────────────────────────────
-    - name: Verify scrape results
-      if: always()
-      run: |
-        echo "=================== SCRAPE RESULTS ==================="
-        if [ -f "scrape-result.json" ]; then
-          cat scrape-result.json
-        else
-          echo "::error::scrape-result.json not found"
-          exit 1
-        fi
+      ###################################################################
+      # verify results
+      ###################################################################
+      - name: Verify scrape results
+        if: always()
+        run: |
+          if [ -f "scrape-result.json" ]; then
+            cat scrape-result.json
+          else
+            echo "::error::scrape-result.json not found"
+            exit 1
+          fi
