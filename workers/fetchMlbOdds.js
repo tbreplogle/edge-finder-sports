@@ -52,22 +52,10 @@ const getTeamId = (name) =>
   TEAM_NAME_TO_ID[name.trim().toUpperCase()] ?? null;
 
 /* -------------------------------------------------------------------------- */
-/* Utils                                                                      */
-/* -------------------------------------------------------------------------- */
-
-/** Round an ISO date string to the nearest 15‑minute bucket (ISO yyyy‑mm‑ddTHH:MM) */
-function toTimeBucket(isoString) {
-  const d = new Date(isoString);
-  d.setSeconds(0, 0);
-  d.setMinutes(Math.floor(d.getMinutes() / 15) * 15);
-  return d.toISOString().slice(0, 16); // "yyyy-mm-ddTHH:MM"
-}
-
-/* -------------------------------------------------------------------------- */
-/* 1. Fetch raw odds from The‑Odds‑API                                        */
+/* 1. Fetch raw odds                                                          */
 /* -------------------------------------------------------------------------- */
 async function fetchOddsApi() {
-  console.log("🕵️  Fetching MLB odds from The‑Odds‑API…");
+  console.log("🕵️  Fetching MLB odds …");
   const { data } = await axios.get(`${ODDS_API_URL}/${SPORT_KEY}/odds`, {
     params: {
       apiKey: ODDS_API_KEY,
@@ -83,7 +71,7 @@ async function fetchOddsApi() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 2. Map raw API response → local record skeleton                            */
+/* 2. Map API response → local skeleton                                       */
 /* -------------------------------------------------------------------------- */
 function mapGame(game) {
   const home_team_id = getTeamId(game.home_team);
@@ -101,7 +89,7 @@ function mapGame(game) {
   const aML = h2h.find((o) => o.name === game.away_team)?.price ?? null;
 
   const utc = new Date(game.commence_time);
-  const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5/CDT
+  const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
 
   return {
     game_id: game.id,
@@ -111,27 +99,24 @@ function mapGame(game) {
     away_team_id,
     home_ml: hML,
     away_ml: aML,
-    matchup_id: null, // attach later
+    matchup_id: null, // filled in later
   };
 }
 
 /* -------------------------------------------------------------------------- */
-/* 3. Attach matchup_id (two‑step lookup)                                     */
+/* 3. Attach matchup_id                                                      */
+/*    1) by game_id, 2) fallback composite (home+away+date)                   */
 /* -------------------------------------------------------------------------- */
 async function attachMatchupIds(records) {
   const { data, error } = await supabase
     .from("mlb_matchups")
-    .select(
-      "matchup_id, game_id, home_team_id, away_team_id, game_date, game_time_ct"
-    );
+    .select("matchup_id, game_id, home_team_id, away_team_id, game_date");
   if (error) throw error;
 
   const byGameId = new Map(data.map((m) => [m.game_id, m.matchup_id]));
   const byComposite = new Map(
     data.map((m) => [
-      `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${toTimeBucket(
-        m.game_time_ct
-      )}`,
+      `${m.home_team_id}_${m.away_team_id}_${m.game_date}`,
       m.matchup_id,
     ])
   );
@@ -140,18 +125,16 @@ async function attachMatchupIds(records) {
     const direct = byGameId.get(r.game_id);
     if (direct) return { ...r, matchup_id: direct };
 
-    const compositeKey = `${r.home_team_id}_${r.away_team_id}_${r.game_date}_${toTimeBucket(
-      r.game_time_ct
-    )}`;
-    return { ...r, matchup_id: byComposite.get(compositeKey) ?? null };
+    const compKey = `${r.home_team_id}_${r.away_team_id}_${r.game_date}`;
+    return { ...r, matchup_id: byComposite.get(compKey) ?? null };
   });
 }
 
 /* -------------------------------------------------------------------------- */
-/* 4. Upsert into mlb_market_odds                                             */
+/* 4. Upsert                                                                 */
 /* -------------------------------------------------------------------------- */
 async function upsertOdds(records) {
-  console.log(`→ Upserting ${records.length} records…`);
+  console.log(`→ Upserting ${records.length} rows into mlb_market_odds …`);
   const { data, error } = await supabase
     .from("mlb_market_odds")
     .upsert(records, { onConflict: "game_id" })
@@ -166,12 +149,7 @@ async function upsertOdds(records) {
 /* -------------------------------------------------------------------------- */
 async function fetchAndSyncMlbOdds() {
   console.log(`🏁 Sync started ${new Date().toISOString()}`);
-  const stats = {
-    fetched: 0,
-    mapped: 0,
-    with_matchup: 0,
-    upserted: 0,
-  };
+  const stats = { fetched: 0, mapped: 0, with_matchup: 0, upserted: 0 };
 
   try {
     if (!(await testConnection())) throw new Error("DB connection failed");
@@ -200,13 +178,12 @@ async function fetchAndSyncMlbOdds() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 6. CLI entry                                                               */
+/* CLI entry                                                                  */
 /* -------------------------------------------------------------------------- */
-const isEntry =
+if (
   process.argv[1] ===
-  resolve(dirname(fileURLToPath(import.meta.url)), "fetchMlbOdds.js");
-
-if (isEntry) {
+  resolve(dirname(fileURLToPath(import.meta.url)), "fetchMlbOdds.js")
+) {
   fetchAndSyncMlbOdds()
     .then((res) => process.exit(res.success ? 0 : 1))
     .catch(() => process.exit(1));
