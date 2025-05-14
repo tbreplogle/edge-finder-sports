@@ -26,9 +26,10 @@ jobs:
     - name: Install dependencies
       run: |
         cd workers
-        npm ci
+        npm install             # ← swapped
       env:
         PUPPETEER_SKIP_DOWNLOAD: "true"
+
 
     - name: Sync MLB Odds
       run: |
