@@ -80,9 +80,10 @@ export async function scrapeTeamHittingStats() {
     }
     
     // Launch browser with no-sandbox for CI environments
-    const browser = await puppeteer.launch({ 
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      headless: 'new' // Use the new headless mode
+   const browser = await puppeteer.launch({
+     headless: 'new',
+     channel : 'chrome',                            // ← use system Chrome
+     args    : ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
     // Create a new page and navigate to the URL
