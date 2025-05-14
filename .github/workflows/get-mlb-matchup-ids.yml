@@ -21,9 +21,9 @@ jobs:
     # ---------- install (skip Puppeteer download) ----------
     - name: Install dependencies
       working-directory: ./workers
-      run: npm ci
+      run: npm install          # ← swapped ci → install
       env:
-        PUPPETEER_SKIP_DOWNLOAD: "true"
+          PUPPETEER_SKIP_DOWNLOAD: "true"
 
     - name: Scrape & save today's MLB matchups
       run: node workers/saveMatchupsToSupabase.js
