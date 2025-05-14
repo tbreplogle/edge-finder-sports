@@ -58,6 +58,17 @@ jobs:
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         DEBUG: 'true'
 
+    - name: Install JS deps
+      run: |
+        cd workers               # omit if you’re already in that folder
+        npm install --no-audit --no-fund
+        # download Chrome only if it isn't cached yet
+        if [ ! -d "$HOME/.cache/puppeteer" ]; then
+          npx puppeteer@21.11.0 browsers install chrome
+        else
+          echo "✓ cached Chrome found"
+        fi
+
     - name: Scrape and save pitching stats
       run: node workers/scrapePitchingMatchups.js
       env:
