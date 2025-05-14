@@ -20,9 +20,10 @@ jobs:
 
     # ---------- install ----------
     - name: Install dependencies
-      run: npm ci
+      run: npm install          # ← swapped
       env:
         PUPPETEER_SKIP_DOWNLOAD: "true"
+
 
     - name: Show environment information
       run: |
