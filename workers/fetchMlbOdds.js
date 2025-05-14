@@ -1,4 +1,5 @@
 // workers/fetchMlbOdds.js
+/* eslint-disable no-console ------------------------------------------------- */
 import axios from "axios";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
@@ -47,15 +48,26 @@ const TEAM_NAME_TO_ID = {
   "BALTIMORE ORIOLES": 30,
 };
 
-function getTeamId(name) {
-  return TEAM_NAME_TO_ID[name.trim().toUpperCase()] ?? null;
+const getTeamId = (name) =>
+  TEAM_NAME_TO_ID[name.trim().toUpperCase()] ?? null;
+
+/* -------------------------------------------------------------------------- */
+/* Utils                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Round an ISO date string to the nearest 15‑minute bucket (ISO yyyy‑mm‑ddTHH:MM) */
+function toTimeBucket(isoString) {
+  const d = new Date(isoString);
+  d.setSeconds(0, 0);
+  d.setMinutes(Math.floor(d.getMinutes() / 15) * 15);
+  return d.toISOString().slice(0, 16); // "yyyy-mm-ddTHH:MM"
 }
 
 /* -------------------------------------------------------------------------- */
-/* Fetch odds API                                                             */
+/* 1. Fetch raw odds from The‑Odds‑API                                        */
 /* -------------------------------------------------------------------------- */
 async function fetchOddsApi() {
-  console.log("🕵️ Fetching MLB odds…");
+  console.log("🕵️  Fetching MLB odds from The‑Odds‑API…");
   const { data } = await axios.get(`${ODDS_API_URL}/${SPORT_KEY}/odds`, {
     params: {
       apiKey: ODDS_API_KEY,
@@ -71,7 +83,7 @@ async function fetchOddsApi() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Map API => local record                                                    */
+/* 2. Map raw API response → local record skeleton                            */
 /* -------------------------------------------------------------------------- */
 function mapGame(game) {
   const home_team_id = getTeamId(game.home_team);
@@ -89,7 +101,7 @@ function mapGame(game) {
   const aML = h2h.find((o) => o.name === game.away_team)?.price ?? null;
 
   const utc = new Date(game.commence_time);
-  const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
+  const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5/CDT
 
   return {
     game_id: game.id,
@@ -99,32 +111,47 @@ function mapGame(game) {
     away_team_id,
     home_ml: hML,
     away_ml: aML,
-    // matchup_id will be filled in attachMatchupIds()
+    matchup_id: null, // attach later
   };
 }
 
 /* -------------------------------------------------------------------------- */
-/* Attach matchup_id by game_id (1‑to‑1)                                      */
+/* 3. Attach matchup_id (two‑step lookup)                                     */
 /* -------------------------------------------------------------------------- */
 async function attachMatchupIds(records) {
   const { data, error } = await supabase
     .from("mlb_matchups")
-    .select("game_id, matchup_id");
+    .select(
+      "matchup_id, game_id, home_team_id, away_team_id, game_date, game_time_ct"
+    );
   if (error) throw error;
 
   const byGameId = new Map(data.map((m) => [m.game_id, m.matchup_id]));
+  const byComposite = new Map(
+    data.map((m) => [
+      `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${toTimeBucket(
+        m.game_time_ct
+      )}`,
+      m.matchup_id,
+    ])
+  );
 
-  return records.map((r) => ({
-    ...r,
-    matchup_id: byGameId.get(r.game_id) ?? null,
-  }));
+  return records.map((r) => {
+    const direct = byGameId.get(r.game_id);
+    if (direct) return { ...r, matchup_id: direct };
+
+    const compositeKey = `${r.home_team_id}_${r.away_team_id}_${r.game_date}_${toTimeBucket(
+      r.game_time_ct
+    )}`;
+    return { ...r, matchup_id: byComposite.get(compositeKey) ?? null };
+  });
 }
 
 /* -------------------------------------------------------------------------- */
-/* Upsert                                                                     */
+/* 4. Upsert into mlb_market_odds                                             */
 /* -------------------------------------------------------------------------- */
 async function upsertOdds(records) {
-  console.log(`→ Upserting ${records.length} rows into mlb_market_odds…`);
+  console.log(`→ Upserting ${records.length} records…`);
   const { data, error } = await supabase
     .from("mlb_market_odds")
     .upsert(records, { onConflict: "game_id" })
@@ -135,7 +162,7 @@ async function upsertOdds(records) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Orchestrator                                                               */
+/* 5. Orchestrator                                                            */
 /* -------------------------------------------------------------------------- */
 async function fetchAndSyncMlbOdds() {
   console.log(`🏁 Sync started ${new Date().toISOString()}`);
@@ -157,7 +184,7 @@ async function fetchAndSyncMlbOdds() {
     if (!mapped.length) throw new Error("No mapped games");
 
     const joined = await attachMatchupIds(mapped);
-    const ready = joined.filter((r) => r.matchup_id); // keep only matched
+    const ready = joined.filter((r) => r.matchup_id);
     stats.with_matchup = ready.length;
     if (!ready.length)
       throw new Error("No games matched to matchup_id (scraper out of sync)");
@@ -173,7 +200,7 @@ async function fetchAndSyncMlbOdds() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Entry point when invoked directly                                          */
+/* 6. CLI entry                                                               */
 /* -------------------------------------------------------------------------- */
 const isEntry =
   process.argv[1] ===
