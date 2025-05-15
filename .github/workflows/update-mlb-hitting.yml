@@ -2,82 +2,72 @@ name: Daily MLB Team Hitting Stats Update
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # 08:00 AM CT
+    - cron: '0 13 * * *'          # 08:00 AM CT
   workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
 
+    env:
+      SUPABASE_URL:               ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY:  ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PUPPETEER_SKIP_DOWNLOAD:    'true'
+
     steps:
-      - uses: actions/checkout@v4
+    # ────────────────────────────────────────────────  checkout + node
+    - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+    - name: Setup Node 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
 
-      - name: Restore Node & Chrome caches
-        id: restore-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/puppeteer
-          key: linux-puppeteer-${{ hashFiles('package-lock.json') }}-v1
-          restore-keys: |
-            linux-puppeteer-
+    # ────────────────────────────────────────────────  cache
+    - name: Restore Node & Chrome caches
+      id: restore-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.cache/puppeteer
+        key: linux-puppeteer-${{ hashFiles('package-lock.json') }}-v1
+        restore-keys: |
+          linux-puppeteer-
 
-      - name: Install JS deps
-        run: |
-          npm ci --ignore-scripts
-          if [ ! -d "$HOME/.cache/puppeteer" ]; then
-            npx puppeteer@21.11.0 browsers install chrome
-          else
-            echo "✓ cached Chrome found"
-          fi
+    # ────────────────────────────────────────────────  deps (+ chrome once)
+    - name: Install root deps
+      run: |
+        npm install --no-audit --no-fund
+        if [ ! -d "$HOME/.cache/puppeteer" ]; then
+          npx puppeteer@21.11.0 browsers install chrome
+        else
+          echo "✓ cached Chrome found"
+        fi
 
-      - name: Save Node & Chrome caches
-        if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/puppeteer
-          key: linux-puppeteer-${{ hashFiles('package-lock.json') }}-v1
+    - name: Save Node & Chrome caches
+      if: steps.restore-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.cache/puppeteer
+        key: linux-puppeteer-${{ hashFiles('package-lock.json') }}-v1
 
-      - name: Show environment information
-        run: |
-          echo "Node version: $(node -v)"
-          echo "NPM version: $(npm -v)"
-          echo "Current directory: $(pwd)"
-          ls -la
+    # ────────────────────────────────────────────────  hit-stats scraper
+    - name: Run MLB hitting stats scraper
+      id: scrape
+      run: node workers/scrapeTeamHittingStats.js
+      env:
+        DEBUG: 'true'
 
-      - name: Check required secrets
-        run: |
-          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
-            echo "::error::SUPABASE_URL is not configured!"
-            exit 1
-          fi
-          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
-            echo "::error::SUPABASE_SERVICE_ROLE_KEY is not configured!"
-            exit 1
-          fi
-
-      - name: Run MLB hitting stats scraper
-        run: node workers/scrapeTeamHittingStats.js
-        env:
-          DEBUG: 'true'
-          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
-      - name: Verify scrape results
-        if: always()
-        run: |
-          if [ -f "scrape-result.json" ]; then
-            echo "✅ scrape-result.json:"
-            cat scrape-result.json
-          else
-            echo "::error:: scrape-result.json not found!"
-            exit 1
-          fi
+    # ────────────────────────────────────────────────  verify result
+    - name: Verify scrape results
+      if: always()
+      run: |
+        if [ -f scrape-result.json ]; then
+          cat scrape-result.json
+        else
+          echo "::error::scrape-result.json not found"
+          exit 1
+        fi
