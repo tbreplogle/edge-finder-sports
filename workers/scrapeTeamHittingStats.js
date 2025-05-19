@@ -215,8 +215,8 @@ const browser = await puppeteer.launch({
       console.log('Sample data with mapped team names:', JSON.stringify(stats.slice(0, 2), null, 2));
     }
     
-    // Write to repo root for GitHub Actions to find
-    const outPath = path.resolve(process.cwd(), 'scrape-result.json');
+   // always write the report in the repo root so the workflow can find it
+    const outPath = path.resolve(process.cwd(), '..', 'scrape-result.json');
     fs.writeFileSync(outPath, JSON.stringify(stats, null, 2));
     console.log(`✅ Wrote scrape-result.json with ${stats.length} rows to ${outPath}`);
     
