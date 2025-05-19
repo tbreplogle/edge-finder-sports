@@ -1,8 +1,10 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./context/AuthProvider";
 
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -20,49 +22,51 @@ import Contact from "./pages/Contact";
 import InjuryDashboard from "./pages/InjuryDashboard";
 import AdminPreview from "./pages/AdminPreview";
 import MlbDashboard from "./pages/MlbDashboard";
-import AccessControl from "./pages/admin/AccessControl"; // ★ new page
+import AccessControl from "./pages/admin/AccessControl";
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
 
-            {/* public & auth  */}
-            <Route path="/auth/:action" element={<Auth />} />
-            <Route path="/pricing" element={<Pricing />} />
+              {/* public & auth  */}
+              <Route path="/auth/:action" element={<Auth />} />
+              <Route path="/pricing" element={<Pricing />} />
 
-            {/* dashboards */}
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/mlb-dashboard" element={<MlbDashboard />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/injuries" element={<InjuryDashboard />} />
+              {/* dashboards */}
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/mlb-dashboard" element={<MlbDashboard />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/injuries" element={<InjuryDashboard />} />
 
-            {/* account */}
-            <Route path="/account" element={<Account />} />
+              {/* account */}
+              <Route path="/account" element={<Account />} />
 
-            {/* admin */}
-            <Route path="/admin/logic" element={<AdminLogic />} />
-            <Route path="/admin/preview" element={<AdminPreview />} />
-            <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
-            <Route path="/admin/access-control" element={<AccessControl />} /> {/* ★ */}
+              {/* admin */}
+              <Route path="/admin/logic" element={<AdminLogic />} />
+              <Route path="/admin/preview" element={<AdminPreview />} />
+              <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
+              <Route path="/admin/access-control" element={<AccessControl />} />
 
-            {/* misc */}
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/contact" element={<Contact />} />
+              {/* misc */}
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/contact" element={<Contact />} />
 
-            {/* 404 */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+              {/* 404 */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

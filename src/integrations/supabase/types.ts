@@ -303,6 +303,33 @@ export type Database = {
           },
         ]
       }
+      page_access_rules: {
+        Row: {
+          access_level: Database["public"]["Enums"]["access_level"]
+          id: string
+          page_key: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          access_level: Database["public"]["Enums"]["access_level"]
+          id?: string
+          page_key: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          access_level?: Database["public"]["Enums"]["access_level"]
+          id?: string
+          page_key?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       pitching_matchups: {
         Row: {
           bb: number | null
@@ -310,6 +337,7 @@ export type Database = {
           er: number | null
           era: number | null
           era_plus: number | null
+          game_id: string | null
           gbfb: number | null
           h: number | null
           hr: number | null
@@ -331,6 +359,7 @@ export type Database = {
           er?: number | null
           era?: number | null
           era_plus?: number | null
+          game_id?: string | null
           gbfb?: number | null
           h?: number | null
           hr?: number | null
@@ -352,6 +381,7 @@ export type Database = {
           er?: number | null
           era?: number | null
           era_plus?: number | null
+          game_id?: string | null
           gbfb?: number | null
           h?: number | null
           hr?: number | null
@@ -445,9 +475,32 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      mlb_predictions_with_market: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          matchup_id: string
+          game_id: string
+          game_time_ct: string
+          home_team: string
+          away_team: string
+          home_market_ml: number
+          away_market_ml: number
+          home_market_pct: number
+          away_market_pct: number
+          home_pred_ml: number
+          away_pred_ml: number
+          home_pred_pct: number
+          away_pred_pct: number
+          home_edge_pct: number
+          away_edge_pct: number
+          home_pitcher: string
+          away_pitcher: string
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      access_level: "none" | "preview" | "full"
+      user_role: "free" | "premium" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -562,6 +615,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      access_level: ["none", "preview", "full"],
+      user_role: ["free", "premium", "admin"],
+    },
   },
 } as const
