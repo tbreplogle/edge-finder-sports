@@ -101,20 +101,13 @@ export function MatchupTicker() {
         setAvailableDates(dates);
         setSelectedDate(initialSelectedDate);
 
-        const daysArray = dates.map(label => ({
+        const days = dates.map(label => ({
           label,
           date: label,
           games: convertToTickerGames(buckets[label], sportKey)
         }));
 
-        const currentDayGames = daysArray.find(d => d.label === initialSelectedDate)?.games || [];
-        
-        setData({
-          lastUpdated: new Date().toISOString(),
-          days: daysArray,
-          games: currentDayGames
-        });
-        
+        setData({ sport, days });
       } catch (err) {
         console.error('[Ticker] fetch failed', err);
         setNoGames(true);
