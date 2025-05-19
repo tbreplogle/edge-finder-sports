@@ -91,7 +91,7 @@ async function scrapeTodayMatchups() {
         ?.innerText
         .trim();
       const dt = dateText
-        ? new Date(${dateText} ${new Date().getFullYear()})
+        ? new Date(`${dateText} ${new Date().getFullYear()}`)
         : null;
       const game_date = dt ? dt.toISOString().slice(0,10) : null;
 
