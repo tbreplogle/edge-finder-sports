@@ -17,7 +17,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { PremiumBanner } from "@/components/PremiumBanner";
-import { usePageAccess } from "@/lib/usePageAccess";           // ★ NEW
+import { usePageAccess } from "@/lib/usePageAccess";
 
 // -----------------------------------------------------------------------------
 // Table‑view interface (unchanged)
@@ -46,8 +46,8 @@ interface MlbPredictionDisplay {
 
 const MlbDashboard = () => {
   const { toast } = useToast();
-  const access = usePageAccess("mlb_dashboard");      // ★ visibility rule
-  if (access === "none") return null;                 // could redirect if you prefer
+  const access = usePageAccess("mlb_dashboard");
+  if (access === "none") return null;
   const isLocked = access !== "full";
 
   // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ const MlbDashboard = () => {
   const [previewGame, setPreviewGame] =
     useState<ProcessedMlbPrediction | null>(null);
 
-  const [isAdmin, setIsAdmin] = useState(false);      // still needed for GameCard props
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Auth stub – reads localStorage (replace with real auth)
@@ -93,7 +93,7 @@ const MlbDashboard = () => {
       // 1. Game with highest absolute edge → featured
       const featured = findHighestEdgePrediction(mlbPredictions) ?? null;
 
-      // 2. Earliest game that isn’t the featured → preview
+      // 2. Earliest game that isn't the featured → preview
       const sorted = [...mlbPredictions].sort(
         (a, b) =>
           new Date(a.game_time_ct).getTime() -
@@ -193,26 +193,25 @@ const MlbDashboard = () => {
 
             <div className="max-w-5xl mx-auto">
               <GameCard
-                id={featuredGame.matchup_id}
-                sport="mlb"
-                homeTeam={featuredGame.home_team}
-                awayTeam={featuredGame.away_team}
-                startTime={featuredGame.game_time_ct}
+                matchup_id={featuredGame.matchup_id}
+                game_id={featuredGame.game_id}
+                home_team={featuredGame.home_team}
+                away_team={featuredGame.away_team}
+                game_time_ct={featuredGame.game_time_ct}
                 isAdmin={isAdmin}
                 isPremium={false}
-                variant="featured"
-                homeMarketMoneyline={featuredGame.home_market_ml}
-                awayMarketMoneyline={featuredGame.away_market_ml}
-                homePredictedOdds={featuredGame.home_pred_ml}
-                awayPredictedOdds={featuredGame.away_pred_ml}
-                homePredictedPct={featuredGame.home_pred_pct}
-                awayPredictedPct={featuredGame.away_pred_pct}
-                edgePct={
-                  Math.max(
-                    featuredGame.home_edge_pct ?? 0,
-                    featuredGame.away_edge_pct ?? 0,
-                  ) || null
-                }
+                isFeatured={true}
+                home_market_ml={featuredGame.home_market_ml}
+                away_market_ml={featuredGame.away_market_ml}
+                home_pred_ml={featuredGame.home_pred_ml}
+                away_pred_ml={featuredGame.away_pred_ml}
+                home_pred_pct={featuredGame.home_pred_pct}
+                away_pred_pct={featuredGame.away_pred_pct}
+                home_edge_pct={featuredGame.home_edge_pct}
+                away_edge_pct={featuredGame.away_edge_pct}
+                home_pitcher={featuredGame.home_pitcher}
+                away_pitcher={featuredGame.away_pitcher}
+                sport="mlb"
               />
             </div>
           </section>
@@ -228,21 +227,25 @@ const MlbDashboard = () => {
 
             <div className="max-w-5xl mx-auto">
               <GameCard
-                id={previewGame.matchup_id}
-                sport="mlb"
-                homeTeam={previewGame.home_team}
-                awayTeam={previewGame.away_team}
-                startTime={previewGame.game_time_ct}
+                matchup_id={previewGame.matchup_id}
+                game_id={previewGame.game_id}
+                home_team={previewGame.home_team}
+                away_team={previewGame.away_team}
+                game_time_ct={previewGame.game_time_ct}
                 isAdmin={isAdmin}
                 isPremium={false}
-                isPreviewGame
-                variant="regular"
-                homeMarketMoneyline={previewGame.home_market_ml}
-                awayMarketMoneyline={previewGame.away_market_ml}
-                homePredictedOdds={previewGame.home_pred_ml}
-                awayPredictedOdds={previewGame.away_pred_ml}
-                homePredictedPct={previewGame.home_pred_pct}
-                awayPredictedPct={previewGame.away_pred_pct}
+                isPreviewGame={true}
+                home_market_ml={previewGame.home_market_ml}
+                away_market_ml={previewGame.away_market_ml}
+                home_pred_ml={previewGame.home_pred_ml}
+                away_pred_ml={previewGame.away_pred_ml}
+                home_pred_pct={previewGame.home_pred_pct}
+                away_pred_pct={previewGame.away_pred_pct}
+                home_edge_pct={previewGame.home_edge_pct}
+                away_edge_pct={previewGame.away_edge_pct}
+                home_pitcher={previewGame.home_pitcher}
+                away_pitcher={previewGame.away_pitcher}
+                sport="mlb"
               />
             </div>
           </section>
@@ -305,11 +308,11 @@ const MlbDashboard = () => {
                 from <code>mlb_predictions.moneyline</code>
               </p>
               <p>
-                <strong>Market / Predicted Implied %:</strong>{" "}
+                <strong>Market / Predicted Implied %:</strong>{" "}
                 win‑probability conversion
               </p>
               <p>
-                <strong>Edge %:</strong> difference between predicted and market
+                <strong>Edge %:</strong> difference between predicted and market
                 implied percentages
               </p>
             </div>
@@ -324,4 +327,5 @@ const MlbDashboard = () => {
   );
 };
 
+// Add default export
 export default MlbDashboard;

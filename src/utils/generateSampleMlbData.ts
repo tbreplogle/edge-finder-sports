@@ -1,23 +1,19 @@
 
-import { GameProps } from "@/components/GameCard";
+import { CardProps } from "@/components/GameCard";
 
 // Function to generate sample MLB data for testing when API is unavailable
-export function generateSampleMlbData(): GameProps[] {
+export function generateSampleMlbData(): CardProps[] {
   const today = new Date();
   const todayDateStr = today.toISOString().split('T')[0];
   
-  const sampleGames: GameProps[] = [
+  const sampleGames: CardProps[] = [
     {
-      id: "685100",
-      sport: "mlb",
-      homeTeam: "PHI",
-      awayTeam: "WSH",
-      startTime: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
-      game_id: "685100",
       matchup_id: "685100",
+      sport: "mlb",
       home_team: "PHI",
       away_team: "WSH",
-      game_time_ct: `${todayDateStr}T21:45:00Z`,
+      game_time_ct: `${todayDateStr}T21:45:00Z`, // 5:45 p.m. ET
+      game_id: "685100",
       home_market_ml: -150,
       away_market_ml: +130,
       home_market_pct: 0.60,
@@ -30,20 +26,15 @@ export function generateSampleMlbData(): GameProps[] {
       away_edge_pct: -0.02,
       home_pitcher: "Wheeler",
       away_pitcher: "Gore",
-      isAdmin: false,
-      isPaid: false
+      isAdmin: false
     },
     {
-      id: "685101",
-      sport: "mlb",
-      homeTeam: "TOR",
-      awayTeam: "BOS",
-      startTime: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
-      game_id: "685101",
       matchup_id: "685101",
+      sport: "mlb",
       home_team: "TOR",
       away_team: "BOS",
-      game_time_ct: `${todayDateStr}T22:07:00Z`,
+      game_time_ct: `${todayDateStr}T22:07:00Z`, // 6:07 p.m. ET
+      game_id: "685101",
       home_market_ml: -120,
       away_market_ml: +110,
       home_market_pct: 0.545,
@@ -56,20 +47,15 @@ export function generateSampleMlbData(): GameProps[] {
       away_edge_pct: -0.02,
       home_pitcher: "Berrios",
       away_pitcher: "Houck",
-      isAdmin: false,
-      isPaid: false
+      isAdmin: false
     },
     {
-      id: "685102",
-      sport: "mlb",
-      homeTeam: "LAA",
-      awayTeam: "DET",
-      startTime: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
-      game_id: "685102",
       matchup_id: "685102",
+      sport: "mlb",
       home_team: "LAA",
       away_team: "DET",
-      game_time_ct: `${todayDateStr}T00:38:00Z`,
+      game_time_ct: `${todayDateStr}T00:38:00Z`, // 8:38 p.m. ET
+      game_id: "685102",
       home_market_ml: 150,
       away_market_ml: -170,
       home_market_pct: 0.40,
@@ -82,20 +68,15 @@ export function generateSampleMlbData(): GameProps[] {
       away_edge_pct: -0.035,
       home_pitcher: "Sandoval",
       away_pitcher: "Skubal",
-      isAdmin: false,
-      isPaid: false
+      isAdmin: false
     },
     {
-      id: "685103",
-      sport: "mlb",
-      homeTeam: "SF",
-      awayTeam: "COL",
-      startTime: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
-      game_id: "685103",
       matchup_id: "685103",
+      sport: "mlb",
       home_team: "SF",
       away_team: "COL",
-      game_time_ct: `${todayDateStr}T01:45:00Z`,
+      game_time_ct: `${todayDateStr}T01:45:00Z`, // 9:45 p.m. ET
+      game_id: "685103",
       home_market_ml: -200,
       away_market_ml: +180,
       home_market_pct: 0.667,
@@ -108,8 +89,7 @@ export function generateSampleMlbData(): GameProps[] {
       away_edge_pct: -0.021,
       home_pitcher: "Webb",
       away_pitcher: "Freeland",
-      isAdmin: false,
-      isPaid: false
+      isAdmin: false
     }
   ];
   

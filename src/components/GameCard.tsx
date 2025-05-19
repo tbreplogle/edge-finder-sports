@@ -1,3 +1,4 @@
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react";
@@ -10,13 +11,44 @@ const ml  = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`)
 const edgeClr = (v: number | null) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
+// Export CardProps as GameProps for backward compatibility with existing imports
 export interface CardProps extends ProcessedMlbPrediction {
+  id?: string; // Make id optional and add it to CardProps
+  sport?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  startTime?: string;
   isAdmin: boolean;
+  isPremium?: boolean;
+  isPaid?: boolean;
+  variant?: string;
+  isPreviewGame?: boolean;
   isFeatured?: boolean;
+  homeMarketMoneyline?: number;
+  awayMarketMoneyline?: number;
+  homePredictedOdds?: number;
+  awayPredictedOdds?: number;
+  homePredictedPct?: number;
+  awayPredictedPct?: number;
+  edgePct?: number | null;
 }
 
+// Export GameProps as alias of CardProps for backward compatibility
+export type GameProps = CardProps;
+
 export function GameCard(p: CardProps) {
-  if (p.isFeatured) {
+  // Map prop aliases to their standard names for internal use
+  const home_team = p.homeTeam || p.home_team;
+  const away_team = p.awayTeam || p.away_team;
+  const game_time_ct = p.startTime || p.game_time_ct;
+  const home_market_ml = p.homeMarketMoneyline || p.home_market_ml;
+  const away_market_ml = p.awayMarketMoneyline || p.away_market_ml;
+  const home_pred_ml = p.homePredictedOdds || p.home_pred_ml;
+  const away_pred_ml = p.awayPredictedOdds || p.away_pred_ml;
+  const home_pred_pct = p.homePredictedPct || p.home_pred_pct;
+  const away_pred_pct = p.awayPredictedPct || p.away_pred_pct;
+  
+  if (p.isFeatured || p.variant === "featured") {
     return (
       <Card className="edge-card border-0 overflow-hidden relative">
         <AspectRatio ratio={16/7} className="bg-gradient-to-r from-edge-primary to-[#1f3356] text-white">
@@ -39,10 +71,10 @@ export function GameCard(p: CardProps) {
           
           <div className="p-6 flex flex-col justify-between h-full">
             <div>
-              <h3 className="text-2xl font-bold">{p.away_team} @ {p.home_team}</h3>
+              <h3 className="text-2xl font-bold">{away_team} @ {home_team}</h3>
               <div className="flex items-center text-sm text-white/80 mt-1">
                 <Clock className="w-3 h-3 mr-1" />
-                {new Date(p.game_time_ct).toLocaleString("en-US", {
+                {new Date(game_time_ct).toLocaleString("en-US", {
                   weekday: "short", month: "short", day: "numeric",
                   hour: "numeric", minute: "2-digit", timeZone: "America/Chicago"
                 })}
@@ -53,18 +85,18 @@ export function GameCard(p: CardProps) {
               {/* Team rows */}
               <div className="grid grid-cols-4 items-center">
                 <div className="col-span-2">
-                  <span className="text-lg font-bold">{p.away_team}</span><br/>
+                  <span className="text-lg font-bold">{away_team}</span><br/>
                   <span className="text-sm text-white/70">{p.away_pitcher ?? "TBD"}</span>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-white/70">Market</div>
-                  <div>{ml(p.away_market_ml)}</div>
+                  <div>{ml(away_market_ml)}</div>
                   <div className="text-xs">{pct(p.away_market_pct)}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-white/70">Predicted</div>
-                  <div>{ml(p.away_pred_ml)}</div>
-                  <div className="text-xs">{pct(p.away_pred_pct)}</div>
+                  <div>{ml(away_pred_ml)}</div>
+                  <div className="text-xs">{pct(away_pred_pct)}</div>
                 </div>
               </div>
               
@@ -84,18 +116,18 @@ export function GameCard(p: CardProps) {
               
               <div className="grid grid-cols-4 items-center">
                 <div className="col-span-2">
-                  <span className="text-lg font-bold">{p.home_team}</span><br/>
+                  <span className="text-lg font-bold">{home_team}</span><br/>
                   <span className="text-sm text-white/70">{p.home_pitcher ?? "TBD"}</span>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-white/70">Market</div>
-                  <div>{ml(p.home_market_ml)}</div>
+                  <div>{ml(home_market_ml)}</div>
                   <div className="text-xs">{pct(p.home_market_pct)}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-white/70">Predicted</div>
-                  <div>{ml(p.home_pred_ml)}</div>
-                  <div className="text-xs">{pct(p.home_pred_pct)}</div>
+                  <div>{ml(home_pred_ml)}</div>
+                  <div className="text-xs">{pct(home_pred_pct)}</div>
                 </div>
               </div>
               
@@ -119,7 +151,7 @@ export function GameCard(p: CardProps) {
     );
   }
   
-  // Regular card (not featured) - keep existing code
+  // Regular card (not featured) - use mapped props
   return (
     <Card className={cn("edge-card", p.isFeatured && "border-0 shadow-lg")}>
       <CardContent className={cn("p-4 space-y-2", p.isFeatured && "bg-transparent")}>
@@ -133,10 +165,10 @@ export function GameCard(p: CardProps) {
           )}
         </div>
 
-        <h3 className={cn("text-lg font-bold", p.isFeatured && "text-white")}>{p.away_team} @ {p.home_team}</h3>
+        <h3 className={cn("text-lg font-bold", p.isFeatured && "text-white")}>{away_team} @ {home_team}</h3>
         <div className={cn("flex items-center text-sm text-muted-foreground mb-2", p.isFeatured && "text-white/80")}>
           <Clock className="w-3 h-3 mr-1" />
-          {new Date(p.game_time_ct).toLocaleString("en-US", {
+          {new Date(game_time_ct).toLocaleString("en-US", {
             weekday: "short", month: "short", day: "numeric",
             hour: "numeric", minute: "2-digit", timeZone: "America/Chicago"
           })}
@@ -153,14 +185,14 @@ export function GameCard(p: CardProps) {
         {/* away */}
         <div className={cn("grid grid-cols-4 items-center mb-1", p.isFeatured && "text-white")}>
           <div>
-            <span className="font-medium">{p.away_team}</span><br/>
+            <span className="font-medium">{away_team}</span><br/>
             <span className={cn("text-xs text-muted-foreground", p.isFeatured && "text-white/70")}>{p.away_pitcher ?? "TBD"}</span>
           </div>
           <div className="text-center">
-            {ml(p.away_market_ml)}<br/><span className="text-xs">{pct(p.away_market_pct)}</span>
+            {ml(away_market_ml)}<br/><span className="text-xs">{pct(p.away_market_pct)}</span>
           </div>
           <div className="text-center">
-            {ml(p.away_pred_ml)}<br/><span className="text-xs">{pct(p.away_pred_pct)}</span>
+            {ml(away_pred_ml)}<br/><span className="text-xs">{pct(away_pred_pct)}</span>
           </div>
           <div className={cn("text-center flex items-center justify-center gap-1", 
                         !p.isFeatured ? edgeClr(p.away_edge_pct) : "text-white")}>
@@ -176,14 +208,14 @@ export function GameCard(p: CardProps) {
         {/* home */}
         <div className={cn("grid grid-cols-4 items-center", p.isFeatured && "text-white")}>
           <div>
-            <span className="font-medium">{p.home_team}</span><br/>
+            <span className="font-medium">{home_team}</span><br/>
             <span className={cn("text-xs text-muted-foreground", p.isFeatured && "text-white/70")}>{p.home_pitcher ?? "TBD"}</span>
           </div>
           <div className="text-center">
-            {ml(p.home_market_ml)}<br/><span className="text-xs">{pct(p.home_market_pct)}</span>
+            {ml(home_market_ml)}<br/><span className="text-xs">{pct(p.home_market_pct)}</span>
           </div>
           <div className="text-center">
-            {ml(p.home_pred_ml)}<br/><span className="text-xs">{pct(p.home_pred_pct)}</span>
+            {ml(home_pred_ml)}<br/><span className="text-xs">{pct(home_pred_pct)}</span>
           </div>
           <div className={cn("text-center flex items-center justify-center gap-1", 
                          !p.isFeatured ? edgeClr(p.home_edge_pct) : "text-white")}>

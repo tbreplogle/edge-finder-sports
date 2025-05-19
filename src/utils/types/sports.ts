@@ -27,7 +27,7 @@ export interface TickerDay {
 }
 
 export interface TickerData {
-  sport: string;
+  sport: string; // Adding the missing sport property
   days: TickerDay[];
 }
 
