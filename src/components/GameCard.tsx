@@ -1,22 +1,19 @@
-
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { GameCardProps } from "@/utils/types/sports";
 
-const pct = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v * 100)}%`);
-const ml  = (v: number | null | undefined) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
-const edgeClr = (v: number | null | undefined) =>
+const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+const ml  = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
+const edgeClr = (v: number | null) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
-// Fix the CardProps interface to avoid property conflicts between types
-export type CardProps = GameCardProps & {
+export interface CardProps extends ProcessedMlbPrediction {
   isAdmin: boolean;
   isFeatured?: boolean;
-};
+}
 
 export function GameCard(p: CardProps) {
   if (p.isFeatured) {
@@ -122,7 +119,7 @@ export function GameCard(p: CardProps) {
     );
   }
   
-  // Regular card (not featured)
+  // Regular card (not featured) - keep existing code
   return (
     <Card className={cn("edge-card", p.isFeatured && "border-0 shadow-lg")}>
       <CardContent className={cn("p-4 space-y-2", p.isFeatured && "bg-transparent")}>
