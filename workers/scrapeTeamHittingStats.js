@@ -1,128 +1,129 @@
-/* --------------------------------------------------------------------------
-   workers/scrapeTeamHittingStats.js
-   – Scrapes FanGraphs team-hitting table and upserts to Supabase
-   – Always writes scrape-result.json
-   – Cleans up rows > 90 days old WITHOUT needing the exec_sql RPC
---------------------------------------------------------------------------- */
+/* workers/scrapeTeamHittingStats.js
+   Scrapes FanGraphs team-hitting table, upserts to Supabase, always
+   writes scrape-result.json, and cleans rows older than 90 days. */
 
-import fs                         from 'fs';
-import puppeteer                  from 'puppeteer';
-import { format, subDays }        from 'date-fns';
+import fs              from 'fs';
+import puppeteer       from 'puppeteer';
+import { format, subDays } from 'date-fns';
 import {
   supabase,
   testConnection,
-  createScrapeReport
-}                                 from './lib/supabaseClient.js';
+  createScrapeReport,
+} from './lib/supabaseClient.js';
 
 const DEBUG = process.env.DEBUG === 'true';
+const TODAY = new Date().toISOString().slice(0, 10);
+const iso   = (d) => format(d, 'yyyy-MM-dd');
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-function iso(d) { return format(d, 'yyyy-MM-dd'); }
-
-/* -------------------------------------------------------------------------- */
-/* Scraper                                                                    */
-/* -------------------------------------------------------------------------- */
+/* ─────────────────────────────────────────────────────────────── */
+/* Scrape helper                                                  */
+/* ─────────────────────────────────────────────────────────────── */
 async function scrapeTeamHittingStats() {
-  // ── launch cached Chrome ────────────────────────────────────────────────
   const browser = await puppeteer.launch({
-    headless : 'new',
-    channel  : 'chrome',                       // use system Chrome from cache
-    args     : ['--no-sandbox','--disable-setuid-sandbox']
+    headless: 'new',
+    channel:  'chrome',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080 });
+  await page.setViewport({ width: 1280, height: 1024 });
 
-  const today = new Date();
-  const url   = `https://www.fangraphs.com/leaders?pos=all&stats=bat&lg=all&qual=y&type=8&season=${today.getFullYear()}&month=0&season1=${today.getFullYear()}&ind=0`;
+  const year = new Date().getFullYear();
+  const url =
+    `https://www.fangraphs.com/leaders?pos=all&stats=bat&lg=all&qual=y&type=8` +
+    `&season=${year}&month=0&season1=${year}&ind=0`;
 
   console.log('→ Opening', url);
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 60_000 });
 
-  // wait for the table to render
-  await page.waitForSelector('#LeaderBoard1_dg1_ctl00 tbody tr', {
-    timeout: 30_000
-  });
+  /* kick the grid’s lazy-loader */
+  await page.evaluate(() => window.scrollBy(0, 600));
 
-  // extract rows
-  const rows = await page.$$eval('#LeaderBoard1_dg1_ctl00 tbody tr', trs => {
-    return trs.map(tr => {
-      const tds = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
+  /* wait for either old ID-grid or new rgMasterTable rows */
+  const selectorA = '#LeaderBoard1_dg1_ctl00 tbody tr';
+  const selectorB = '.rgMasterTable tbody tr';
+  try {
+    await page.waitForFunction(
+      (sel1, sel2) =>
+        document.querySelector(sel1) || document.querySelector(sel2),
+      { timeout: 45_000 },
+      selectorA,
+      selectorB
+    );
+  } catch {
+    console.warn('⚠️  FanGraphs table did not render within 45 s');
+  }
+
+  /* choose whichever selector exists */
+  const rowSelector =
+    (await page.$$(selectorA)).length ? selectorA : selectorB;
+
+  const rows = await page.$$eval(rowSelector, (trs) =>
+    trs.map((tr) => {
+      const tds = [...tr.querySelectorAll('td')].map((td) =>
+        td.textContent.trim()
+      );
       return {
-        team_name     : tds[1],
-        games_played  : +tds[2],
-        at_bats       : +tds[3],
-        runs          : +tds[4],
-        hits          : +tds[5],
-        doubles       : +tds[6],
-        triples       : +tds[7],
-        home_runs     : +tds[8],
-        rbi           : +tds[9],
-        bb            : +tds[10],
-        so            : +tds[11],
-        avg           : +tds[12],
-        obp           : +tds[13],
-        slg           : +tds[14],
-        ops           : +tds[15],
-        game_date     : new Date().toISOString().slice(0,10), // today
+        team_name: tds[1],
+        games_played: +tds[2],
+        at_bats: +tds[3],
+        runs: +tds[4],
+        hits: +tds[5],
+        doubles: +tds[6],
+        triples: +tds[7],
+        home_runs: +tds[8],
+        rbi: +tds[9],
+        bb: +tds[10],
+        so: +tds[11],
+        avg: +tds[12],
+        obp: +tds[13],
+        slg: +tds[14],
+        ops: +tds[15],
+        game_date: new Date().toISOString().slice(0, 10),
       };
-    });
-  });
+    })
+  );
 
   await browser.close();
-  console.log(`→ Scraped ${rows.length} team stats records`);
-  if (DEBUG) console.log(JSON.stringify(rows.slice(0,3), null, 2)); // preview
+  console.log(`→ Scraped ${rows.length} team-stat records`);
+  if (DEBUG) console.log(JSON.stringify(rows.slice(0, 3), null, 2));
   return rows;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Main runner                                                                */
-/* -------------------------------------------------------------------------- */
+/* ─────────────────────────────────────────────────────────────── */
+/* Main runner                                                    */
+/* ─────────────────────────────────────────────────────────────── */
 export async function scrapeAndSaveTeamHittingStats() {
   console.log('⏳ MLB team-hitting stats update starting…');
-  let report   = {};
-  let inserted = 0;
+  let report = { success: false, error: 'Unknown error' };
 
   try {
-    if (!(await testConnection())) {
-      throw new Error('Supabase connection failed');
-    }
+    if (!(await testConnection())) throw new Error('Supabase connection failed');
 
-    // 1) scrape
     const rows = await scrapeTeamHittingStats();
+    if (!rows.length) throw new Error('Scraper returned 0 rows');
 
-    // 2) upsert
-    console.log(`→ Upserting ${rows.length} rows to Supabase…`);
+    /* upsert */
+    console.log(`→ Upserting ${rows.length} rows…`);
     const { error } = await supabase
       .from('mlb_team_hitting_stats')
-      .upsert(rows, { onConflict: ['team_name','game_date'] });
-
+      .upsert(rows, { onConflict: ['team_name', 'game_date'] });
     if (error) throw error;
-    inserted = rows.length;
-    console.log('✅ Successfully saved team hitting stats to Supabase');
 
-    // 3) delete anything older than 90 days (no exec_sql RPC)
-    const cutoff = subDays(new Date(), 90);
-    console.log('→ Removing rows older than', iso(cutoff));
-    const { error: delErr } = await supabase
+    /* cleanup older than 90 days */
+    const cutoff = iso(subDays(new Date(), 90));
+    await supabase
       .from('mlb_team_hitting_stats')
       .delete()
-      .lt('game_date', iso(cutoff));
+      .lt('game_date', cutoff);
 
-    if (delErr) throw delErr;
-
-    report = { success: true, stats: { seven_day: inserted } };
-    console.log(`✅ MLB team hitting stats update completed successfully in ${((Date.now()-cutoff)/1e3).toFixed(2)}s`);
+    console.log('✅ Team-hitting stats saved & cleanup done');
+    report = { success: true, stats: { inserted: rows.length } };
   } catch (err) {
-    console.error('❌ Error:', err.message);
+    console.error('❌', err.message);
     report = { success: false, error: err.message };
   } finally {
-    // always write the JSON file for the workflow step that verifies results
     fs.writeFileSync('scrape-result.json', JSON.stringify(report, null, 2));
-    console.log('✓ Scrape report saved to scrape-result.json');
-
-    // plus a row in scrape_history (optional helper)
+    console.log('✓ scrape-result.json written');
     await createScrapeReport({
       ...report,
       timestamp: new Date().toISOString(),
@@ -130,7 +131,7 @@ export async function scrapeAndSaveTeamHittingStats() {
   }
 }
 
-/* Run directly from CLI ---------------------------------------------------- */
+/* run when executed directly */
 if (import.meta.url.endsWith('scrapeTeamHittingStats.js')) {
   scrapeAndSaveTeamHittingStats()
     .then(() => process.exit(0))
