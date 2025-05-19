@@ -14,6 +14,35 @@ export interface TickerGame {
   final?: boolean;
   moneyline?: number;
   moneyline_opponent?: number;
+  spread?: number;
+  score_away?: number;
+  score_home?: number;
+  total?: number;
+  tip?: string;
+}
+
+export interface TickerData {
+  games: TickerGame[];
+  lastUpdated: string;
+}
+
+export interface OddsApiGame {
+  id: string;
+  sport_key: string;
+  home_team: string;
+  away_team: string;
+  commence_time: string;
+  bookmakers: Array<{
+    key: string;
+    title: string;
+    markets: Array<{
+      key: string;
+      outcomes: Array<{
+        name: string;
+        price: number;
+      }>;
+    }>;
+  }>;
 }
 
 export interface GameCardProps {
@@ -51,6 +80,7 @@ export interface GameCardProps {
   away_pitcher?: string;
   variant?: string;
   isAdmin?: boolean;
+  isPaid?: boolean;
   isPremium?: boolean;
   isFeatured?: boolean;
   isPreviewGame?: boolean;

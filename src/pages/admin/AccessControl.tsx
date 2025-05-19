@@ -82,7 +82,7 @@ export default function AccessControl() {
   };
 
   return (
-    <AppLayout isAuthenticated={true} showAdmin={true}>
+    <AppLayout isAuthenticated={true}>
       <div className="container py-6">
         <h1 className="text-3xl font-bold mb-6">Access Control</h1>
         

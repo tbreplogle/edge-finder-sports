@@ -5,7 +5,6 @@ import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { SportIcon } from "@/components/SportIcons";
 import { GameCardProps } from "@/utils/types/sports";
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
@@ -13,7 +12,8 @@ const ml  = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`)
 const edgeClr = (v: number | null) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
-export interface CardProps extends ProcessedMlbPrediction, GameCardProps {
+// Export interface that extends both types with a union type to avoid conflicts
+export interface CardProps extends Omit<ProcessedMlbPrediction, 'id'>, GameCardProps {
   isAdmin: boolean;
   isFeatured?: boolean;
 }
@@ -122,7 +122,7 @@ export function GameCard(p: CardProps) {
     );
   }
   
-  // Regular card (not featured) - keep existing code
+  // Regular card (not featured)
   return (
     <Card className={cn("edge-card", p.isFeatured && "border-0 shadow-lg")}>
       <CardContent className={cn("p-4 space-y-2", p.isFeatured && "bg-transparent")}>
