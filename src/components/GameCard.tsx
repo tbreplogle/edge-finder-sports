@@ -1,16 +1,19 @@
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { SportIcon } from "@/components/SportIcons";
+import { GameCardProps } from "@/utils/types/sports";
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
 const ml  = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
 const edgeClr = (v: number | null) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
-export interface CardProps extends ProcessedMlbPrediction {
+export interface CardProps extends ProcessedMlbPrediction, GameCardProps {
   isAdmin: boolean;
   isFeatured?: boolean;
 }
