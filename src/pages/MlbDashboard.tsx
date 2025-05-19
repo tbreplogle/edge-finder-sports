@@ -17,7 +17,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { PremiumBanner } from "@/components/PremiumBanner";
-import { usePageAccess } from "@/lib/usePageAccess";
+import { usePageAccess } from "@/lib/usePageAccess";           // ★ NEW
 
 // -----------------------------------------------------------------------------
 // Table‑view interface (unchanged)
@@ -46,8 +46,8 @@ interface MlbPredictionDisplay {
 
 const MlbDashboard = () => {
   const { toast } = useToast();
-  const access = usePageAccess("mlb_dashboard");
-  if (access === "none") return null;
+  const access = usePageAccess("mlb_dashboard");      // ★ visibility rule
+  if (access === "none") return null;                 // could redirect if you prefer
   const isLocked = access !== "full";
 
   // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ const MlbDashboard = () => {
   const [previewGame, setPreviewGame] =
     useState<ProcessedMlbPrediction | null>(null);
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);      // still needed for GameCard props
 
   // ---------------------------------------------------------------------------
   // Auth stub – reads localStorage (replace with real auth)
@@ -193,39 +193,20 @@ const MlbDashboard = () => {
 
             <div className="max-w-5xl mx-auto">
               <GameCard
-                id={featuredGame.matchup_id || ""}
-                matchup_id={featuredGame.matchup_id}
-                game_id={featuredGame.game_id}
+                id={featuredGame.matchup_id}
                 sport="mlb"
-                home_team={featuredGame.home_team}
-                away_team={featuredGame.away_team}
-                game_time_ct={featuredGame.game_time_ct}
                 homeTeam={featuredGame.home_team}
                 awayTeam={featuredGame.away_team}
                 startTime={featuredGame.game_time_ct}
                 isAdmin={isAdmin}
                 isPremium={false}
                 variant="featured"
-                home_market_ml={featuredGame.home_market_ml}
-                away_market_ml={featuredGame.away_market_ml}
                 homeMarketMoneyline={featuredGame.home_market_ml}
                 awayMarketMoneyline={featuredGame.away_market_ml}
-                home_pred_ml={featuredGame.home_pred_ml}
-                away_pred_ml={featuredGame.away_pred_ml}
                 homePredictedOdds={featuredGame.home_pred_ml}
                 awayPredictedOdds={featuredGame.away_pred_ml}
-                home_pred_pct={featuredGame.home_pred_pct}
-                away_pred_pct={featuredGame.away_pred_pct}
                 homePredictedPct={featuredGame.home_pred_pct}
                 awayPredictedPct={featuredGame.away_pred_pct}
-                home_edge_pct={featuredGame.home_edge_pct}
-                away_edge_pct={featuredGame.away_edge_pct}
-                homeEdgePct={featuredGame.home_edge_pct}
-                awayEdgePct={featuredGame.away_edge_pct}
-                home_pitcher={featuredGame.home_pitcher}
-                away_pitcher={featuredGame.away_pitcher}
-                homePitcher={featuredGame.home_pitcher || undefined}
-                awayPitcher={featuredGame.away_pitcher || undefined}
                 edgePct={
                   Math.max(
                     featuredGame.home_edge_pct ?? 0,
@@ -247,13 +228,8 @@ const MlbDashboard = () => {
 
             <div className="max-w-5xl mx-auto">
               <GameCard
-                id={previewGame.matchup_id || ""}
-                matchup_id={previewGame.matchup_id}
-                game_id={previewGame.game_id}
+                id={previewGame.matchup_id}
                 sport="mlb"
-                home_team={previewGame.home_team}
-                away_team={previewGame.away_team}
-                game_time_ct={previewGame.game_time_ct}
                 homeTeam={previewGame.home_team}
                 awayTeam={previewGame.away_team}
                 startTime={previewGame.game_time_ct}
@@ -261,26 +237,12 @@ const MlbDashboard = () => {
                 isPremium={false}
                 isPreviewGame
                 variant="regular"
-                home_market_ml={previewGame.home_market_ml}
-                away_market_ml={previewGame.away_market_ml}
                 homeMarketMoneyline={previewGame.home_market_ml}
                 awayMarketMoneyline={previewGame.away_market_ml}
-                home_pred_ml={previewGame.home_pred_ml}
-                away_pred_ml={previewGame.away_pred_ml}
                 homePredictedOdds={previewGame.home_pred_ml}
                 awayPredictedOdds={previewGame.away_pred_ml}
-                home_pred_pct={previewGame.home_pred_pct}
-                away_pred_pct={previewGame.away_pred_pct}
                 homePredictedPct={previewGame.home_pred_pct}
                 awayPredictedPct={previewGame.away_pred_pct}
-                home_edge_pct={previewGame.home_edge_pct}
-                away_edge_pct={previewGame.away_edge_pct}
-                homeEdgePct={previewGame.home_edge_pct}
-                awayEdgePct={previewGame.away_edge_pct}
-                home_pitcher={previewGame.home_pitcher}
-                away_pitcher={previewGame.away_pitcher}
-                homePitcher={previewGame.home_pitcher || undefined}
-                awayPitcher={previewGame.away_pitcher || undefined}
               />
             </div>
           </section>
