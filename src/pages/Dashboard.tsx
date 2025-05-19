@@ -110,16 +110,30 @@ export default function Dashboard() {
             <div className="max-w-5xl mx-auto">
               {/* Always show featured game with full details */}
               <GameCard 
-                id={featuredGame.game_id}
+                id={featuredGame.matchup_id || ""}
+                matchup_id={featuredGame.matchup_id}
+                game_id={featuredGame.game_id}
                 sport="mlb"
+                home_team={featuredGame.home_team}
+                away_team={featuredGame.away_team}
+                game_time_ct={featuredGame.game_time_ct}
                 homeTeam={featuredGame.home_team}
                 awayTeam={featuredGame.away_team}
                 startTime={featuredGame.game_time_ct}
-                isAdmin={admin} 
+                isAdmin={admin}
                 isPaid={isPaid}
-                isPremium={!isPaid && !admin} 
+                isPremium={!isPaid && !admin}
                 variant="featured"
-                {...featuredGame}
+                home_market_ml={featuredGame.home_market_ml}
+                away_market_ml={featuredGame.away_market_ml}
+                home_pred_ml={featuredGame.home_pred_ml}
+                away_pred_ml={featuredGame.away_pred_ml}
+                home_pred_pct={featuredGame.home_pred_pct}
+                away_pred_pct={featuredGame.away_pred_pct}
+                home_edge_pct={featuredGame.home_edge_pct}
+                away_edge_pct={featuredGame.away_edge_pct}
+                home_pitcher={featuredGame.home_pitcher}
+                away_pitcher={featuredGame.away_pitcher}
               />
             </div>
           </div>
@@ -153,15 +167,29 @@ export default function Dashboard() {
             {games.map(g => (
               <GameCard 
                 key={g.matchup_id}
-                id={g.game_id}
+                id={g.matchup_id || ""}
+                matchup_id={g.matchup_id}
+                game_id={g.game_id}
                 sport="mlb"
+                home_team={g.home_team}
+                away_team={g.away_team}
+                game_time_ct={g.game_time_ct}
                 homeTeam={g.home_team}
                 awayTeam={g.away_team}
                 startTime={g.game_time_ct}
-                isAdmin={admin} 
+                isAdmin={admin}
                 isPaid={isPaid}
                 isPremium={!isPaid && !admin}
-                {...g}
+                home_market_ml={g.home_market_ml}
+                away_market_ml={g.away_market_ml}
+                home_pred_ml={g.home_pred_ml}
+                away_pred_ml={g.away_pred_ml}
+                home_pred_pct={g.home_pred_pct}
+                away_pred_pct={g.away_pred_pct}
+                home_edge_pct={g.home_edge_pct}
+                away_edge_pct={g.away_edge_pct}
+                home_pitcher={g.home_pitcher}
+                away_pitcher={g.away_pitcher}
               />
             ))}
           </div>

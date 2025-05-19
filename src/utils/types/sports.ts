@@ -19,11 +19,18 @@ export interface TickerGame {
   score_home?: number;
   total?: number;
   tip?: string;
+  consensus?: number;
+  show_prediction?: boolean;
 }
 
 export interface TickerData {
   games: TickerGame[];
   lastUpdated: string;
+  days?: Array<{
+    label: string;
+    date: string;
+    games: TickerGame[];
+  }>;
 }
 
 export interface OddsApiGame {
@@ -39,7 +46,8 @@ export interface OddsApiGame {
       key: string;
       outcomes: Array<{
         name: string;
-        price: number;
+        price?: number;
+        point?: number;
       }>;
     }>;
   }>;

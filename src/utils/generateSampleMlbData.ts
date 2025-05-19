@@ -1,5 +1,4 @@
 
-import { ProcessedMlbPrediction } from "./fetchMlbPredictions";
 import { CardProps } from "@/components/GameCard";
 
 export const generateSampleMlbData = (): Partial<CardProps>[] => {

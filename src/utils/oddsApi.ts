@@ -60,7 +60,7 @@ export function convertToTickerGames(
 
       if (!isBaseball && spreads) {
         const out = spreads.outcomes.find(o => o.name === g.home_team);
-        if (out?.point !== undefined) spread = out.point;
+        if (out && out.point !== undefined) spread = out.point;
       }
 
       if (isBaseball && h2h) {
@@ -69,7 +69,10 @@ export function convertToTickerGames(
       }
 
       if (totals?.outcomes?.length) {
-        total = Math.abs(totals.outcomes[0].point ?? 0);
+        const outcome = totals.outcomes[0];
+        if (outcome && outcome.point !== undefined) {
+          total = Math.abs(outcome.point);
+        }
       }
     }
 

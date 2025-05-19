@@ -7,16 +7,16 @@ import { ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { GameCardProps } from "@/utils/types/sports";
 
-const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
-const ml  = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
-const edgeClr = (v: number | null) =>
+const pct = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+const ml  = (v: number | null | undefined) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
+const edgeClr = (v: number | null | undefined) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
-// Export interface that extends both types with a union type to avoid conflicts
-export interface CardProps extends Omit<ProcessedMlbPrediction, 'id'>, GameCardProps {
+// Fix the CardProps interface to avoid property conflicts between types
+export type CardProps = GameCardProps & {
   isAdmin: boolean;
   isFeatured?: boolean;
-}
+};
 
 export function GameCard(p: CardProps) {
   if (p.isFeatured) {
