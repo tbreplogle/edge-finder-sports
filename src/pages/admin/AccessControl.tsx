@@ -1,211 +1,133 @@
-
-import { useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
+
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AccessRule } from "@/types/accessRule";
-import { toast } from "@/hooks/use-toast";
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 
-const fetchAccessRules = async (): Promise<AccessRule[]> => {
-  const response = await fetch("/api/access-rules");
-  const data = await response.json();
-  return data.rules;
-};
+import { pages, roles, options } from "./accessMeta";
+import { useQuery } from "@tanstack/react-query";
 
-const updateAccessRule = async (rule: AccessRule): Promise<void> => {
-  const response = await fetch("/api/access-rules", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+/* fetch all rules --------------------------------------------------------- */
+function useAccessRules() {
+  return useQuery({
+    queryKey: ["access-rules"],
+    queryFn: async () => {
+      const res = await fetch("/api/access-rules");
+      const json = await res.json();
+      return json.rules as {
+        page_key: string;
+        role: "free" | "premium" | "admin";
+        access_level: "none" | "preview" | "full";
+      }[];
     },
-    body: JSON.stringify(rule),
+    staleTime: 60_000,
   });
-  
-  if (!response.ok) {
-    throw new Error("Failed to update access rule");
-  }
-};
+}
+/* ------------------------------------------------------------------------ */
 
 export default function AccessControl() {
-  const queryClient = useQueryClient();
-  const [editingRule, setEditingRule] = useState<AccessRule | null>(null);
-
-  const { data: rules = [], isLoading } = useQuery({
-    queryKey: ["access-rules"],
-    queryFn: fetchAccessRules,
-  });
+  const { data: rules, isLoading } = useAccessRules();
+  const qc = useQueryClient();
+  const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: updateAccessRule,
+    mutationFn: async (body: {
+      page_key: string;
+      role: string;
+      access_level: string;
+    }) =>
+      fetch("/api/access-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
     onSuccess: () => {
-      // Use the correct invalidation syntax
-      queryClient.invalidateQueries({ queryKey: ["access-rules"] });
-      toast({
-        title: "Access rule updated",
-        description: "The access rule has been successfully updated.",
-      });
+      qc.invalidateQueries(["access-rules"]);
+      toast({ description: "Rule updated" });
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to update access rule: ${error.message}`,
-        variant: "destructive",
-      });
-    },
+    onError: () =>
+      toast({ description: "Update failed", variant: "destructive" }),
   });
 
-  // Group rules by page
-  const pageGroups = rules.reduce((acc, rule) => {
-    if (!acc[rule.page_key]) {
-      acc[rule.page_key] = [];
-    }
-    acc[rule.page_key].push(rule);
-    return acc;
-  }, {} as Record<string, AccessRule[]>);
+  if (isLoading || !rules) {
+    return (
+      <AppLayout isAuthenticated>
+        <div className="p-10 flex justify-center">
+          <Loader2 className="animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
-  const handleAccessLevelChange = (
-    rule: AccessRule,
-    newLevel: "none" | "preview" | "full"
-  ) => {
-    const updatedRule = { ...rule, access_level: newLevel };
-    mutation.mutate(updatedRule);
-  };
+  const current = (p: string, r: string) =>
+    rules.find((ru) => ru.page_key === p && ru.role === r)?.access_level ??
+    "none";
 
   return (
-    <AppLayout isAuthenticated={true}>
-      <div className="container py-6">
-        <h1 className="text-3xl font-bold mb-6">Access Control</h1>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Page Access Rules</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="py-4 text-center">Loading access rules...</div>
-            ) : (
-              <div className="space-y-8">
-                {Object.entries(pageGroups).map(([pageKey, pageRules]) => (
-                  <div key={pageKey} className="space-y-4">
-                    <h3 className="text-xl font-bold capitalize">
-                      {pageKey.replace('_', ' ')}
-                    </h3>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Access Level</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pageRules.map((rule) => (
-                          <TableRow key={`${rule.page_key}-${rule.role}`}>
-                            <TableCell className="font-medium capitalize">
-                              {rule.role}
-                            </TableCell>
-                            <TableCell>
-                              <AccessLevelBadge level={rule.access_level} />
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                <AccessLevelButton
-                                  level="none"
-                                  currentLevel={rule.access_level}
-                                  onClick={() =>
-                                    handleAccessLevelChange(rule, "none")
-                                  }
-                                />
-                                <AccessLevelButton
-                                  level="preview"
-                                  currentLevel={rule.access_level}
-                                  onClick={() =>
-                                    handleAccessLevelChange(rule, "preview")
-                                  }
-                                />
-                                <AccessLevelButton
-                                  level="full"
-                                  currentLevel={rule.access_level}
-                                  onClick={() =>
-                                    handleAccessLevelChange(rule, "full")
-                                  }
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+    <AppLayout isAuthenticated>
+      <div className="container py-10">
+        <h1 className="text-2xl font-bold mb-6">Access Control</h1>
+
+        {pages.map((page) => (
+          <Card key={page} className="mb-6">
+            <CardContent className="p-4">
+              <h2 className="font-semibold mb-4 capitalize">
+                {page.replace("_", " ")}
+              </h2>
+
+              <div className="grid grid-cols-[120px_repeat(3,1fr)] gap-4">
+                <div></div>
+                {roles.map((r) => (
+                  <div
+                    key={r}
+                    className="text-center font-medium capitalize"
+                  >
+                    {r}
                   </div>
                 ))}
+
+                {options.map((opt) => (
+                  <>
+                    <div
+                      key={opt}
+                      className="capitalize text-sm text-muted-foreground"
+                    >
+                      {opt}
+                    </div>
+                    {roles.map((r) => (
+                      <RadioGroup
+                        key={`${page}-${r}-${opt}`}
+                        value={current(page, r)}
+                        onValueChange={() =>
+                          mutation.mutate({
+                            page_key: page,
+                            role: r,
+                            access_level: opt,
+                          })
+                        }
+                        className="flex justify-center"
+                      >
+                        <RadioGroupItem
+                          value={opt}
+                          checked={current(page, r) === opt}
+                        />
+                      </RadioGroup>
+                    ))}
+                  </>
+                ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </AppLayout>
-  );
-}
-
-function AccessLevelBadge({ level }: { level: string }) {
-  switch (level) {
-    case "full":
-      return <Badge className="bg-green-500">Full Access</Badge>;
-    case "preview":
-      return <Badge className="bg-yellow-500">Preview</Badge>;
-    case "none":
-    default:
-      return <Badge variant="destructive">No Access</Badge>;
-  }
-}
-
-function AccessLevelButton({
-  level,
-  currentLevel,
-  onClick,
-}: {
-  level: "none" | "preview" | "full";
-  currentLevel: string;
-  onClick: () => void;
-}) {
-  const isActive = level === currentLevel;
-  
-  let variant: "outline" | "default" | "destructive" = "outline";
-  let label = "";
-  
-  switch (level) {
-    case "full":
-      variant = isActive ? "default" : "outline";
-      label = "Full";
-      break;
-    case "preview":
-      variant = isActive ? "default" : "outline";
-      label = "Preview";
-      break;
-    case "none":
-      variant = isActive ? "destructive" : "outline";
-      label = "None";
-      break;
-  }
-
-  return (
-    <Button
-      variant={variant}
-      size="sm"
-      onClick={onClick}
-      disabled={isActive}
-    >
-      {label}
-    </Button>
   );
 }

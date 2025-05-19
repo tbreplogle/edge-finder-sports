@@ -90,13 +90,6 @@ export type Database = {
             referencedColumns: ["matchup_id"]
           },
           {
-            foreignKeyName: "fk_mmo_matchup"
-            columns: ["matchup_id"]
-            isOneToOne: false
-            referencedRelation: "mlb_predictions_with_market"
-            referencedColumns: ["matchup_id"]
-          },
-          {
             foreignKeyName: "mlb_market_odds_away_team_id_fkey"
             columns: ["away_team_id"]
             isOneToOne: false
@@ -115,13 +108,6 @@ export type Database = {
             columns: ["matchup_id"]
             isOneToOne: false
             referencedRelation: "mlb_matchups"
-            referencedColumns: ["matchup_id"]
-          },
-          {
-            foreignKeyName: "mlb_market_odds_matchup_id_fkey"
-            columns: ["matchup_id"]
-            isOneToOne: false
-            referencedRelation: "mlb_predictions_with_market"
             referencedColumns: ["matchup_id"]
           },
         ]
@@ -420,13 +406,6 @@ export type Database = {
             referencedColumns: ["matchup_id"]
           },
           {
-            foreignKeyName: "fk_pitching_matchup"
-            columns: ["matchup_id"]
-            isOneToOne: false
-            referencedRelation: "mlb_predictions_with_market"
-            referencedColumns: ["matchup_id"]
-          },
-          {
             foreignKeyName: "fk_pitching_team"
             columns: ["team_id"]
             isOneToOne: false
@@ -485,26 +464,7 @@ export type Database = {
       }
     }
     Views: {
-      mlb_predictions_with_market: {
-        Row: {
-          away_market_ml: number | null
-          away_market_pct: number | null
-          away_pitcher: string | null
-          away_pred_ml: number | null
-          away_pred_pct: number | null
-          away_team: string | null
-          game_id: string | null
-          game_time_ct: string | null
-          home_market_ml: number | null
-          home_market_pct: number | null
-          home_pitcher: string | null
-          home_pred_ml: number | null
-          home_pred_pct: number | null
-          home_team: string | null
-          matchup_id: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       archive_mlb_daily_data: {

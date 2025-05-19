@@ -1,45 +1,27 @@
+import { Router } from "express";
+import { supabase } from "../supabase";          // adjust path if yours differs
+import { authMiddleware } from "../middleware";  // must set req.user & .is_admin
 
-import express, { Request, Response } from 'express';
+export const accessRulesRouter = Router();
+accessRulesRouter.use(authMiddleware);
 
-export const accessRulesRouter = express.Router();
-
-// Middleware to check authentication for all routes
-accessRulesRouter.use((req: Request, res: Response, next) => {
-  // For now, just pass through for development
-  next();
+// GET  /api/access-rules
+accessRulesRouter.get("/", async (_req, res) => {
+  const { data, error } = await supabase
+    .from("page_access_rules")
+    .select("*")
+    .order("page_key");
+  if (error) return res.status(500).json({ error });
+  res.json({ rules: data });
 });
 
-// Get all access rules
-accessRulesRouter.get('/', async (_req: Request, res: Response) => {
-  try {
-    // This would normally fetch from a database
-    const rules = [
-      { id: 1, page_key: 'dashboard', role: 'free', access_level: 'preview' },
-      { id: 2, page_key: 'dashboard', role: 'premium', access_level: 'full' },
-      { id: 3, page_key: 'dashboard', role: 'admin', access_level: 'full' },
-      { id: 4, page_key: 'mlb', role: 'free', access_level: 'preview' },
-      { id: 5, page_key: 'mlb', role: 'premium', access_level: 'full' },
-      { id: 6, page_key: 'mlb', role: 'admin', access_level: 'full' },
-    ];
-    
-    return res.json({ rules });
-  } catch (err) {
-    console.error('Error fetching access rules:', err);
-    return res.status(500).json({ error: 'Failed to fetch access rules' });
-  }
-});
-
-// Update an access rule
-accessRulesRouter.post('/', async (req: Request, res: Response) => {
-  try {
-    const rule = req.body;
-    
-    // In a real app, we would update in a database
-    console.log('Updating access rule:', rule);
-    
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('Error updating access rule:', err);
-    return res.status(500).json({ error: 'Failed to update access rule' });
-  }
+// POST /api/access-rules
+accessRulesRouter.post("/", async (req, res) => {
+  if (!req.user?.is_admin) return res.sendStatus(403);
+  const { page_key, role, access_level } = req.body;
+  const { error } = await supabase
+    .from("page_access_rules")
+    .upsert({ page_key, role, access_level });
+  if (error) return res.status(500).json({ error });
+  res.json({ ok: true });
 });

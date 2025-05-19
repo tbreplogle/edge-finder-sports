@@ -1,51 +1,130 @@
-
-import { AppLayout } from "@/components/AppLayout";
 import { useState, useEffect } from "react";
+import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Calendar, Info, RefreshCw } from "lucide-react";
+import { Calendar, RefreshCw, Info, Trophy, Lock } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { format } from "date-fns";
+import { MlbPredictionsTable } from "@/components/admin/MlbPredictionsTable";
+import {
+  fetchMlbPredictions,
+  ProcessedMlbPrediction,
+} from "@/utils/fetchMlbPredictions";
+import { findHighestEdgePrediction } from "@/lib/utils";
+import { GameCard } from "@/components/GameCard";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { format } from "date-fns";
-import { GameCard } from "@/components/GameCard";
 import { PremiumBanner } from "@/components/PremiumBanner";
-import { fetchMlbPredictions, ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { usePageAccess } from "@/lib/usePageAccess";           // ★ NEW
+
+// -----------------------------------------------------------------------------
+// Table‑view interface (unchanged)
+// -----------------------------------------------------------------------------
+interface MlbPredictionDisplay {
+  matchup_id: string;
+  game_id: string;
+  home_team: string;
+  away_team: string;
+  game_date: string;
+  game_time_ct: string;
+  home_market_ml: number | null;
+  away_market_ml: number | null;
+  home_market_pct: number | null;
+  away_market_pct: number | null;
+  home_pred_pct: number | null;
+  away_pred_pct: number | null;
+  home_pred_ml: number | null;
+  away_pred_ml: number | null;
+  home_edge_pct: number | null;
+  away_edge_pct: number | null;
+  home_pitcher: string | null;
+  away_pitcher: string | null;
+  updated_at: string;
+}
 
 const MlbDashboard = () => {
   const { toast } = useToast();
-  const [predictions, setPredictions] = useState<ProcessedMlbPrediction[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [userRole, setUserRole] = useState<string | null>("guest");
-  const [generatedDate, setGeneratedDate] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const access = usePageAccess("mlb_dashboard");      // ★ visibility rule
+  if (access === "none") return null;                 // could redirect if you prefer
+  const isLocked = access !== "full";
 
-  // Check authentication state from localStorage (for demo purposes)
+  // ---------------------------------------------------------------------------
+  // Local state
+  // ---------------------------------------------------------------------------
+  const [predictions, setPredictions] =
+    useState<MlbPredictionDisplay[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [generatedDate, setGeneratedDate] = useState<string | null>(null);
+
+  const [featuredGame, setFeaturedGame] =
+    useState<ProcessedMlbPrediction | null>(null);
+  const [previewGame, setPreviewGame] =
+    useState<ProcessedMlbPrediction | null>(null);
+
+  const [isAdmin, setIsAdmin] = useState(false);      // still needed for GameCard props
+
+  // ---------------------------------------------------------------------------
+  // Auth stub – reads localStorage (replace with real auth)
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const isAdmin = localStorage.getItem("isAdmin") === "true";
-    setIsAuthenticated(!!localStorage.getItem("token"));
-    setUserRole(isAdmin ? "admin" : localStorage.getItem("userRole") || "guest");
+    const stored = localStorage.getItem("user");
+    if (!stored) return;
+    try {
+      const user = JSON.parse(stored);
+      setIsAdmin(user.is_admin === true);
+    } catch (err) {
+      console.error("Error parsing user data:", err);
+    }
   }, []);
 
-  // Fetch MLB predictions
-  const fetchPredictions = async (skipLoading = false) => {
-    if (!skipLoading) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
+  // ---------------------------------------------------------------------------
+  // Data fetcher
+  // ---------------------------------------------------------------------------
+  const fetchData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
 
     try {
-      const data = await fetchMlbPredictions();
-      setPredictions(data);
+      const mlbPredictions = await fetchMlbPredictions();
+
+      // 1. Game with highest absolute edge → featured
+      const featured = findHighestEdgePrediction(mlbPredictions) ?? null;
+
+      // 2. Earliest game that isn’t the featured → preview
+      const sorted = [...mlbPredictions].sort(
+        (a, b) =>
+          new Date(a.game_time_ct).getTime() -
+          new Date(b.game_time_ct).getTime(),
+      );
+      const firstNonFeatured = sorted.find(
+        (g) => !featured || g.matchup_id !== featured.matchup_id,
+      );
+      setFeaturedGame(featured);
+      setPreviewGame(firstNonFeatured ?? null);
+
+      // 3. Regular table (exclude featured + preview)
+      const tableRows = mlbPredictions.filter(
+        (p) =>
+          (!featured || p.matchup_id !== featured.matchup_id) &&
+          (!firstNonFeatured ||
+            p.matchup_id !== firstNonFeatured.matchup_id),
+      );
+
+      const formatted: MlbPredictionDisplay[] = tableRows.map((p) => ({
+        ...p,
+        game_date: new Date(p.game_time_ct)
+          .toISOString()
+          .split("T")[0],
+        updated_at: new Date().toISOString(),
+      }));
+
+      setPredictions(formatted);
       setGeneratedDate(format(new Date(), "MMM d, yyyy"));
-    } catch (error) {
-      console.error('Error fetching MLB predictions:', error);
+    } catch (err) {
+      console.error("Error fetching MLB predictions:", err);
       toast({
         title: "Error",
         description: "Failed to load MLB predictions. Please try again.",
@@ -57,44 +136,46 @@ const MlbDashboard = () => {
     }
   };
 
-  // Fetch predictions on component mount
+  // initial load
   useEffect(() => {
-    fetchPredictions();
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Manual refresh handler
-  const handleRefresh = () => {
-    fetchPredictions(true);
-  };
-
-  // Check if we have a preview game (first game for guests)
-  const hasPreviewGame = userRole === 'guest' && predictions.length > 0;
-  
-  // Format today's date for display
+  const handleRefresh = () => fetchData(true);
   const todayFormatted = format(new Date(), "MMM d, yyyy");
-  
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
-    <AppLayout isAuthenticated={isAuthenticated}>
+    <AppLayout isAuthenticated>
       <div className="container py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        {/* ---------- header ---------- */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">MLB Predictions Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+              MLB Predictions
+              <span className="text-edge-secondary">Dashboard</span>
+            </h1>
             <p className="text-muted-foreground">
-              Today's MLB games with moneyline predictions and market edges
+              MLB games with predicted odds and market edges
             </p>
           </div>
-          
+
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="flex items-center gap-2"
               onClick={handleRefresh}
               disabled={refreshing}
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+              <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
             </Button>
-            
+
             <Button variant="outline" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span>{generatedDate || todayFormatted}</span>
@@ -102,151 +183,142 @@ const MlbDashboard = () => {
           </div>
         </div>
 
-        {userRole === 'guest' && (
-          <Alert className="mb-6 bg-muted">
-            <Info className="h-4 w-4" />
-            <AlertTitle>Preview Mode</AlertTitle>
-            <AlertDescription>
-              You're viewing in guest preview mode. Limited game predictions are shown.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {hasPreviewGame && (
-          <Alert className="mb-6 border-edge-secondary bg-edge-secondary/10">
-            <Info className="h-4 w-4 text-edge-secondary" />
-            <AlertTitle>Preview Game</AlertTitle>
-            <AlertDescription>
-              The first game below shows premium details as a preview. Create an account to access all predictions.
-            </AlertDescription>
-          </Alert>
+        {/* ---------- featured game ---------- */}
+        {featuredGame && (
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy className="h-5 w-5 text-edge-secondary" />
+              <h2 className="text-xl font-bold">Game of the Day</h2>
+            </div>
+
+            <div className="max-w-5xl mx-auto">
+              <GameCard
+                id={featuredGame.matchup_id}
+                sport="mlb"
+                homeTeam={featuredGame.home_team}
+                awayTeam={featuredGame.away_team}
+                startTime={featuredGame.game_time_ct}
+                isAdmin={isAdmin}
+                isPremium={false}
+                variant="featured"
+                homeMarketMoneyline={featuredGame.home_market_ml}
+                awayMarketMoneyline={featuredGame.away_market_ml}
+                homePredictedOdds={featuredGame.home_pred_ml}
+                awayPredictedOdds={featuredGame.away_pred_ml}
+                homePredictedPct={featuredGame.home_pred_pct}
+                awayPredictedPct={featuredGame.away_pred_pct}
+                edgePct={
+                  Math.max(
+                    featuredGame.home_edge_pct ?? 0,
+                    featuredGame.away_edge_pct ?? 0,
+                  ) || null
+                }
+              />
+            </div>
+          </section>
         )}
 
+        {/* ---------- preview game ---------- */}
+        {previewGame && (
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Info className="h-5 w-5" />
+              <h2 className="text-xl font-bold">Free Preview Game</h2>
+            </div>
+
+            <div className="max-w-5xl mx-auto">
+              <GameCard
+                id={previewGame.matchup_id}
+                sport="mlb"
+                homeTeam={previewGame.home_team}
+                awayTeam={previewGame.away_team}
+                startTime={previewGame.game_time_ct}
+                isAdmin={isAdmin}
+                isPremium={false}
+                isPreviewGame
+                variant="regular"
+                homeMarketMoneyline={previewGame.home_market_ml}
+                awayMarketMoneyline={previewGame.away_market_ml}
+                homePredictedOdds={previewGame.home_pred_ml}
+                awayPredictedOdds={previewGame.away_pred_ml}
+                homePredictedPct={previewGame.home_pred_pct}
+                awayPredictedPct={previewGame.away_pred_pct}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* upsell banner (only if locked) */}
+        {isLocked && <PremiumBanner />}
+
+        {/* info alert */}
+        <Alert className="mb-6 bg-muted">
+          <Info className="h-4 w-4" />
+          <AlertTitle>MLB Predictions</AlertTitle>
+          <AlertDescription>
+            Using live data from the <code>mlb_predictions</code> table and
+            current market odds.
+          </AlertDescription>
+        </Alert>
+
+        {/* main table / locked card */}
         {loading ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading MLB predictions...</p>
+            <RefreshCw className="h-10 w-10 animate-spin mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Loading MLB predictions…</p>
           </div>
-        ) : predictions.length > 0 ? (
+        ) : access === "full" ? (
           <div>
-            {/* Featured Games Section */}
-            {predictions.some(game => game.home_edge_pct !== null && Math.abs(game.home_edge_pct) > 0.05 || 
-                                      game.away_edge_pct !== null && Math.abs(game.away_edge_pct) > 0.05) && (
-              <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">Featured Games</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {predictions
-                    .filter(game => {
-                      // Games with significant edges (>5%)
-                      return (game.home_edge_pct !== null && Math.abs(game.home_edge_pct) > 0.05) || 
-                             (game.away_edge_pct !== null && Math.abs(game.away_edge_pct) > 0.05);
-                    })
-                    .slice(0, 3) // Limit to 3 featured games
-                    .map(game => (
-                      <GameCard
-                        key={game.matchup_id}
-                        id={game.matchup_id}
-                        homeTeam={game.home_team}
-                        awayTeam={game.away_team}
-                        startTime={game.game_time_ct}
-                        homeMarketMoneyline={game.home_market_ml}
-                        awayMarketMoneyline={game.away_market_ml}
-                        homePredictedOdds={game.home_pred_ml}
-                        awayPredictedOdds={game.away_pred_ml} 
-                        homePredictedPct={game.home_pred_pct}
-                        awayPredictedPct={game.away_pred_pct}
-                        homeEdgePct={game.home_edge_pct}
-                        awayEdgePct={game.away_edge_pct}
-                        homePitcher={game.home_pitcher}
-                        awayPitcher={game.away_pitcher}
-                        sport="mlb"
-                        isPremium={userRole === 'premium' || userRole === 'admin'}
-                        isAdmin={userRole === 'admin'}
-                        variant="featured"
-                      />
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* All Games Section */}
-            <div>
-              <h2 className="text-xl font-bold mb-4">All MLB Games</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {predictions.map((game, index) => (
-                  <GameCard
-                    key={game.matchup_id}
-                    id={game.matchup_id}
-                    homeTeam={game.home_team}
-                    awayTeam={game.away_team}
-                    startTime={game.game_time_ct}
-                    homeMarketMoneyline={game.home_market_ml}
-                    awayMarketMoneyline={game.away_market_ml}
-                    homePredictedOdds={game.home_pred_ml}
-                    awayPredictedOdds={game.away_pred_ml}
-                    homePredictedPct={game.home_pred_pct}
-                    awayPredictedPct={game.away_pred_pct}
-                    homeEdgePct={game.home_edge_pct}
-                    awayEdgePct={game.away_edge_pct}
-                    homePitcher={game.home_pitcher}
-                    awayPitcher={game.away_pitcher}
-                    sport="mlb"
-                    isPremium={userRole === 'premium' || userRole === 'admin'}
-                    isAdmin={userRole === 'admin'}
-                    isPreviewGame={userRole === 'guest' && index === 0}
-                    variant={userRole === 'guest' && index !== 0 ? "locked" : "default"}
-                  />
-                ))}
-              </div>
-            </div>
+            <h2 className="text-xl font-bold mb-4">All MLB Games</h2>
+            <MlbPredictionsTable predictions={predictions} isLoading={false} />
           </div>
         ) : (
-          <div className="text-center py-12 border rounded-lg bg-card p-8">
-            <p className="text-xl font-medium text-foreground mb-2">No MLB games scheduled today</p>
-            <p className="text-muted-foreground">Check back later for MLB predictions.</p>
+          <div className="bg-card border rounded-lg p-8 text-center">
+            <Lock className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-xl font-medium mb-2">
+              Premium Content Locked
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Upgrade to a premium account to see all MLB predictions and
+              detailed analytics.
+            </p>
+            <Button onClick={() => (window.location.href = "/pricing")}>
+              Upgrade Now
+            </Button>
           </div>
         )}
-        
-        {userRole !== 'premium' && userRole !== 'admin' && (
-          <PremiumBanner />
-        )}
-        
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>MLB Prediction Guide</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-1">Understanding Moneylines</h4>
-                <p className="text-sm text-muted-foreground">
-                  Moneylines represent the odds for a team to win. Negative numbers (like -150) indicate favorites, 
-                  meaning you'd need to bet that amount to win $100. Positive numbers (like +130) indicate underdogs, 
-                  meaning a $100 bet would win that amount.
-                </p>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h4 className="font-medium mb-1">Edge Percentage</h4>
-                <p className="text-sm text-muted-foreground">
-                  The edge percentage shows the difference between our predicted win probability and the implied 
-                  probability from the market odds. A positive edge suggests a potential betting opportunity.
-                </p>
-              </div>
 
-              <Separator />
-              
-              <div>
-                <h4 className="font-medium mb-1">Pitching Matchups</h4>
-                <p className="text-sm text-muted-foreground">
-                  Our predictions consider the starting pitchers for each game, their recent performance metrics, 
-                  and historical data against opposing teams.
-                </p>
+        {/* legend */}
+        <div className="mt-8 p-4 border rounded-lg bg-card">
+          <h3 className="font-medium mb-2">Legend</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-3 h-3 bg-edge-mlb rounded-full" />
+                <span className="text-sm font-medium">MLB</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="text-xs text-muted-foreground">
+              <p>
+                <strong>Predicted Odds:</strong>{" "}
+                from <code>mlb_predictions.moneyline</code>
+              </p>
+              <p>
+                <strong>Market / Predicted Implied %:</strong>{" "}
+                win‑probability conversion
+              </p>
+              <p>
+                <strong>Edge %:</strong> difference between predicted and market
+                implied percentages
+              </p>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              <p>Last updated: {generatedDate || todayFormatted}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </AppLayout>
   );

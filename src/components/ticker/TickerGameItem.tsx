@@ -43,7 +43,7 @@ export const TickerGameItem = ({ game }: Props) => {
         <span className="font-medium">{favTeam} {formattedPrice}</span>
       </div>
     );
-  } else if (!isBaseball && game.spread !== undefined && game.spread !== 0) {
+  } else if (!isBaseball && game.spread !== 0) {
     // For point spreads, the favorite is indicated by negative spread
     const favoredTeam = game.spread < 0 ? homeTeam : awayTeam;
     const spreadValue = Math.abs(game.spread);
@@ -83,10 +83,10 @@ export const TickerGameItem = ({ game }: Props) => {
             <div className="flex flex-col">
               <div className="flex items-center justify-between w-28">
                 <span className="font-medium text-sm">{awayTeam}</span>
-                {!isBaseball && game.spread !== undefined && game.spread > 0 && (
+                {!isBaseball && game.spread > 0 && (
                   <span className="text-xs text-muted-foreground ml-2">+{Math.abs(game.spread)}</span>
                 )}
-                {!isBaseball && game.spread !== undefined && game.spread < 0 && (
+                {!isBaseball && game.spread < 0 && (
                   <span className="text-xs text-secondary ml-2">-{Math.abs(game.spread)}</span>
                 )}
                 {isBaseball && game.moneyline_opponent !== undefined && (
@@ -97,10 +97,10 @@ export const TickerGameItem = ({ game }: Props) => {
               </div>
               <div className="flex items-center justify-between w-28 mt-2">
                 <span className="font-medium text-sm">{homeTeam}</span>
-                {!isBaseball && game.spread !== undefined && game.spread < 0 && (
+                {!isBaseball && game.spread < 0 && (
                   <span className="text-xs text-muted-foreground ml-2">+{Math.abs(game.spread)}</span>
                 )}
-                {!isBaseball && game.spread !== undefined && game.spread > 0 && (
+                {!isBaseball && game.spread > 0 && (
                   <span className="text-xs text-secondary ml-2">-{Math.abs(game.spread)}</span>
                 )}
                 {isBaseball && game.moneyline !== undefined && (

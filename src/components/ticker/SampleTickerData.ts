@@ -3,7 +3,7 @@ import { TickerData } from "@/utils/types/sports";
 
 // Sample ticker data (fallback if API fails)
 export const sampleTickerData: TickerData = {
-  lastUpdated: new Date().toISOString(),
+  sport: "NFL",
   days: [
     {
       label: "Yesterday",
@@ -17,7 +17,10 @@ export const sampleTickerData: TickerData = {
           score_home: 24,
           score_away: 21,
           spread: -3,
-          total: 44
+          total: 44,
+          predicted_margin: -2.7,
+          predicted_total: 42,
+          consensus: 58
         },
         {
           id: "nfl-2",
@@ -27,7 +30,10 @@ export const sampleTickerData: TickerData = {
           score_home: 28,
           score_away: 17,
           spread: -4.5,
-          total: 46
+          total: 46,
+          predicted_margin: -5.2,
+          predicted_total: 44,
+          consensus: 61
         }
       ]
     },
@@ -42,7 +48,9 @@ export const sampleTickerData: TickerData = {
           tip: "7:30 PM CT",
           spread: -6,
           consensus: 59,
-          total: 45
+          total: 45,
+          predicted_margin: -5.4,
+          predicted_total: 47
         },
         {
           id: "nfl-4",
@@ -51,7 +59,9 @@ export const sampleTickerData: TickerData = {
           tip: "8:00 PM CT",
           spread: -3.5,
           consensus: 67,
-          total: 42
+          total: 42,
+          predicted_margin: -4.2,
+          predicted_total: 40
         }
       ]
     },
@@ -66,7 +76,9 @@ export const sampleTickerData: TickerData = {
           tip: "6:30 PM CT",
           spread: -1.5,
           consensus: 52,
-          total: 48
+          total: 48,
+          predicted_margin: -0.9,
+          predicted_total: 46
         },
         {
           id: "nfl-6",
@@ -75,10 +87,11 @@ export const sampleTickerData: TickerData = {
           tip: "7:00 PM CT",
           spread: -2,
           consensus: 61,
-          total: 47
+          total: 47,
+          predicted_margin: -2.7,
+          predicted_total: 49
         }
       ]
     }
-  ],
-  games: [] // Empty array as current games will be set based on selected day
+  ]
 };
