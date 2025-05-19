@@ -2,74 +2,57 @@ name: Daily MLB Matchup IDs Scraper
 
 on:
   schedule:
-    - cron: '0 13 * * *'          # 08:00 AM CT (13:00 UTC)
+    - cron: '0 13 * * *'          # 08:00 AM CT
   workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     env:
       SUPABASE_URL:               ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY:  ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      PUPPETEER_SKIP_DOWNLOAD:    'true'    # ← skip auto-DL during npm install
+      PUPPETEER_SKIP_DOWNLOAD:    'true'
 
     steps:
-    # ────────────────────────────────────────────────  checkout + node
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # ───── checkout & Node ─────
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 18 }
 
-    - name: Setup Node 18
-      uses: actions/setup-node@v4
-      with:
-        node-version: 18
+      # ───── restore cache ─────
+      - name: Restore npm cache
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
 
-    # ────────────────────────────────────────────────  cache
-    - name: Restore Node & Chrome caches
-      id: restore-cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-          ~/.cache/puppeteer
-        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
-        restore-keys: |
-          linux-puppeteer-
+      # ───── install (fast) ─────
+      - name: Install JS deps (workers/)
+        working-directory: workers
+        run: npm install --no-audit --no-fund
 
-    # ────────────────────────────────────────────────  deps (+ chrome once)
-    - name: Install JS deps (workers/)
-      working-directory: workers
-      run: |
-        npm install --no-audit --no-fund
-        if [ ! -d "$HOME/.cache/puppeteer" ]; then
-          npx puppeteer@21.11.0 browsers install chrome
-        else
-          echo "✓ cached Chrome found"
-        fi
+      # ───── save cache if miss ─────
+      - name: Save npm cache
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
 
-    - name: Save Node & Chrome caches
-      if: steps.restore-cache.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-          ~/.cache/puppeteer
-        key: linux-puppeteer-${{ hashFiles('workers/package-lock.json') }}-v1
+      # ───── run scrapers ─────
+      - name: Scrape & save today's MLB matchups
+        working-directory: workers
+        run: node saveMatchupsToSupabase.js
+        env: { DEBUG: 'true' }
 
-    # ────────────────────────────────────────────────  run scrapers
-    - name: Scrape & save today’s MLB matchups
-      working-directory: workers
-      run: node saveMatchupsToSupabase.js
-      env:
-        DEBUG: 'true'
+      - name: Scrape and save pitching stats
+        working-directory: workers
+        run: node scrapePitchingMatchups.js
+        env: { DEBUG: 'false' }
 
-    - name: Scrape and save pitching stats
-      working-directory: workers
-      run: node scrapePitchingMatchups.js
-      env:
-        DEBUG: 'false'
-
-    # ────────────────────────────────────────────────  log
-    - name: Log matchup IDs
-      run: |
-        test -f scrape-result.json && cat scrape-result.json || echo "No scrape-result.json file found"
+      - name: Log matchup IDs
+        run: |
+          test -f scrape-result.json && cat scrape-result.json || echo "scrape-result.json missing"
