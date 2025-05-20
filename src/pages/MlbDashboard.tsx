@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -203,6 +204,8 @@ const MlbDashboard = () => {
                 isFeatured={true}
                 home_market_ml={featuredGame.home_market_ml}
                 away_market_ml={featuredGame.away_market_ml}
+                home_market_pct={featuredGame.home_market_pct}
+                away_market_pct={featuredGame.away_market_pct}
                 home_pred_ml={featuredGame.home_pred_ml}
                 away_pred_ml={featuredGame.away_pred_ml}
                 home_pred_pct={featuredGame.home_pred_pct}
@@ -237,6 +240,8 @@ const MlbDashboard = () => {
                 isPreviewGame={true}
                 home_market_ml={previewGame.home_market_ml}
                 away_market_ml={previewGame.away_market_ml}
+                home_market_pct={previewGame.home_market_pct}
+                away_market_pct={previewGame.away_market_pct}
                 home_pred_ml={previewGame.home_pred_ml}
                 away_pred_ml={previewGame.away_pred_ml}
                 home_pred_pct={previewGame.home_pred_pct}

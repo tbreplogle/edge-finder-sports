@@ -1,3 +1,4 @@
+
 import { AppLayout } from "@/components/AppLayout";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
@@ -50,7 +51,7 @@ export default function AccessControl() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      qc.invalidateQueries(["access-rules"]);
+      qc.invalidateQueries({ queryKey: ["access-rules"] });
       toast({ description: "Rule updated" });
     },
     onError: () =>

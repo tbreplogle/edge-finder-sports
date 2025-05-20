@@ -1,4 +1,3 @@
-
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react";
@@ -12,7 +11,7 @@ const edgeClr = (v: number | null) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
 // Export CardProps as GameProps for backward compatibility with existing imports
-export interface CardProps extends ProcessedMlbPrediction {
+export interface CardProps extends Omit<ProcessedMlbPrediction, 'id'> {
   id?: string; // Make id optional and add it to CardProps
   sport?: string;
   homeTeam?: string;

@@ -1,6 +1,6 @@
 
 import { Router } from "express";
-import { supabase } from "../supabase";
+import { supabase } from "../../supabase";
 import { authMiddleware } from "../middleware";
 
 export const accessRulesRouter = Router();
