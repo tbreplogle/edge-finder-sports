@@ -487,17 +487,17 @@ export type Database = {
     Views: {
       mlb_predictions_with_market: {
         Row: {
-          away_market_ml: number | null
+          away_edge_pct: number | null
           away_market_pct: number | null
-          away_pitcher: string | null
+          away_ml: number | null
           away_pred_ml: number | null
           away_pred_pct: number | null
           away_team: string | null
           game_id: string | null
           game_time_ct: string | null
-          home_market_ml: number | null
+          home_edge_pct: number | null
           home_market_pct: number | null
-          home_pitcher: string | null
+          home_ml: number | null
           home_pred_ml: number | null
           home_pred_pct: number | null
           home_team: string | null
