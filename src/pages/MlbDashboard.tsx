@@ -45,7 +45,7 @@ export default function MlbDashboard() {
 
   /* ──────────────────────────────────────────────────────────────────
      access-control (guest / premium / admin)                       */
-  const access = usePageAccess("mlb_dashboard");
+  const access = usePageAccess("mlb");
   if (access === "none") return null;
   const isLocked = access !== "full";
 
