@@ -1,103 +1,88 @@
 import { supabase } from "@/integrations/supabase/client";
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Helper converters
-   ────────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────── helpers ────────────────────────── */
 const mlToPct = (ml: number | null): number | null =>
   ml == null
     ? null
     : ml > 0
-    ? 100 / (ml + 100)
-    : Math.abs(ml) / (Math.abs(ml) + 100);
+    ? 100 / (ml + 100)               // under-dog
+    : Math.abs(ml) / (Math.abs(ml) + 100); // favorite
 
 const pctToMl = (p: number | null): number | null =>
   p == null
     ? null
-    : p >= 0.5
-    ? -Math.round((p / (1 - p)) * 100)
-    : Math.round(((1 - p) / p) * 100);
+    : p > 0.5
+    ? -Math.round((p / (1 - p)) * 100)          // favorite
+    :  Math.round(((1 - p) / p) * 100);         // dog
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Type returned to the front-end
-   ────────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────── types ──────────────────────────── */
 export interface ProcessedMlbPrediction {
-  matchup_id:      string;
-  game_id:         string;
-  game_time_ct:    string;
+  matchup_id      : string;
+  game_id         : string;
+  home_team       : string;
+  away_team       : string;
+  game_time_ct    : string;
 
-  home_team:       string;
-  away_team:       string;
+  home_market_ml  : number | null;
+  away_market_ml  : number | null;
+  home_market_pct : number | null;
+  away_market_pct : number | null;
 
-  home_market_ml:  number | null;
-  away_market_ml:  number | null;
-  home_market_pct: number | null;
-  away_market_pct: number | null;
+  home_pred_pct   : number | null;
+  away_pred_pct   : number | null;
+  home_pred_ml    : number | null;
+  away_pred_ml    : number | null;
 
-  home_pred_ml:    number | null;
-  away_pred_ml:    number | null;
-  home_pred_pct:   number | null;
-  away_pred_pct:   number | null;
+  home_edge_pct   : number | null;
+  away_edge_pct   : number | null;
 
-  home_edge_pct:   number | null;
-  away_edge_pct:   number | null;
-
-  home_pitcher:    string | null;
-  away_pitcher:    string | null;
+  home_pitcher    : string | null;
+  away_pitcher    : string | null;
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Fetcher (reads directly from the VIEW)
-   ────────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────── fetcher ────────────────────────── */
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
-  // read every column from the view and order by first pitch
-  const { data, error } = await supabase
-    .from("mlb_predictions_with_market")
-    .select("*")
-    .order("game_time_ct", { ascending: true });
+  // the RPC / view aggregates market + model data
+  const { data, error } = await supabase.rpc("mlb_predictions_with_market");
+  if (error) throw new Error(error.message);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  return (data as any[]).map((r) => {
+    // *Always* compute implied % from the ML so we never get 0 %
+    const homeMarketPct = mlToPct(r.home_market_ml);
+    const awayMarketPct = mlToPct(r.away_market_ml);
 
-  /* normalise + derive extra fields for the UI --------------------------- */
-  return (data as any[]).map((row) => {
-    // market implied % (view might already include, but fall back just in case)
-    const homeMarketPct = row.home_market_pct ?? mlToPct(row.home_market_ml);
-    const awayMarketPct = row.away_market_pct ?? mlToPct(row.away_market_ml);
-
-    // predicted % (view should include, but guard anyway)
-    const homePredPct  = row.home_pred_pct ?? null;
-    const awayPredPct  = row.away_pred_pct ?? null;
+    // model win% (may already be pre-computed in view)
+    const homePredPct  = r.home_pred_pct ?? null;
+    const awayPredPct  = r.away_pred_pct ?? null;
 
     return {
-      matchup_id:   row.matchup_id,
-      game_id:      row.game_id,
-      game_time_ct: row.game_time_ct,
+      matchup_id : r.matchup_id,
+      game_id    : r.game_id,
+      home_team  : r.home_team,
+      away_team  : r.away_team,
+      game_time_ct: r.game_time_ct,
 
-      home_team:    row.home_team,
-      away_team:    row.away_team,
-
-      home_market_ml:  row.home_market_ml,
-      away_market_ml:  row.away_market_ml,
+      home_market_ml : r.home_market_ml,
+      away_market_ml : r.away_market_ml,
       home_market_pct: homeMarketPct,
       away_market_pct: awayMarketPct,
 
-      home_pred_pct:   homePredPct,
-      away_pred_pct:   awayPredPct,
-      home_pred_ml:    pctToMl(homePredPct),
-      away_pred_ml:    pctToMl(awayPredPct),
+      home_pred_pct  : homePredPct,
+      away_pred_pct  : awayPredPct,
+      home_pred_ml   : pctToMl(homePredPct),
+      away_pred_ml   : pctToMl(awayPredPct),
 
-      home_edge_pct:
+      home_edge_pct  :
         homePredPct != null && homeMarketPct != null
           ? homePredPct - homeMarketPct
           : null,
-      away_edge_pct:
+      away_edge_pct  :
         awayPredPct != null && awayMarketPct != null
           ? awayPredPct - awayMarketPct
           : null,
 
-      home_pitcher: row.home_pitcher ?? null,
-      away_pitcher: row.away_pitcher ?? null,
+      home_pitcher   : r.home_pitcher ?? null,
+      away_pitcher   : r.away_pitcher ?? null,
     } as ProcessedMlbPrediction;
   });
 }
