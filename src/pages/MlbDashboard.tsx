@@ -10,7 +10,7 @@ import {
   Trophy,
   Lock,
 } from "lucide-react";
-
+import { fetchMlbPredictions } from "@/utils/fetchMlbPredictions";
 import { AppLayout } from "@/components/AppLayout";
 import { Button }   from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
