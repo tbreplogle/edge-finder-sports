@@ -44,11 +44,11 @@ const TEAM_ALT_NAME_TO_ID = {
 };
 
 async function scrapePitchingMatchups() {
-  // 1. pull today’s games FROM mlb_market_odds (always has game_id)
+  // 1) pull today’s games FROM mlb_market_odds
   const today = new Date().toISOString().slice(0, 10);
   const { data: games, error } = await supabase
     .from("mlb_market_odds")
-    .select("matchup_id, game_id, game_date")
+    .select("matchup_id, game_id")
     .eq("game_date", today);
 
   if (error) {
@@ -60,7 +60,7 @@ async function scrapePitchingMatchups() {
   }
   console.log(`→ Found ${games.length} games to scrape`);
 
-  // 2. launch Puppeteer (use system Chrome)
+  // 2) launch Puppeteer (system Chrome)
   const browser = await puppeteer.launch({
     headless: "new",
     channel: "chrome",
@@ -74,7 +74,7 @@ async function scrapePitchingMatchups() {
 
   const rows = [];
 
-  // 3. loop through matchups
+  // 3) loop through today's matchups
   for (const { matchup_id, game_id } of games) {
     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
     console.log(`→ Loading ${url}`);
@@ -95,9 +95,7 @@ async function scrapePitchingMatchups() {
           (el) => el.innerText.trim().toUpperCase()
         );
         team_id = TEAM_ALT_NAME_TO_ID[team_name] ?? null;
-        if (!team_id) {
-          console.warn(`⚠️ No team_id mapping for "${team_name}"`);
-        }
+        if (!team_id) console.warn(`⚠️ No team_id mapping for "${team_name}"`);
       } catch {
         console.warn(
           `⚠️ Could not read team name for ${role} side of ${matchup_id}`
@@ -118,7 +116,7 @@ async function scrapePitchingMatchups() {
         continue;
       }
 
-      // stat row
+      // find the stats row
       const trHandles = await page.$$(`${tab} table tr`);
       let statRow = null;
       for (const tr of trHandles) {
@@ -131,7 +129,7 @@ async function scrapePitchingMatchups() {
             break;
           }
         } catch {
-          // skip
+          // skip non‐stat rows
         }
       }
       if (!statRow) {
@@ -139,7 +137,7 @@ async function scrapePitchingMatchups() {
         continue;
       }
 
-      // extract numeric cells
+      // extract the numeric columns
       const allB = await statRow.$$eval("td b", (bs) =>
         bs.map((b) => b.innerText.trim())
       );
@@ -225,7 +223,7 @@ export async function scrapeAndSavePitchingMatchups() {
     console.log(`→ Upserting ${rows.length} rows to Supabase…`);
     const { data, error } = await supabase
       .from("pitching_matchups")
-      .upsert(rows, { onConflict: ["game_id", "pitcher_role"] })
+      .upsert(rows, { onConflict: ["matchup_id", "pitcher_role"] })
       .select();
     if (error) throw error;
 
@@ -246,7 +244,7 @@ export async function scrapeAndSavePitchingMatchups() {
   }
 }
 
-// Run directly
+// Run directly -------------------------------------------------------------
 if (import.meta.url.endsWith("scrapePitchingMatchups.js")) {
   scrapeAndSavePitchingMatchups()
     .then(() => process.exit(0))
