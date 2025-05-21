@@ -18,7 +18,7 @@ create table if not exists public.mlb_predictions (
 );
 
 /* ----------------------------------------------------------------
-   1) Raw rating (capped at 143) + 7-day hitting adjust
+   1) Raw rating (capped at 143) + 14-day hitting adjust
 -----------------------------------------------------------------*/
 with ratings as (
   select
@@ -39,7 +39,7 @@ with ratings as (
   join   mlb_team_hitting_stats hs
          on hs.team_id        = pm.team_id
         and hs.game_date      = m.game_date
-        and hs.timeframe_days = 7
+        and hs.timeframe_days = 14
 ),
 
 /* ----------------------------------------------------------------
