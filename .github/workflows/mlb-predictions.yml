@@ -72,9 +72,9 @@ jobs:
           # Add the IPv4 address to /etc/hosts temporarily
           echo "$IPV4_ADDRESS    $PGHOST" | sudo tee -a /etc/hosts
           
-          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
-            --set=ON_ERROR_STOP=1 \
-            -f sql/mlb_predictions.sql || {
+           psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
+             --set=ON_ERROR_STOP=1 \
+             -f sql/mlb_predictions.sql || {
               echo "❌ SQL execution failed"
               echo "Testing basic connection…"
               psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
