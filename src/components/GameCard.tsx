@@ -1,233 +1,186 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge }            from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn }               from "@/lib/utils";
 import { ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { AspectRatio }      from "@/components/ui/aspect-ratio";
 
-const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
-const ml  = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
+const pct  = (v: number | null) => v == null ? "—" : `${Math.round(v * 100)}%`;
+const ml   = (v: number | null) => v == null ? "—" : v > 0 ? `+${v}` : `${v}`;
 const edgeClr = (v: number | null) =>
   v == null ? "" : v > 0 ? "text-edge-secondary" : "text-edge-accent";
 
-// Export CardProps as GameProps for backward compatibility with existing imports
-export interface CardProps extends Omit<ProcessedMlbPrediction, 'id'> {
-  id?: string; // Make id optional and add it to CardProps
-  sport?: string;
-  homeTeam?: string;
-  awayTeam?: string;
-  startTime?: string;
-  isAdmin: boolean;
+export interface GameCardProps extends ProcessedMlbPrediction {
+  /** visual tweaks supplied by parent */
+  variant?: "featured" | "regular" | "locked";
+  isAdmin?:  boolean;
   isPremium?: boolean;
-  isPaid?: boolean;
-  variant?: string;
-  isPreviewGame?: boolean;
   isFeatured?: boolean;
-  homeMarketMoneyline?: number;
-  awayMarketMoneyline?: number;
-  homePredictedOdds?: number;
-  awayPredictedOdds?: number;
-  homePredictedPct?: number;
-  awayPredictedPct?: number;
-  edgePct?: number | null;
+  isPreviewGame?: boolean;
 }
 
-// Export GameProps as alias of CardProps for backward compatibility
-export type GameProps = CardProps;
-
-export function GameCard(p: CardProps) {
-  // Map prop aliases to their standard names for internal use
-  const home_team = p.homeTeam || p.home_team;
-  const away_team = p.awayTeam || p.away_team;
-  const game_time_ct = p.startTime || p.game_time_ct;
-  const home_market_ml = p.homeMarketMoneyline || p.home_market_ml;
-  const away_market_ml = p.awayMarketMoneyline || p.away_market_ml;
-  const home_pred_ml = p.homePredictedOdds || p.home_pred_ml;
-  const away_pred_ml = p.awayPredictedOdds || p.away_pred_ml;
-  const home_pred_pct = p.homePredictedPct || p.home_pred_pct;
-  const away_pred_pct = p.awayPredictedPct || p.away_pred_pct;
-  
-  if (p.isFeatured || p.variant === "featured") {
+export function GameCard(p: GameCardProps) {
+  /* ─────────────── FEATURED CARD ─────────────── */
+  if (p.variant === "featured") {
     return (
       <Card className="edge-card border-0 overflow-hidden relative">
-        <AspectRatio ratio={16/7} className="bg-gradient-to-r from-edge-primary to-[#1f3356] text-white">
-          <div className="absolute top-0 left-0 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1IiBoZWlnaHQ9IjUiPgo8cmVjdCB3aWR0aD0iNSIgaGVpZ2h0PSI1IiBmaWxsPSIjMDAwIiBvcGFjaXR5PSIwLjA1Ii8+CjwvcGF0dGVybj48L3N2Zz4=')] opacity-15"></div>
-          
+        <AspectRatio ratio={16/7}
+          className="bg-gradient-to-r from-edge-primary to-[#1f3356] text-white">
+
+          {/* ribbons */}
           <div className="absolute top-3 left-3 flex gap-2">
             <Badge variant="outline" className="bg-black/30 text-white border-white/20">MLB</Badge>
             <Badge variant="secondary" className="flex gap-1 items-center bg-edge-secondary text-white">
-              <Trophy className="w-3 h-3" />
-              <span>Game of the Day</span>
+              <Trophy className="w-3 h-3" /> Game of the Day
             </Badge>
           </div>
-          
           <div className="absolute top-3 right-3">
             <Badge variant="outline" className="bg-black/30 text-white border-white/20 flex items-center gap-1">
-              <Star className="h-3 w-3 text-yellow-300 fill-yellow-300" />
-              <span>TOP EDGE</span>
+              <Star className="h-3 w-3 text-yellow-300 fill-yellow-300" /> TOP EDGE
             </Badge>
           </div>
-          
+
+          {/* content */}
           <div className="p-6 flex flex-col justify-between h-full">
-            <div>
-              <h3 className="text-2xl font-bold">{away_team} @ {home_team}</h3>
+            <header>
+              <h3 className="text-2xl font-bold">{p.away_team} @ {p.home_team}</h3>
               <div className="flex items-center text-sm text-white/80 mt-1">
                 <Clock className="w-3 h-3 mr-1" />
-                 {new Date(p.game_time + "Z")                // treat as UTC
-                   .toLocaleString("en-US", {
-                     weekday: "short", month: "short", day: "numeric",
-                      hour: "numeric", minute: "2-digit",
-                        timeZone: "America/Chicago"
-                   })}
+                {new Date(p.game_time_ct).toLocaleString("en-US", {
+                  weekday: "short", month: "short", day: "numeric",
+                  hour: "numeric", minute: "2-digit",
+                  timeZone: "America/Chicago"
+                })}
               </div>
-            </div>
+            </header>
 
-            <div className="grid grid-cols-1 gap-y-4 mt-4 md:grid-cols-2">
-              {/* Team rows */}
-              <div className="grid grid-cols-4 items-center">
-                <div className="col-span-2">
-                  <span className="text-lg font-bold">{away_team}</span><br/>
-                  <span className="text-sm text-white/70">{p.away_pitcher ?? "TBD"}</span>
-                </div>
-                <div className="text-center">
-                  <div className="text-sm text-white/70">Market</div>
-                  <div>{ml(away_market_ml)}</div>
-                  <div className="text-xs">{pct(p.away_market_pct)}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-sm text-white/70">Predicted</div>
-                  <div>{ml(away_pred_ml)}</div>
-                  <div className="text-xs">{pct(away_pred_pct)}</div>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-center md:justify-end">
-                <div className="px-4 py-2 bg-black/30 rounded-lg flex items-center gap-2">
-                  <span className="text-sm">Edge</span>
-                  <div className="flex items-center gap-1 font-bold">
-                    {p.away_edge_pct == null ? "—" : (
-                      <>
-                        {p.away_edge_pct > 0 ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
-                        {(p.away_edge_pct * 100).toFixed(1)}%
-                      </>
-                    )}
+            {/* team rows */}
+            <div className="grid md:grid-cols-2 gap-y-4 mt-4">
+              {["away","home"].map((side) => {
+                const isAway = side === "away";
+                return (
+                  <div key={side} className="grid grid-cols-4 items-center">
+                    {/* team / pitcher */}
+                    <div className="col-span-2">
+                      <span className="text-lg font-bold">
+                        {isAway ? p.away_team : p.home_team}
+                      </span><br/>
+                      <span className="text-sm text-white/70">
+                        {isAway ? p.away_pitcher : p.home_pitcher || "TBD"}
+                      </span>
+                    </div>
+
+                    {/* market */}
+                    <div className="text-center">
+                      <div className="text-sm text-white/70">Market</div>
+                      <div>{ml(isAway ? p.away_market_ml : p.home_market_ml)}</div>
+                      <div className="text-xs">{pct(isAway ? p.away_market_pct : p.home_market_pct)}</div>
+                    </div>
+
+                    {/* predicted */}
+                    <div className="text-center">
+                      <div className="text-sm text-white/70">Predicted</div>
+                      <div>{ml(isAway ? p.away_pred_ml : p.home_pred_ml)}</div>
+                      <div className="text-xs">{pct(isAway ? p.away_pred_pct : p.home_pred_pct)}</div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-4 items-center">
-                <div className="col-span-2">
-                  <span className="text-lg font-bold">{home_team}</span><br/>
-                  <span className="text-sm text-white/70">{p.home_pitcher ?? "TBD"}</span>
-                </div>
-                <div className="text-center">
-                  <div className="text-sm text-white/70">Market</div>
-                  <div>{ml(home_market_ml)}</div>
-                  <div className="text-xs">{pct(p.home_market_pct)}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-sm text-white/70">Predicted</div>
-                  <div>{ml(home_pred_ml)}</div>
-                  <div className="text-xs">{pct(home_pred_pct)}</div>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-center md:justify-end">
-                <div className="px-4 py-2 bg-black/30 rounded-lg flex items-center gap-2">
-                  <span className="text-sm">Edge</span>
-                  <div className="flex items-center gap-1 font-bold">
-                    {p.home_edge_pct == null ? "—" : (
-                      <>
-                        {p.home_edge_pct > 0 ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
-                        {(p.home_edge_pct * 100).toFixed(1)}%
-                      </>
-                    )}
+                );
+              })}
+
+              {/* edge chips */}
+              {["away","home"].map((side) => {
+                const edge = side === "away" ? p.away_edge_pct : p.home_edge_pct;
+                return (
+                  <div key={side} className="flex items-center justify-center md:justify-end">
+                    <div className="px-4 py-2 bg-black/30 rounded-lg flex items-center gap-2">
+                      <span className="text-sm">Edge</span>
+                      <div className="flex items-center gap-1 font-bold">
+                        {edge == null ? "—" : (
+                          <>
+                            {edge > 0 ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
+                            {(edge * 100).toFixed(1)}%
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
         </AspectRatio>
       </Card>
     );
   }
-  
-  // Regular card (not featured) - use mapped props
+
+  /* ─────────────── REGULAR / LOCKED CARD ─────────────── */
+  const locked = p.variant === "locked";
+
   return (
-    <Card className={cn("edge-card", p.isFeatured && "border-0 shadow-lg")}>
-      <CardContent className={cn("p-4 space-y-2", p.isFeatured && "bg-transparent")}>
+    <Card className={cn("edge-card", p.variant === "featured" && "border-0 shadow-lg")}>
+      <CardContent className="p-4 space-y-2">
         <div className="flex items-center gap-2 mb-1">
-          <Badge variant="outline" className={cn("mb-1", p.isFeatured && "bg-black/30 text-white border-white/20")}>MLB</Badge>
-          {p.isFeatured && (
-            <Badge variant="secondary" className="flex gap-1 items-center">
-              <Trophy className="w-3 h-3" />
-              <span>Game of the Day</span>
-            </Badge>
-          )}
+          <Badge variant="outline" className="mb-1">MLB</Badge>
         </div>
 
-        <h3 className={cn("text-lg font-bold", p.isFeatured && "text-white")}>{away_team} @ {home_team}</h3>
-        <div className={cn("flex items-center text-sm text-muted-foreground mb-2", p.isFeatured && "text-white/80")}>
+        <h3 className="text-lg font-bold">{p.away_team} @ {p.home_team}</h3>
+        <div className="flex items-center text-sm text-muted-foreground mb-2">
           <Clock className="w-3 h-3 mr-1" />
-          {new Date(game_time_ct).toLocaleString("en-US", {
+          {new Date(p.game_time_ct).toLocaleString("en-US", {
             weekday: "short", month: "short", day: "numeric",
-            hour: "numeric", minute: "2-digit", timeZone: "America/Chicago"
+            hour: "numeric", minute: "2-digit",
+            timeZone: "America/Chicago"
           })}
         </div>
 
-        {/* header row */}
-        <div className={cn("grid grid-cols-4 text-xs text-muted-foreground mb-1", p.isFeatured && "text-white/70")}>
-          <div></div>
-          <div className="text-center">Market</div>
+        {/* HEADER ROW */}
+        <div className="grid grid-cols-4 text-xs text-muted-foreground mb-1">
+          <div></div><div className="text-center">Market</div>
           <div className="text-center">Predicted</div>
           <div className="text-center">Edge</div>
         </div>
 
-        {/* away */}
-        <div className={cn("grid grid-cols-4 items-center mb-1", p.isFeatured && "text-white")}>
-          <div>
-            <span className="font-medium">{away_team}</span><br/>
-            <span className={cn("text-xs text-muted-foreground", p.isFeatured && "text-white/70")}>{p.away_pitcher ?? "TBD"}</span>
-          </div>
-          <div className="text-center">
-            {ml(away_market_ml)}<br/><span className="text-xs">{pct(p.away_market_pct)}</span>
-          </div>
-          <div className="text-center">
-            {ml(away_pred_ml)}<br/><span className="text-xs">{pct(away_pred_pct)}</span>
-          </div>
-          <div className={cn("text-center flex items-center justify-center gap-1", 
-                        !p.isFeatured ? edgeClr(p.away_edge_pct) : "text-white")}>
-            {p.away_edge_pct == null ? "—" : (
-              <>
-                {p.away_edge_pct > 0 ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
-                {(p.away_edge_pct * 100).toFixed(1)}%
-              </>
-            )}
-          </div>
-        </div>
+        {/* TEAMS */}
+        {["away","home"].map((side) => {
+          const isAway = side === "away";
+          const mMl  = isAway ? p.away_market_ml  : p.home_market_ml;
+          const mPct = isAway ? p.away_market_pct : p.home_market_pct;
+          const pMl  = isAway ? p.away_pred_ml    : p.home_pred_ml;
+          const pPct = isAway ? p.away_pred_pct   : p.home_pred_pct;
+          const edge = isAway ? p.away_edge_pct   : p.home_edge_pct;
+          const tm   = isAway ? p.away_team       : p.home_team;
+          const ptc  = isAway ? p.away_pitcher    : p.home_pitcher;
 
-        {/* home */}
-        <div className={cn("grid grid-cols-4 items-center", p.isFeatured && "text-white")}>
-          <div>
-            <span className="font-medium">{home_team}</span><br/>
-            <span className={cn("text-xs text-muted-foreground", p.isFeatured && "text-white/70")}>{p.home_pitcher ?? "TBD"}</span>
-          </div>
-          <div className="text-center">
-            {ml(home_market_ml)}<br/><span className="text-xs">{pct(p.home_market_pct)}</span>
-          </div>
-          <div className="text-center">
-            {ml(home_pred_ml)}<br/><span className="text-xs">{pct(home_pred_pct)}</span>
-          </div>
-          <div className={cn("text-center flex items-center justify-center gap-1", 
-                         !p.isFeatured ? edgeClr(p.home_edge_pct) : "text-white")}>
-            {p.home_edge_pct == null ? "—" : (
-              <>
-                {p.home_edge_pct > 0 ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
-                {(p.home_edge_pct * 100).toFixed(1)}%
-              </>
-            )}
-          </div>
-        </div>
+          return (
+            <div key={side} className="grid grid-cols-4 items-center mb-1">
+              <div>
+                <span className="font-medium">{tm}</span><br/>
+                <span className="text-xs text-muted-foreground">{ptc ?? "TBD"}</span>
+              </div>
+              <div className="text-center">
+                {ml(mMl)}<br/><span className="text-xs">{pct(mPct)}</span>
+              </div>
+              <div className="text-center">
+                {locked ? "—" : (
+                  <>
+                    {ml(pMl)}<br/><span className="text-xs">{pct(pPct)}</span>
+                  </>
+                )}
+              </div>
+              <div className={cn(
+                    "text-center flex items-center justify-center gap-1",
+                    edgeClr(edge)
+              )}>
+                {edge == null || locked ? "—" : (
+                  <>
+                    {edge > 0 ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
+                    {(edge * 100).toFixed(1)}%
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
