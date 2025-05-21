@@ -7,7 +7,7 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 const DEBUG = process.env.DEBUG === 'true';
 
 // Only 7 days needed
-const TIMEFRAME_DAYS = 7;
+const TIMEFRAME_DAYS = 14;
 
 /**
  * Maps a raw team name to its proper name, abbreviation, and ID
