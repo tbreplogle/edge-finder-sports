@@ -1,99 +1,112 @@
 -- ================================================================
 --  sql/mlb_predictions.sql
---  RUN:  psql -f sql/mlb_predictions.sql
--- ------------------------------------------------
---  0‒143 rating  +7‑day hitting
---  +6‑point home bonus  (≈ +24 Elo)
---  Elo logistic  (denominator = 143)
---  Clamp prob 12‑88 %
---  Convert → American ML, clamp –500…+500
---  UPSERT → mlb_predictions
+--  Run from GitHub Action via:  psql -f sql/mlb_predictions.sql
 -- ================================================================
 
--- 0 ─ ensure dest table exists
-\i sql/create_mlb_predictions_table.sql     -- ← your DDL path
+/* ----------------------------------------------------------------
+   0) Ensure destination table exists (NO data change)
+-----------------------------------------------------------------*/
+create table if not exists public.mlb_predictions (
+  matchup_id        text    not null,
+  team_id           int     not null,
+  rating            numeric,
+  adjusted_rating   numeric,
+  win_pct           numeric,
+  moneyline         int,
+  created_at        timestamptz default now(),
+  primary key (matchup_id, team_id)
+);
 
--- 1 ─ raw rating (cap 143) + hitting
-WITH ratings AS (
-  SELECT
+/* ----------------------------------------------------------------
+   1) Raw rating (capped at 143) + 7-day hitting adjust
+-----------------------------------------------------------------*/
+with ratings as (
+  select
     pm.matchup_id,
     pm.team_id,
-    LEAST(
+    least(
       56.74
-      +  0.108  * hs.home_runs      -- 7‑day HR
-      -  0.0934 * pm.hr             -- HR allowed
-      + 334.9  * hs.avg             -- 7‑day BA
-      +  0.188  * pm.era_plus
-      -  61.98  * pm.whip,
+      + 0.108  * hs.home_runs
+      - 0.0934 * pm.hr
+      + 334.9  * hs.avg
+      + 0.188  * pm.era_plus
+      - 61.98  * pm.whip,
       143
-    )              AS rating,
+    )                             as rating,
     pm.pitcher_role
-  FROM pitching_matchups pm
-  JOIN mlb_matchups m
-        ON m.matchup_id = pm.matchup_id
-  JOIN mlb_team_hitting_stats hs
-        ON hs.team_id        = pm.team_id
-       AND hs.game_date      = m.game_date
-       AND hs.timeframe_days = 7
+  from   pitching_matchups pm
+  join   mlb_matchups      m  on m.matchup_id = pm.matchup_id
+  join   mlb_team_hitting_stats hs
+         on hs.team_id        = pm.team_id
+        and hs.game_date      = m.game_date
+        and hs.timeframe_days = 7
 ),
 
--- 2 ─ add fixed home‑field bump (+6)
-adj AS (
-  SELECT
+/* ----------------------------------------------------------------
+   2) Add home-field bonus (+6)
+-----------------------------------------------------------------*/
+adj as (
+  select
     r.matchup_id,
     r.team_id,
     r.rating,
-    CASE WHEN r.pitcher_role = 'home'
-         THEN r.rating + 6
-         ELSE r.rating
-    END            AS adj_rating
-  FROM ratings r
+    case when r.pitcher_role = 'home'
+         then r.rating + 6
+         else r.rating
+    end                         as adj_rating
+  from ratings r
 ),
 
--- 3 ─ Elo logistic win%  (scale 143)  → clamp
-prob AS (
-  SELECT
+/* ----------------------------------------------------------------
+   3) Elo logistic → win% (clamp 12-88 %)
+-----------------------------------------------------------------*/
+prob as (
+  select
     a.matchup_id,
     a.team_id,
     a.rating,
     a.adj_rating,
-    GREATEST(
+    greatest(
       0.12,
-      LEAST(
+      least(
         0.88,
-        1.0 / (1.0 + POWER(10.0, (b.adj_rating - a.adj_rating) / 143.0))
+        1 / (1 + power(10, (b.adj_rating - a.adj_rating) / 143))
       )
-    ) AS win_pct
-  FROM adj a
-  JOIN adj b
-    ON b.matchup_id = a.matchup_id
-   AND b.team_id   <> a.team_id
+    )                           as win_pct
+  from adj a
+  join adj b
+    on b.matchup_id = a.matchup_id
+   and b.team_id    <> a.team_id
 ),
 
--- 4 ─ prob → American ML, clamp ±500
-final AS (
-  SELECT
+/* ----------------------------------------------------------------
+   4) Convert win% → moneyline (clamp –500…+500)
+-----------------------------------------------------------------*/
+final as (
+  select
     p.matchup_id,
     p.team_id,
     p.rating,
-    p.adj_rating      AS adjusted_rating,
+    p.adj_rating      as adjusted_rating,
     p.win_pct,
-    LEAST(
+    least(
       500,
-      GREATEST(
+      greatest(
         -500,
-        CASE
-          WHEN p.win_pct >= 0.5
-            THEN -ROUND(100 *  p.win_pct        / (1 - p.win_pct))
-          ELSE  ROUND(100 * (1 - p.win_pct) /  p.win_pct)
-        END
+        case
+          when p.win_pct >= 0.5
+            then -round(100 * p.win_pct / (1 - p.win_pct))
+          else  round(100 * (1 - p.win_pct) / p.win_pct)
+        end
       )
-    )                AS moneyline
-  FROM prob p
+    )                           as moneyline
+  from prob p
 )
 
--- 5 ─ UPSERT
-INSERT INTO mlb_predictions
+/* ----------------------------------------------------------------
+   5) UPSERT into mlb_predictions
+-----------------------------------------------------------------*/
+insert into mlb_predictions
         (matchup_id,
          team_id,
          rating,
@@ -101,18 +114,18 @@ INSERT INTO mlb_predictions
          win_pct,
          moneyline,
          created_at)
-SELECT  matchup_id,
+select  matchup_id,
         team_id,
         rating,
         adjusted_rating,
         win_pct,
         moneyline,
-        NOW()
-FROM final
-ON CONFLICT (matchup_id, team_id)
-DO UPDATE
-  SET rating          = EXCLUDED.rating,
-      adjusted_rating = EXCLUDED.adjusted_rating,
-      win_pct         = EXCLUDED.win_pct,
-      moneyline       = EXCLUDED.moneyline,
-      created_at      = EXCLUDED.created_at;
+        now()
+from final
+on conflict (matchup_id, team_id)
+do update
+  set rating          = excluded.rating,
+      adjusted_rating = excluded.adjusted_rating,
+      win_pct         = excluded.win_pct,
+      moneyline       = excluded.moneyline,
+      created_at      = excluded.created_at;
