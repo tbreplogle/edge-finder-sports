@@ -73,10 +73,12 @@ export function GameCard(p: CardProps) {
               <h3 className="text-2xl font-bold">{away_team} @ {home_team}</h3>
               <div className="flex items-center text-sm text-white/80 mt-1">
                 <Clock className="w-3 h-3 mr-1" />
-                {new Date(game_time_ct).toLocaleString("en-US", {
-                  weekday: "short", month: "short", day: "numeric",
-                  hour: "numeric", minute: "2-digit", timeZone: "America/Chicago"
-                })}
+                 {new Date(p.game_time + "Z")                // treat as UTC
+                   .toLocaleString("en-US", {
+                     weekday: "short", month: "short", day: "numeric",
+                      hour: "numeric", minute: "2-digit",
+                        timeZone: "America/Chicago"
+                   })}
               </div>
             </div>
 
