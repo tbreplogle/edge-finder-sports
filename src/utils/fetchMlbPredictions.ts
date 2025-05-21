@@ -1,27 +1,28 @@
 import { supabase } from "@/integrations/supabase/client";
 
-/* ───────────────────────── helpers ────────────────────────── */
-const mlToPct = (ml: number | null): number | null =>
-  ml == null
-    ? null
-    : ml > 0
-    ? 100 / (ml + 100)               // under-dog
-    : Math.abs(ml) / (Math.abs(ml) + 100); // favorite
+/* ---------- helpers ---------------------------------------------------- */
+const mlToPct = (raw: number | null): number | null => {
+  const ml = raw == null ? null : parseFloat(String(raw));
+  if (ml == null || Number.isNaN(ml)) return null;
+  return ml > 0
+    ? 100 / (ml + 100)
+    : Math.abs(ml) / (Math.abs(ml) + 100);
+};
 
 const pctToMl = (p: number | null): number | null =>
   p == null
     ? null
-    : p > 0.5
-    ? -Math.round((p / (1 - p)) * 100)          // favorite
-    :  Math.round(((1 - p) / p) * 100);         // dog
+    : p >= 0.5
+    ? -Math.round((p / (1 - p)) * 100)
+    :  Math.round(((1 - p) / p) * 100);
 
-/* ───────────────────────── types ──────────────────────────── */
+/* ---------- type ------------------------------------------------------- */
 export interface ProcessedMlbPrediction {
-  matchup_id      : string;
-  game_id         : string;
-  home_team       : string;
-  away_team       : string;
-  game_time_ct    : string;
+  matchup_id : string;
+  game_id    : string;
+  home_team  : string;
+  away_team  : string;
+  game_time  : string;               // now plain timestamp (no TZ)
 
   home_market_ml  : number | null;
   away_market_ml  : number | null;
@@ -40,49 +41,46 @@ export interface ProcessedMlbPrediction {
   away_pitcher    : string | null;
 }
 
-/* ───────────────────────── fetcher ────────────────────────── */
+/* ---------- fetcher ---------------------------------------------------- */
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
-  // the RPC / view aggregates market + model data
   const { data, error } = await supabase.rpc("mlb_predictions_with_market");
   if (error) throw new Error(error.message);
 
-  return (data as any[]).map((r) => {
-    // *Always* compute implied % from the ML so we never get 0 %
-    const homeMarketPct = mlToPct(r.home_market_ml);
-    const awayMarketPct = mlToPct(r.away_market_ml);
+  return (data as any[]).map(r => {
+    /* money-lines arrive as TEXT → force number */
+    const hML = r.home_market_ml != null ? +r.home_market_ml : null;
+    const aML = r.away_market_ml != null ? +r.away_market_ml : null;
 
-    // model win% (may already be pre-computed in view)
-    const homePredPct  = r.home_pred_pct ?? null;
-    const awayPredPct  = r.away_pred_pct ?? null;
+    const hPct = mlToPct(hML);
+    const aPct = mlToPct(aML);
+
+    const hPredPct = r.home_pred_pct != null ? +r.home_pred_pct : null;
+    const aPredPct = r.away_pred_pct != null ? +r.away_pred_pct : null;
 
     return {
       matchup_id : r.matchup_id,
       game_id    : r.game_id,
       home_team  : r.home_team,
       away_team  : r.away_team,
-      game_time_ct: r.game_time_ct,
+      game_time  : r.game_time_ct,             // plain timestamp
 
-      home_market_ml : r.home_market_ml,
-      away_market_ml : r.away_market_ml,
-      home_market_pct: homeMarketPct,
-      away_market_pct: awayMarketPct,
+      home_market_ml  : hML,
+      away_market_ml  : aML,
+      home_market_pct : hPct,
+      away_market_pct : aPct,
 
-      home_pred_pct  : homePredPct,
-      away_pred_pct  : awayPredPct,
-      home_pred_ml   : pctToMl(homePredPct),
-      away_pred_ml   : pctToMl(awayPredPct),
+      home_pred_pct : hPredPct,
+      away_pred_pct : aPredPct,
+      home_pred_ml  : pctToMl(hPredPct),
+      away_pred_ml  : pctToMl(aPredPct),
 
-      home_edge_pct  :
-        homePredPct != null && homeMarketPct != null
-          ? homePredPct - homeMarketPct
-          : null,
-      away_edge_pct  :
-        awayPredPct != null && awayMarketPct != null
-          ? awayPredPct - awayMarketPct
-          : null,
+      home_edge_pct :
+        hPredPct != null && hPct != null ? +(hPredPct - hPct).toFixed(4) : null,
+      away_edge_pct :
+        aPredPct != null && aPct != null ? +(aPredPct - aPct).toFixed(4) : null,
 
-      home_pitcher   : r.home_pitcher ?? null,
-      away_pitcher   : r.away_pitcher ?? null,
-    } as ProcessedMlbPrediction;
+      home_pitcher : r.home_pitcher ?? null,
+      away_pitcher : r.away_pitcher ?? null,
+    };
   });
 }
