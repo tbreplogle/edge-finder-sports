@@ -9,7 +9,6 @@ import { GameCard } from "@/components/GameCard";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { PremiumBanner } from "@/components/PremiumBanner";
 import { usePageAccess } from "@/lib/usePageAccess";
-
 import {
   fetchMlbPredictions,
   ProcessedMlbPrediction,
@@ -38,19 +37,26 @@ export default function MlbDashboard() {
       setGeneratedDate(format(new Date(), "MMM d, yyyy"));
 
       if (data.length > 0) {
-        // Featured = largest abs edge
+        // pick largest-edge game
         const top = [...data].sort((a, b) => {
-          const ae = Math.max(Math.abs(a.home_edge_pct ?? 0), Math.abs(a.away_edge_pct ?? 0));
-          const be = Math.max(Math.abs(b.home_edge_pct ?? 0), Math.abs(b.away_edge_pct ?? 0));
+          const ae = Math.max(
+            Math.abs(a.home_edge_pct ?? 0),
+            Math.abs(a.away_edge_pct ?? 0)
+          );
+          const be = Math.max(
+            Math.abs(b.home_edge_pct ?? 0),
+            Math.abs(b.away_edge_pct ?? 0)
+          );
           return be - ae;
         })[0];
         setFeatured(top);
 
-        // Preview = next earliest by time
+        // pick next-earliest
         const others = data.filter((g) => g.matchup_id !== top.matchup_id);
         const next = others.sort(
           (a, b) =>
-            new Date(a.game_time_ct).getTime() - new Date(b.game_time_ct).getTime()
+            new Date(a.game_time_ct).getTime() -
+            new Date(b.game_time_ct).getTime()
         )[0];
         setPreview(next ?? null);
 
@@ -85,7 +91,8 @@ export default function MlbDashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-              MLB Predictions <span className="text-edge-secondary">Dashboard</span>
+              MLB Predictions{" "}
+              <span className="text-edge-secondary">Dashboard</span>
             </h1>
             <p className="text-muted-foreground">
               MLB games with predicted odds and market edges
@@ -98,7 +105,9 @@ export default function MlbDashboard() {
               onClick={handleRefresh}
               disabled={refreshing}
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
               {refreshing ? "Refreshing…" : "Refresh"}
             </Button>
             <Button variant="outline" className="flex items-center gap-2">
@@ -148,7 +157,7 @@ export default function MlbDashboard() {
           </section>
         )}
 
-        {/* Locked Banner */}
+        {/* Locked */}
         {!loading && isLocked && <PremiumBanner />}
 
         {/* Info Alert */}
@@ -157,12 +166,13 @@ export default function MlbDashboard() {
             <Info className="h-4 w-4" />
             <AlertTitle>MLB Predictions</AlertTitle>
             <AlertDescription>
-              Using live data from the <code>mlb_predictions</code> table and current market odds.
+              Using live data from the <code>mlb_predictions</code> table and
+              current market odds.
             </AlertDescription>
           </Alert>
         )}
 
-        {/* All / Locked */}
+        {/* All vs Locked */}
         {!loading &&
           (access === "full" ? (
             <div>
@@ -176,9 +186,12 @@ export default function MlbDashboard() {
           ) : (
             <div className="bg-card border rounded-lg p-8 text-center">
               <Lock className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-xl font-medium mb-2">Premium Content Locked</h3>
+              <h3 className="text-xl font-medium mb-2">
+                Premium Content Locked
+              </h3>
               <p className="text-muted-foreground mb-4">
-                Upgrade to a premium account to see all MLB predictions and detailed analytics.
+                Upgrade to a premium account to see all MLB predictions and
+                detailed analytics.
               </p>
               <Button onClick={() => (window.location.href = "/pricing")}>
                 Upgrade Now
@@ -197,7 +210,8 @@ export default function MlbDashboard() {
               </div>
               <div>
                 <p>
-                  <strong>Predicted Odds:</strong> from <code>mlb_predictions.moneyline</code>
+                  <strong>Predicted Odds:</strong>{" "}
+                  from <code>mlb_predictions.moneyline</code>
                 </p>
                 <p>
                   <strong>Market / Predicted %:</strong> implied probability
