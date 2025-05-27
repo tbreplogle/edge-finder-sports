@@ -1,12 +1,12 @@
-// src/pages/AccessControl.tsx
-import { FC } from "react";
+// src/pages/admin/AccessControl.tsx
+import React, { FC } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { pages, roles, options } from "@/pages/accessMeta";
+import { pages, roles, options } from "@/pages/admin/accessMeta";
 
 interface Rule {
   page_key: string;

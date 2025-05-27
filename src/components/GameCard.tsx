@@ -43,7 +43,7 @@ export function GameCard(p: GameCardProps) {
           {/* content */}
           <div className="p-6 flex flex-col justify-between h-full">
             <header>
-              <h3 className="text-2xl font-bold">{p.away_team} @ {p.home_team}</h3>
+              <h3 className="text-3xl font-bold">{p.away_team} @ {p.home_team}</h3>
               <div className="flex items-center text-sm text-white/80 mt-1">
                 <Clock className="w-3 h-3 mr-1" />
                 {new Date(p.game_time_ct).toLocaleString("en-US", {

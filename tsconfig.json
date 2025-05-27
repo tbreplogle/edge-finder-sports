@@ -1,9 +1,29 @@
-{
+{   
+
   "compilerOptions": {
-    /* …existing settings… */
-    "baseUrl": ".",                    // ← add (if missing)
-    "paths": {
-      "@/*": ["src/*"]                 // ← add / merge
-    }
-  }
+    /* ---------- output ---------- */
+    "module": "ESNext",
+    "moduleResolution": "Node",                    /* simpler than NodeNext */
+    "jsx": "react-jsx",
+
+    /* ---------- alias rules ---------- */
+    "baseUrl": "./src",                            /* <-- key #1  */
+    "paths": {                                     /*   alias must end with /* and
+                                                      point INSIDE baseUrl        */
+      "@/*": ["*"],                                /* "@/foo"        → src/foo   */
+      "@components/*": ["components/*"],
+      "@hooks/*":      ["hooks/*"],
+      "@pages/*":      ["pages/*"],
+      "@utils/*":      ["utils/*"]
+    },
+
+    /* ---------- type-safety ---------- */
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
 }
