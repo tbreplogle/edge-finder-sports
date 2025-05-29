@@ -255,7 +255,7 @@ export async function scrapeAndSavePitchingMatchups() {
     -----------------------------------------------------------*/
     const { data, error } = await supabase
       .from("pitching_matchups")
-      .upsert(rows, { onConflict: ["matchup_id", "pitcher_role"] })
+      .upsert(rows, { onConflict: 'matchup_id,pitcher_role' })
       .select();
 
     if (error) throw error;
