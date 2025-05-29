@@ -3,7 +3,7 @@
 /* -------------------------------------------------------------------------- */
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import { toZonedTime } from "date-fns-tz";          // ← works in all versions
 import { CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ import {
 const CT_ZONE = "America/Chicago";
 type SortKey = "time" | "edgeHigh" | "edgeLow";
 
+/** interpret naïve CT timestamp correctly */
 const ctToDate = (ct: string) => toZonedTime(parseISO(ct), CT_ZONE);
 
 const sortGames = (list: ProcessedMlbPrediction[], key: SortKey) => {
@@ -29,9 +30,7 @@ const sortGames = (list: ProcessedMlbPrediction[], key: SortKey) => {
   switch (key) {
     case "time":
       clone.sort(
-        (a, b) =>
-          ctToDate(a.game_time_ct).getTime() -
-          ctToDate(b.game_time_ct).getTime()
+        (a, b) => ctToDate(a.game_time_ct).getTime() - ctToDate(b.game_time_ct).getTime()
       );
       break;
     case "edgeHigh":
@@ -86,7 +85,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  /* fetch data ------------------------------------------------- */
+  /* load data -------------------------------------------------- */
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -107,10 +106,7 @@ export default function Dashboard() {
           });
           setFeaturedGame(top);
           setGames(
-            sortGames(
-              rows.filter((g) => g.matchup_id !== top.matchup_id),
-              sortKey
-            )
+            sortGames(rows.filter((g) => g.matchup_id !== top.matchup_id), sortKey)
           );
         } else {
           setFeaturedGame(null);
@@ -142,16 +138,19 @@ export default function Dashboard() {
 
         <SportTabs activeTab="mlb" onTabChange={() => {}} />
 
-        {/* Featured game */}
+        {/* ── Featured Game ─────────────────────────────────── */}
         {featuredGame && (
           <section className="mb-10">
             <h2 className="text-xl font-semibold mb-4">Game of the Day</h2>
             <div className="max-w-4xl mx-auto">
               <GameCard
                 variant="featured"
-                startTime={featuredGame.game_time_ct}
                 homeTeam={featuredGame.home_team}
                 awayTeam={featuredGame.away_team}
+                startTime={featuredGame.game_time_ct}
+                isAdmin={admin}
+                isPaid={isPaid}
+                isPremium={!isPaid && !admin}
                 {...featuredGame}
               />
             </div>
@@ -160,7 +159,7 @@ export default function Dashboard() {
 
         {!isPaid && !admin && <PremiumBanner />}
 
-        {/* Sort picker */}
+        {/* ── Sort picker ───────────────────────────────────── */}
         <div className="flex items-center justify-between my-4">
           <h2 className="text-xl font-semibold">MLB Games</h2>
           <select
@@ -174,6 +173,7 @@ export default function Dashboard() {
           </select>
         </div>
 
+        {/* ── Games grid ────────────────────────────────────── */}
         {loading ? (
           <div className="grid md:grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -185,9 +185,12 @@ export default function Dashboard() {
             {games.map((g) => (
               <GameCard
                 key={g.matchup_id}
-                startTime={g.game_time_ct}
                 homeTeam={g.home_team}
                 awayTeam={g.away_team}
+                startTime={g.game_time_ct}
+                isAdmin={admin}
+                isPaid={isPaid}
+                isPremium={!isPaid && !admin}
                 {...g}
               />
             ))}

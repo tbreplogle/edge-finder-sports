@@ -1,9 +1,9 @@
 name: MLB Predictions
 
-# Run every day at 8:30 AM Central (CDT = UTC−5 → 13:30 UTC)
+# Run every day at 10:30 AM Central (CDT = UTC−5 → 13:30 UTC)
 on:
   schedule:
-    - cron: '30 14 * * *'
+    - cron: '20 14 * * *'
   workflow_dispatch:
 
 jobs:
