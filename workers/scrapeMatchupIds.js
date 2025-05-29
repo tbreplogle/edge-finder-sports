@@ -91,7 +91,7 @@ async function scrapeTodayMatchups() {
       const dt = dateText
         ? new Date(`${dateText} ${new Date().getFullYear()}`)
         : null;
-      const game_date = dt ? dt.toISOString().slice(0,10) : null;
+      const game_date = dt ? dt.toISOString().slice(0,10) : today;
 
       return { game_id, matchup_id, away_team, home_team, game_date };
     })
