@@ -8,7 +8,7 @@ import {
 
 const DEBUG = process.env.DEBUG === "true";
 
-/** Map team labels → team_id (from teams_mlb.alt_name) */
+/** Covers tab text → team_id (matches teams_mlb.alt_name) */
 const TEAM_ALT_NAME_TO_ID = {
   SEATTLE: 1,
   CLEVELAND: 2,
@@ -44,26 +44,26 @@ const TEAM_ALT_NAME_TO_ID = {
 };
 
 async function scrapePitchingMatchups() {
-  // 1) load today’s market‐odds rows
+  // 1) pull today’s games FROM mlb_market_odds
   const today = new Date().toISOString().slice(0, 10);
   const { data: games, error } = await supabase
     .from("mlb_market_odds")
-    .select("matchup_id,game_id")
+    .select("matchup_id, game_id")
     .eq("game_date", today);
 
   if (error) throw new Error(`Could not load games: ${error.message}`);
-  if (!games?.length) {
-    console.warn("⚠️ No market-odds rows for today");
+  if (!games || games.length === 0) {
+    console.warn("⚠️ No games with market odds found for today");
     return [];
   }
 
-  // 2) dedupe by game_id (so every double header is kept)
+  // dedupe by game_id (not matchup_id) so each doubleheader stays distinct
   const uniqueGames = Array.from(
     new Map(games.map((g) => [g.game_id, g])).values()
   );
   console.log(`→ Found ${games.length} rows, ${uniqueGames.length} unique game_ids`);
 
-  // 3) launch Puppeteer
+  // 2) launch Puppeteer
   const browser = await puppeteer.launch({
     headless: "new",
     channel: "chrome",
@@ -77,71 +77,76 @@ async function scrapePitchingMatchups() {
 
   const rows = [];
 
+  // 3) loop through each unique game
   for (const { matchup_id, game_id } of uniqueGames) {
     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
     console.log(`→ Scraping ${url}`);
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
+    // for each side (away / home) look at its table
     for (const role of ["away", "home"]) {
-      const tab = role === "away" ? "#away-team-last-5" : "#home-team-last-5";
+      const tabSelector = role === "away"
+        ? 'a[href="#away-team-last-5"]'
+        : 'a[href="#home-team-last-5"]';
 
-      // team → id
-      let team_name = null;
-      let team_id = null;
+      // click tab
+      try {
+        await page.click(tabSelector);
+        await page.waitForSelector("table.starter-table", { timeout: 30000 });
+      } catch {
+        console.warn(`⚠️ Could not open ${role} tab for matchup ${matchup_id}`);
+        continue;
+      }
+
+      // team name → id
+      let team_name = null, team_id = null;
       try {
         team_name = await page.$eval(
-          `a[href="${tab}"]`,
-          (el) => el.textContent.trim().toUpperCase()
+          `${tabSelector} + .table-container .starter-table caption`,
+          (c) => {
+            // caption is always "Last 5" so back up: look at the first <a> in the table
+            const link = c.parentElement!.querySelector("tbody tr:first-child a");
+            return link?.textContent?.trim().split(" ")[0].toUpperCase() || "";
+          }
         );
-        team_id = TEAM_ALT_NAME_TO_ID[team_name] ?? null;
+        team_id = TEAM_ALT_NAME_TO_ID[team_name] || null;
+        if (!team_id) console.warn(`⚠️ No team_id mapping for "${team_name}"`);
       } catch {
-        console.warn(`⚠️ No team name for ${role} of ${matchup_id}`);
-        continue;
+        console.warn(`⚠️ Could not read ${role} team for matchup ${matchup_id}`);
       }
 
-      // pitcher name
-      let pitcher_name = null;
-      try {
-        pitcher_name = await page.$eval(
-          `${tab} a.anchor-with-border`,
-          (el) => el.textContent.trim()
-        );
-      } catch {
-        console.warn(`⚠️ No ${role} pitcher for ${matchup_id}`);
-        continue;
-      }
-
-      // find the “last X avg” row
-      const trs = await page.$$(`${tab} table tr`);
-      const statRow = trs.find(async (tr) => {
-        try {
-          const txt = (await tr.$eval("td b", (b) => b.textContent)).toLowerCase();
-          return txt.includes("last") && txt.includes("avg");
-        } catch {
-          return false;
-        }
-      });
-      if (!statRow) {
-        console.warn(`⚠️ Stats missing for ${role} of ${matchup_id}`);
-        continue;
-      }
-
-      // extract the 10 numbers
-      const cells = await statRow.$$eval("td b", (bs) =>
-        bs.map((b) => b.textContent.trim())
+      // now grab the LAST ROW of tbody
+      const allRows = await page.$$(
+        `${tabSelector} + .table-container table.starter-table tbody tr`
       );
-      const nums = cells.slice(1);
-      if (nums.length < 10) {
-        console.warn(
-          `⚠️ Unexpected # cols (${nums.length}) for ${role} ${matchup_id}`
-        );
+      if (allRows.length === 0) {
+        console.warn(`⚠️ No rows in table for ${role} ${matchup_id}`);
         continue;
       }
-      const [ip_s, h_s, r_s, er_s, so_s, bb_s, hr_s, pit_s, pip_s, gbfb_s] = nums.map(
-        (v) => parseFloat(v) || 0
-      );
+      const avgRowHandle = allRows[allRows.length - 1];
 
-      const { ip, h, r, er, so, bb, hr, pit, pip, gbfb } = {
+      // extract all <b>…</b> cells (the 1st b is the "Last 5 Avg." label, then 12 numeric)
+      const bTexts = await avgRowHandle.$$eval("b", (bs) =>
+        bs.map((b) => b.textContent?.trim() || "")
+      );
+      if (bTexts.length < 13) {
+        console.warn(`⚠️ Unexpected # cols (${bTexts.length}) for ${role} ${matchup_id}`);
+        continue;
+      }
+      // drop first (label), then parse floats
+      const [ , ip_s, h_s, r_s, er_s, so_s, bb_s, hr_s, pit_s, pip_s, gbfb_s ] =
+        bTexts.slice(0).map((t, i) => {
+          // after the label, the next 11 are the numeric we care about; we index accordingly
+          const val = parseFloat(t);
+          return isNaN(val) ? 0 : val;
+        });
+
+      rows.push({
+        game_id,
+        matchup_id,
+        pitcher_role: role,
+        team_name,
+        team_id,
         ip: ip_s,
         h: h_s,
         r: r_s,
@@ -152,61 +157,43 @@ async function scrapePitchingMatchups() {
         pit: pit_s,
         pip: pip_s,
         gbfb: gbfb_s,
-      };
-      const era = ip > 0 ? +((er / ip) * 9).toFixed(2) : null;
-      const era_plus = era ? Math.round((100 * 4.1) / era) : null;
-      const whip = ip > 0 ? +(((bb + h) / ip).toFixed(3)) : null;
-
-      rows.push({
-        game_id,
-        matchup_id,
-        pitcher_role: role,
-        team_name,
-        team_id,
-        pitcher_name,
-        ip,
-        h,
-        r,
-        er,
-        so,
-        bb,
-        hr,
-        pit,
-        pip,
-        gbfb,
-        era,
-        era_plus,
-        whip,
       });
     }
   }
 
   await browser.close();
   console.log(`→ Scraped ${rows.length} pitcher records`);
+  if (DEBUG) console.log(JSON.stringify(rows, null, 2));
   return rows;
 }
 
 export async function scrapeAndSavePitchingMatchups() {
   console.log("⏳ Starting pitching-matchups scraper…");
-  if (!(await testConnection())) process.exit(1);
+  if (!(await testConnection())) {
+    console.error("❌ Supabase connection failed, aborting.");
+    process.exit(1);
+  }
 
   try {
     const rows = await scrapePitchingMatchups();
     console.log(`→ Upserting ${rows.length} rows to Supabase…`);
     const { data, error } = await supabase
       .from("pitching_matchups")
-      .upsert(rows, {
-        onConflict: ["game_id", "pitcher_role"],
-      })
+      // make sure you've done:
+      //   ALTER TABLE public.pitching_matchups
+      //   ADD CONSTRAINT unique_game_role UNIQUE(game_id, pitcher_role);
+      .upsert(rows, { onConflict: ["game_id", "pitcher_role"] })
       .select();
+
     if (error) throw error;
-    console.log(`✅ Saved ${data.length} rows`);
+    console.log(`✅ Saved ${data.length} pitching records`);
     await createScrapeReport({
       success: true,
       timestamp: new Date().toISOString(),
       stats: { records: data.length },
     });
-  } catch (err) {
+
+  } catch (err: any) {
     console.error("❌ Error inserting pitching stats:", err.message);
     await createScrapeReport({
       success: false,
@@ -217,7 +204,9 @@ export async function scrapeAndSavePitchingMatchups() {
   }
 }
 
-// CLI
+// if run directly
 if (import.meta.url.endsWith("scrapePitchingMatchups.js")) {
-  scrapeAndSavePitchingMatchups().then(() => process.exit(0));
+  scrapeAndSavePitchingMatchups()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
 }
