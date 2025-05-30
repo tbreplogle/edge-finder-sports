@@ -1,226 +1,118 @@
-import { useState, useEffect } from "react";
+// src/pages/History.tsx
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Calendar, Download, Filter, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { format } from "date-fns";
+import { supabase } from "@/utils/supabaseClient";
 
-const History = () => {
-  const navigate = useNavigate();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isPaid, setIsPaid] = useState(false);
-  const [year, setYear] = useState<string>("2025");
-  const [team, setTeam] = useState<string>("");
-  const [mockData, setMockData] = useState<any[]>([]);
-  
-  // Check user role/subscription
+interface ResultRow {
+  matchup_id: string;
+  game_date: string;
+  chosen_team_id: number;
+  confidence: number;
+  moneyline: number;
+  stake: number;
+  profit: number;
+  outcome: "win" | "loss";
+}
+
+export default function HistoryPage() {
+  const [rows, setRows] = useState<ResultRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (!userStr) {
-      navigate("/auth/login");
-      return;
-    }
-    
-    try {
-      const userData = JSON.parse(userStr);
-      setIsAdmin(userData.is_admin === true);
-      setIsPaid(userData.role === "premium" || userData.is_admin === true);
-      
-      if (!userData.is_admin && userData.role !== "premium") {
-        navigate("/pricing");
+    (async () => {
+      const { data, error } = await supabase
+        .from("mlb_daily_results")           // no generic args
+        .select("*")
+        .order("game_date", { ascending: false });
+
+      if (error) {
+        console.error(error);
+      } else {
+        setRows(data as ResultRow[]);
       }
-    } catch (e) {
-      console.error("Error parsing user data:", e);
-    }
-  }, [navigate]);
-  
-  // Mock data for demo purposes - in a real app, this would be fetched from the backend
-  useEffect(() => {
-    // Mock data generation
-    const generateMockHistoricalData = () => {
-      const teams = ["Chiefs", "Eagles", "Cowboys", "Packers", "Bears", "Ravens", "49ers", "Bills"];
-      const results = [];
-      
-      // Generate 10 random historical games
-      for (let i = 0; i < 10; i++) {
-        const homeIndex = Math.floor(Math.random() * teams.length);
-        let awayIndex = Math.floor(Math.random() * teams.length);
-        
-        // Ensure home and away teams are different
-        while (awayIndex === homeIndex) {
-          awayIndex = Math.floor(Math.random() * teams.length);
-        }
-        
-        const homeTeam = teams[homeIndex];
-        const awayTeam = teams[awayIndex];
-        const marketSpread = Math.round((Math.random() * 14 - 7) * 2) / 2;
-        const predictedMargin = Math.round((Math.random() * 16 - 8) * 10) / 10;
-        const actualMargin = Math.round((Math.random() * 20 - 10) * 10) / 10;
-        const edge = Math.round((predictedMargin - marketSpread) * 10) / 10;
-        
-        // Filter by team if specified
-        if (team && !homeTeam.toLowerCase().includes(team.toLowerCase()) && 
-            !awayTeam.toLowerCase().includes(team.toLowerCase())) {
-          continue;
-        }
-        
-        results.push({
-          id: `hist-${i}`,
-          date: new Date(2025, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
-          homeTeam,
-          awayTeam,
-          marketSpread,
-          predictedMargin,
-          actualMargin,
-          edge,
-          isPremium: edge > 2 || edge < -2,
-        });
-      }
-      
-      return results;
-    };
-    
-    setMockData(generateMockHistoricalData());
-  }, [team, year]);
-  
-  const handleDownloadCSV = () => {
-    // In a real app, this would call the API endpoint
-    alert("In a production app, this would download CSV data from the /api/history.csv endpoint");
-  };
-  
-  // Format spread for display
-  const formatSpread = (value: number) => {
-    return value > 0 ? `+${value}` : value;
-  };
-  
-  if (!isPaid && !isAdmin) {
-    return null; // Redirect happens in useEffect
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) {
+    return (
+      <AppLayout isAuthenticated>
+        <div className="py-12 text-center">Loading betting history…</div>
+      </AppLayout>
+    );
   }
-  
+
+  const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0);
+  const totalBets   = rows.length;
+  const wins        = rows.filter((r) => r.outcome === "win").length;
+  const losses      = totalBets - wins;
+  const totalStaked = rows.reduce((sum, r) => sum + r.stake, 0);
+  const roi         = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+
   return (
-    <AppLayout isAuthenticated={true}>
+    <AppLayout isAuthenticated>
       <div className="container py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Historical Predictions</h1>
-            <p className="text-muted-foreground">
-              Review past predictions and outcomes
-            </p>
-          </div>
-          
-          <Button 
-            variant="outline" 
-            className="flex items-center gap-2"
-            onClick={handleDownloadCSV}
-          >
-            <Download className="h-4 w-4" />
-            <span>Download CSV</span>
-          </Button>
-        </div>
-        
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Season</label>
-                <Select value={year} onValueChange={setYear}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2025">2025</SelectItem>
-                    <SelectItem value="2024">2024</SelectItem>
-                    <SelectItem value="2023">2023</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium mb-2 block">Team Filter</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Filter by team name"
-                    value={team}
-                    onChange={(e) => setTeam(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex items-end">
-                <Button variant="secondary" className="flex items-center gap-2 w-full md:w-auto">
-                  <Filter className="h-4 w-4" />
-                  <span>Apply Filters</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Matchup</TableHead>
-                <TableHead>Market Spread</TableHead>
-                <TableHead>Predicted Margin</TableHead>
-                <TableHead>Actual Margin</TableHead>
-                <TableHead>Edge</TableHead>
+        <h1 className="text-2xl font-bold mb-4">Betting History</h1>
+
+        {/* use default Alert (no variant="info") */}
+        <Alert className="mb-6">
+          <AlertTitle>Summary (confidence ≥ 7.0)</AlertTitle>
+          <p>
+            Bets: {totalBets} | Wins: {wins} | Losses: {losses} | P/L: $
+            {totalProfit.toFixed(2)} | ROI: {roi.toFixed(2)}%
+          </p>
+        </Alert>
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Matchup</TableHead>
+              <TableHead>Confidence</TableHead>
+              <TableHead>ML</TableHead>
+              <TableHead>Stake</TableHead>
+              <TableHead>Profit</TableHead>
+              <TableHead>Outcome</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={`${r.game_date}-${r.matchup_id}`}>
+                <TableCell>
+                  {format(new Date(r.game_date), "MMM d, yyyy")}
+                </TableCell>
+                <TableCell>{r.matchup_id}</TableCell>
+                <TableCell>{r.confidence.toFixed(1)}</TableCell>
+                <TableCell>
+                  {r.moneyline > 0 ? `+${r.moneyline}` : r.moneyline}
+                </TableCell>
+                <TableCell>${r.stake}</TableCell>
+                <TableCell
+                  className={
+                    r.profit >= 0 ? "text-green-500" : "text-red-500"
+                  }
+                >
+                  {r.profit >= 0
+                    ? `+$${r.profit.toFixed(2)}`
+                    : `-$${Math.abs(r.profit).toFixed(2)}`}
+                </TableCell>
+                <TableCell>{r.outcome}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockData.length > 0 ? (
-                mockData.map((game) => {
-                  const isBlurred = !isAdmin && game.isPremium;
-                  
-                  return (
-                    <TableRow key={game.id}>
-                      <TableCell>
-                        {game.date.toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </TableCell>
-                      <TableCell>{game.awayTeam} @ {game.homeTeam}</TableCell>
-                      <TableCell>{formatSpread(game.marketSpread)}</TableCell>
-                      <TableCell className={isBlurred ? "premium-blur" : ""}>
-                        {formatSpread(game.predictedMargin)}
-                      </TableCell>
-                      <TableCell>
-                        {formatSpread(game.actualMargin)}
-                      </TableCell>
-                      <TableCell className={isBlurred ? "premium-blur" : ""}>
-                        <span className={game.edge > 0 ? "text-edge-secondary" : "text-edge-accent"}>
-                          {formatSpread(game.edge)}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
-                    <div className="flex flex-col items-center justify-center">
-                      <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="font-medium text-lg mb-1">No historical data</h3>
-                      <p className="text-muted-foreground">
-                        No historical predictions match your filters.
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </AppLayout>
   );
-};
-
-export default History;
+}

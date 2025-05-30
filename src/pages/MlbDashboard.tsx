@@ -26,7 +26,9 @@ export default function MlbDashboard() {
   const [predictions, setPredictions] = useState<ProcessedMlbPrediction[]>([]);
   const [featured, setFeatured] = useState<ProcessedMlbPrediction | null>(null);
   const [preview, setPreview] = useState<ProcessedMlbPrediction | null>(null);
-
+  const [sortBy, setSortBy] = useState<
+    "edgeDesc" | "edgeAsc" | "time" | "confidence"
+    >("edgeDesc");
   const load = async (force = false) => {
     if (force) setRefreshing(true);
     else setLoading(true);
@@ -88,6 +90,26 @@ export default function MlbDashboard() {
     <AppLayout isAuthenticated>
       <div className="container py-8">
         {/* Header */}
+                {!loading && access === "full" && (
+              <div className="flex justify-end mb-4">
+              <select
+              className="p-1 border rounded bg-card text-sm"
+                value={sortBy}
+                onChange={(e) =>
+                    setSortBy(e.target.value as
+                    | "edgeDesc"
+                    | "edgeAsc"
+                    | "time"
+                    | "confidence")
+            }
+            >
+              <option value="edgeDesc">Highest Edge</option>
+              <option value="edgeAsc">Lowest Edge</option>
+              <option value="time">Game Time</option>
+              <option value="confidence">Highest Confidence</option>
+            </select>
+          </div>
+        )}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">

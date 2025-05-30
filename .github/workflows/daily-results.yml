@@ -1,0 +1,30 @@
+name: Daily MLB Results Scraper
+
+on:
+  # every day at 09:00 AM CT (14:00 UTC)
+  schedule:
+    - cron: '0 12 * * *'
+  # allow you to kick it off any time from the Actions UI
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) check out your code
+      - uses: actions/checkout@v3
+
+      # 2) set up Node
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # 3) install dependencies
+      - run: npm ci
+
+      # 4) run the scraper
+      - run: node workers/scrapeDailyResults.js
+        env:
+          # point these at your Supabase project & service‐role key
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
