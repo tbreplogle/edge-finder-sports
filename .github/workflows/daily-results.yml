@@ -1,30 +1,50 @@
 name: Daily MLB Results Scraper
 
 on:
-  # every day at 09:00 AM CT (14:00 UTC)
+  # 07:00 AM CT is 14:00 UTC
   schedule:
     - cron: '0 12 * * *'
-  # allow you to kick it off any time from the Actions UI
   workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PUPPETEER_SKIP_DOWNLOAD:   'true'
+
     steps:
-      # 1) check out your code
-      - uses: actions/checkout@v3
-
-      # 2) set up Node
-      - uses: actions/setup-node@v3
+      # ─── Check out & Node ───
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 18
 
-      # 3) install dependencies
-      - run: npm ci
+      # ─── Restore npm cache ───
+      - name: Restore npm cache
+        id: cache-npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
 
-      # 4) run the scraper
-      - run: node workers/scrapeDailyResults.js
-        env:
-          # point these at your Supabase project & service‐role key
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # ─── Install deps ───
+      - name: Install JS deps (workers/)
+        working-directory: workers
+        run: npm ci --no-audit --no-fund
+
+      # ─── Save cache if miss ───
+      - name: Save npm cache
+        if: steps.cache-npm.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
+
+      # ─── Run the daily‐results scraper ───
+      - name: Scrape & save yesterday's results
+        working-directory: workers
+        run: node scrapeDailyResults.js
