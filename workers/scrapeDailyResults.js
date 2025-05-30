@@ -40,12 +40,12 @@ async function run() {
     process.exit(1);
   }
 
-  // 1) yesterday’s date
+  // 1) Compute yesterday’s YYYY-MM-DD
   const d = new Date();
   d.setDate(d.getDate() - 1);
   const y = d.toISOString().slice(0, 10);
 
-  // 2) fetch yesterday’s predictions WITH confidence & moneyline
+  // 2) Pull yesterday’s predictions (with confidences & moneylines)
   const { data: preds, error: predErr } = await supabase
     .from("mlb_predictions_with_market")
     .select(`
@@ -54,47 +54,76 @@ async function run() {
       home_confidence,
       away_confidence,
       home_pred_ml,
-      away_pred_ml,
-      home_team_id,
-      away_team_id
+      away_pred_ml
     `)
-    .eq("game_time_ct", y);  // assuming game_time_ct is YYYY-MM-DD
+    .eq("game_time_ct", y);
 
   if (predErr) throw predErr;
 
-  // 3) keep only confidence ≥ 7
-  const toBet = preds.filter(
-    (p) =>
-      Math.max(p.home_confidence ?? 0, p.away_confidence ?? 0) >= 7.0
-  );
+  // 3) Pull the matchup IDs → team_id mapping from mlb_matchups
+  const { data: metas, error: metaErr } = await supabase
+    .from("mlb_matchups")
+    .select("matchup_id, home_team_id, away_team_id")
+    .eq("game_date", y);
+
+  if (metaErr) throw metaErr;
+
+  // Build a lookup
+  const metaById = {};
+  metas.forEach((m) => {
+    metaById[m.matchup_id] = m;
+  });
+
+  // 4) Filter to confidence ≥ 7.0
+  const toBet = preds.filter((p) => {
+    const hc = p.home_confidence ?? 0;
+    const ac = p.away_confidence ?? 0;
+    return Math.max(hc, ac) >= 7.0;
+  });
 
   if (toBet.length === 0) {
     console.log("No high-confidence bets for", y);
     return;
   }
 
-  // 4) scrape actual scores
+  // 5) Scrape final scores
   const scores = await scrapeYesterdayScores(y);
 
-  // 5) build upsert rows
+  // 6) Compute profit/loss rows
   const rows = toBet
     .map((p) => {
-      const isHome = (p.home_confidence ?? 0) > (p.away_confidence ?? 0);
-      const chosenMl = isHome ? p.home_pred_ml : p.away_pred_ml;
-      const chosenTeamId = isHome ? p.home_team_id : p.away_team_id;
-      const stake = 100;
-      const s = scores.find((s) => s.matchup_id === p.matchup_id);
-      if (!s) return null;
+      const meta = metaById[p.matchup_id];
+      if (!meta) {
+        console.warn(
+          `⚠️ No mlb_matchups entry for ${p.matchup_id} on ${y}`
+        );
+        return null;
+      }
 
-      const winner = s.home_score > s.away_score ? "home" : "away";
+      // decide which side we bet
+      const isHome = (p.home_confidence ?? 0) > (p.away_confidence ?? 0);
+      const ml = isHome ? p.home_pred_ml : p.away_pred_ml;
+      const chosenTeamId = isHome
+        ? meta.home_team_id
+        : meta.away_team_id;
+      const stake = 100;
+
+      // find the scraped score
+      const sc = scores.find((s) => s.matchup_id === p.matchup_id);
+      if (!sc) {
+        console.warn(`⚠️ No score found for matchup ${p.matchup_id}`);
+        return null;
+      }
+
+      const winner = sc.home_score > sc.away_score ? "home" : "away";
       let profit = -stake;
       let outcome = "loss";
       if (winner === (isHome ? "home" : "away")) {
         outcome = "win";
         profit =
-          chosenMl > 0
-            ? (chosenMl / 100) * stake
-            : (100 / Math.abs(chosenMl)) * stake;
+          ml > 0
+            ? (ml / 100) * stake
+            : (100 / Math.abs(ml)) * stake;
       }
 
       return {
@@ -102,7 +131,7 @@ async function run() {
         game_date: y,
         chosen_team_id: chosenTeamId,
         confidence: Math.max(p.home_confidence, p.away_confidence),
-        moneyline: chosenMl,
+        moneyline: ml,
         stake,
         profit: +profit.toFixed(2),
         outcome,
@@ -110,7 +139,7 @@ async function run() {
     })
     .filter(Boolean);
 
-  // 6) insert into mlb_daily_results
+  // 7) Insert into mlb_daily_results
   const { error: insertErr } = await supabase
     .from("mlb_daily_results")
     .insert(rows);
