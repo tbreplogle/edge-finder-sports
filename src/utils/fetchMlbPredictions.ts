@@ -33,6 +33,9 @@ export interface ProcessedMlbPrediction {
   home_edge_pct: number | null;
   away_edge_pct: number | null;
 
+  home_confidence: number
+  away_confidence: number
+
   home_pitcher: string | null;
   away_pitcher: string | null;
 }
@@ -78,6 +81,9 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
 
       home_pitcher: r.home_pitcher ?? null,
       away_pitcher: r.away_pitcher ?? null,
+
+      home_confidence: r.home_confidence,
+      away_confidence: r.away_confidence,
     } as ProcessedMlbPrediction;
   });
 }

@@ -1,4 +1,3 @@
-// src/components/GameCard.tsx
 import React, { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -6,7 +5,7 @@ import { ArrowUp, ArrowDown, Clock, Trophy, Star } from "lucide-react"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { ProcessedMlbPrediction } from "@/utils/fetchMlbPredictions"
 import { cn } from "@/lib/utils"
-import { ConfidenceMeter } from "@/components/ConfidenceMeter"
+import { HorizontalConfidenceMeter } from "./HorizontalConfidenceMeter"
 
 export interface GameCardProps extends ProcessedMlbPrediction {
   variant?: "featured" | "regular" | "locked"
@@ -30,14 +29,14 @@ export function GameCard(p: GameCardProps) {
   const fmtPct = (v: number | null) =>
     v == null ? "—" : `${Math.round(v * 100)}%`
 
+  // FEATURED
   if (p.variant === "featured") {
     return (
       <Card className="overflow-hidden border-0 bg-card shadow-lg relative">
         <AspectRatio ratio={16 / 7} className="bg-gradient-to-r from-edge-primary to-[#1f3356] text-white">
+          {/* ribbons */}
           <div className="absolute top-4 left-4 flex gap-2">
-            <Badge variant="outline" className="bg-black/30 border-white/20">
-              MLB
-            </Badge>
+            <Badge variant="outline" className="bg-black/30 border-white/20">MLB</Badge>
             <Badge variant="secondary" className="flex items-center gap-1 bg-edge-secondary">
               <Trophy className="w-4 h-4" /> Game of the Day
             </Badge>
@@ -47,7 +46,9 @@ export function GameCard(p: GameCardProps) {
               <Star className="w-4 h-4 text-yellow-300 fill-yellow-300" /> TOP EDGE
             </Badge>
           </div>
+          {/* main content */}
           <div className="pt-12 px-6 pb-6 flex flex-col h-full space-y-8">
+            {/* header */}
             <header className="space-y-1 mb-8">
               <h3 className="text-3xl font-extrabold tracking-tight">
                 {p.away_team} <span className="opacity-70">@</span> {p.home_team}
@@ -64,16 +65,18 @@ export function GameCard(p: GameCardProps) {
                 })}
               </div>
             </header>
+            {/* stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {(["away", "home"] as const).map((side) => {
                 const isAway = side === "away"
-                const team = isAway ? p.away_team : p.home_team
+                const team    = isAway ? p.away_team  : p.home_team
                 const pitcher = isAway ? p.away_pitcher : p.home_pitcher
-                const mMl = isAway ? p.away_market_ml : p.home_market_ml
-                const mPct = isAway ? awayPct : homePct
-                const prMl = isAway ? p.away_pred_ml : p.home_pred_ml
-                const prPct = isAway ? p.away_pred_pct : p.home_pred_pct
-                const edge = isAway ? p.away_edge_pct : p.home_edge_pct
+                const mMl     = isAway ? p.away_market_ml  : p.home_market_ml
+                const mPct    = isAway ? awayPct            : homePct
+                const prMl    = isAway ? p.away_pred_ml      : p.home_pred_ml
+                const prPct   = isAway ? p.away_pred_pct     : p.home_pred_pct
+                const edge    = isAway ? p.away_edge_pct     : p.home_edge_pct
+
                 return (
                   <div key={side} className="bg-white/10 rounded-lg p-4 flex flex-col space-y-2">
                     <div>
@@ -81,16 +84,19 @@ export function GameCard(p: GameCardProps) {
                       <div className="text-sm text-white/70">{pitcher ?? "TBD"}</div>
                     </div>
                     <div className="flex justify-between items-center text-sm">
+                      {/* Market */}
                       <div className="text-center">
                         <div className="opacity-70">Market</div>
                         <div className="font-medium">{fmtMl(mMl)}</div>
                         <div className="opacity-70">{fmtPct(mPct)}</div>
                       </div>
+                      {/* Predicted */}
                       <div className="text-center">
                         <div className="opacity-70">Predicted</div>
                         <div className="font-medium">{fmtMl(prMl)}</div>
                         <div className="opacity-70">{fmtPct(prPct)}</div>
                       </div>
+                      {/* Edge */}
                       <div className="text-center">
                         <div className="opacity-70">Edge</div>
                         <Badge
@@ -104,19 +110,15 @@ export function GameCard(p: GameCardProps) {
                               : "text-edge-accent"
                           )}
                         >
-                          {edge == null
-                            ? "—"
-                            : edge > 0
-                            ? (
-                              <>
-                                <ArrowUp className="w-4 h-4 inline" /> {(edge * 100).toFixed(1)}%
-                              </>
-                            )
-                            : (
-                              <>
-                                <ArrowDown className="w-4 h-4 inline" /> {(edge * 100).toFixed(1)}%
-                              </>
-                            )}
+                          {edge == null ? "—" : edge > 0 ? (
+                            <>
+                              <ArrowUp className="w-4 h-4 inline" /> {(edge * 100).toFixed(1)}%
+                            </>
+                          ) : (
+                            <>
+                              <ArrowDown className="w-4 h-4 inline" /> {(edge * 100).toFixed(1)}%
+                            </>
+                          )}
                         </Badge>
                       </div>
                     </div>
@@ -126,21 +128,23 @@ export function GameCard(p: GameCardProps) {
             </div>
           </div>
         </AspectRatio>
+        {/* More Info toggle */}
         <CardContent className="pt-4">
           <button onClick={() => setShowInfo(b => !b)} className="text-sm underline">
             {showInfo ? "Hide Info" : "More Info"}
           </button>
         </CardContent>
+        {/* dropdown meters */}
         {showInfo && (
           <CardContent className="pt-2">
-            <div className="flex justify-around items-center">
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-medium">Home Confidence</span>
-                <ConfidenceMeter value={p.home_confidence} />
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm font-medium mb-1">Home Confidence</div>
+                <HorizontalConfidenceMeter value={p.home_confidence} />
               </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-medium">Away Confidence</span>
-                <ConfidenceMeter value={p.away_confidence} />
+              <div>
+                <div className="text-sm font-medium mb-1">Away Confidence</div>
+                <HorizontalConfidenceMeter value={p.away_confidence} />
               </div>
             </div>
           </CardContent>
@@ -149,6 +153,7 @@ export function GameCard(p: GameCardProps) {
     )
   }
 
+  // REGULAR & LOCKED
   const locked = p.variant === "locked"
 
   return (
@@ -175,20 +180,23 @@ export function GameCard(p: GameCardProps) {
         </div>
         {(["away", "home"] as const).map((side) => {
           const isAway = side === "away"
-          const tm = isAway ? p.away_team : p.home_team
-          const ptc = isAway ? p.away_pitcher : p.home_pitcher
-          const mMl = isAway ? p.away_market_ml : p.home_market_ml
-          const mPct = isAway ? p.away_market_pct : p.home_market_pct
-          const prMl = isAway ? p.away_pred_ml : p.home_pred_ml
-          const prPct = isAway ? p.away_pred_pct : p.home_pred_pct
-          const edge = isAway ? p.away_edge_pct : p.home_edge_pct
+          const tm     = isAway ? p.away_team      : p.home_team
+          const ptc    = isAway ? p.away_pitcher    : p.home_pitcher
+          const mMl    = isAway ? p.away_market_ml  : p.home_market_ml
+          const mPct   = isAway ? p.away_market_pct : p.home_market_pct
+          const prMl   = isAway ? p.away_pred_ml    : p.home_pred_ml
+          const prPct  = isAway ? p.away_pred_pct   : p.home_pred_pct
+          const edge   = isAway ? p.away_edge_pct   : p.home_edge_pct
+
           return (
             <div key={side} className="grid grid-cols-4 items-center mb-1">
               <div>
                 <span className="font-medium">{tm}</span><br />
                 <span className="text-xs text-muted-foreground">{ptc ?? "TBD"}</span>
               </div>
-              <div className="text-center">{fmtMl(mMl)}<br /><span className="text-xs">{fmtPct(mPct)}</span></div>
+              <div className="text-center">
+                {fmtMl(mMl)}<br /><span className="text-xs">{fmtPct(mPct)}</span>
+              </div>
               <div className="text-center">
                 {locked ? "—" : (
                   <>
@@ -196,7 +204,8 @@ export function GameCard(p: GameCardProps) {
                   </>
                 )}
               </div>
-              <div className={cn("text-center flex items-center justify-center gap-1",
+              <div className={cn(
+                "text-center flex items-center justify-center gap-1",
                 edge == null ? "" : edge > 0 ? "text-edge-secondary" : "text-edge-accent"
               )}>
                 {edge == null || locked ? "—" : (
@@ -209,26 +218,28 @@ export function GameCard(p: GameCardProps) {
             </div>
           )
         })}
-        <CardContent className="pt-4">
-          <button onClick={() => setShowInfo(b => !b)} className="text-sm underline">
-            {showInfo ? "Hide Info" : "More Info"}
-          </button>
-        </CardContent>
-        {showInfo && (
-          <CardContent className="pt-2">
-            <div className="flex justify-around items-center">
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-medium">Home Confidence</span>
-                <ConfidenceMeter value={p.home_confidence} />
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-medium">Away Confidence</span>
-                <ConfidenceMeter value={p.away_confidence} />
-              </div>
-            </div>
-          </CardContent>
-        )}
       </CardContent>
+      {/* More Info toggle */}
+      <CardContent className="pt-2">
+        <button onClick={() => setShowInfo(b => !b)} className="text-sm underline">
+          {showInfo ? "Hide Info" : "More Info"}
+        </button>
+      </CardContent>
+      {/* dropdown meters */}
+      {showInfo && (
+        <CardContent className="pt-2">
+          <div className="space-y-4">
+            <div>
+              <div className="text-sm font-medium mb-1">Home Confidence</div>
+              <HorizontalConfidenceMeter value={p.home_confidence} />
+            </div>
+            <div>
+              <div className="text-sm font-medium mb-1">Away Confidence</div>
+              <HorizontalConfidenceMeter value={p.away_confidence} />
+            </div>
+          </div>
+        </CardContent>
+      )}
     </Card>
   )
 }
