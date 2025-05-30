@@ -1,9 +1,8 @@
 name: Daily MLB Results Scraper
 
 on:
-  # 07:00 AM CT is 14:00 UTC
   schedule:
-    - cron: '0 12 * * *'
+    - cron: '0 12 * * *'    # 07:00 AM CT
   workflow_dispatch:
 
 jobs:
@@ -15,36 +14,36 @@ jobs:
       PUPPETEER_SKIP_DOWNLOAD:   'true'
 
     steps:
-      # ─── Check out & Node ───
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # ─── Restore npm cache ───
-      - name: Restore npm cache
-        id: cache-npm
+      # ─── Cache workers/node_modules ───
+      - name: Restore workers cache
+        id: cache-workers
         uses: actions/cache@v4
         with:
-          path: ~/.npm
-          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
+          path: workers/node_modules
+          key: linux-npm-workers-${{ hashFiles('workers/package.json') }}-v1
           restore-keys: |
-            linux-npm-
+            linux-npm-workers-
 
-      # ─── Install deps ───
+      # ─── Install in workers/ ───
       - name: Install JS deps (workers/)
         working-directory: workers
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
-      # ─── Save cache if miss ───
-      - name: Save npm cache
-        if: steps.cache-npm.outputs.cache-hit != 'true'
+      # ─── Save cache if it was a miss ───
+      - name: Save workers cache
+        if: steps.cache-workers.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
-          path: ~/.npm
-          key: linux-npm-${{ hashFiles('workers/package-lock.json') }}-v1
+          path: workers/node_modules
+          key: linux-npm-workers-${{ hashFiles('workers/package.json') }}-v1
 
-      # ─── Run the daily‐results scraper ───
+      # ─── Run your scraper ───
       - name: Scrape & save yesterday's results
         working-directory: workers
         run: node scrapeDailyResults.js
