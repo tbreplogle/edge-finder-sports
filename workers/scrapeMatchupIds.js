@@ -112,7 +112,7 @@ export async function scrapeAndSaveTodayMatchups () {
       return { success: false, error: 'No matchups found', matchups: [] };
     }
 
-    /* De-duplicate by matchup_id (in case Covers shows the same box twice) */
+    /* De-duplicate by matchup_id */
     matchups = Array.from(
       new Map(matchups.map(m => [m.matchup_id, m])).values()
     );
@@ -124,17 +124,10 @@ export async function scrapeAndSaveTodayMatchups () {
     }));
 
     console.log(`→ Upserting ${enriched.length} records to Supabase…`);
-     // ── 1️⃣  make sure each (matchup_id, team_side) pair is unique ⟶
-    const deduped = Array.from(
-      new Map(
-         pitcherRows.map(r => [`${r.matchup_id}-${r.team_side}`, r])
-       ).values()
-     );
-
     const { data, error } = await supabase
-       .from('mlb_pitching_matchups')
-       // list *all* columns that make the row unique
-       .upsert(deduped, { onConflict: 'matchup_id,team_side' });
+      .from('mlb_matchups')
+      .upsert(enriched, { onConflict: 'matchup_id' })
+      .select();
 
     if (error) throw error;
 
