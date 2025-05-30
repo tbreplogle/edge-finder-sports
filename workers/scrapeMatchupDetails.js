@@ -1,4 +1,4 @@
-
+//scrapeMatchupDetails.js
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import axiosRetry from 'axios-retry';
@@ -30,9 +30,11 @@ export async function scrapeMatchupDetail(matchupId) {
   
   try {
     const { data: html } = await axios.get(url, {
-      timeout: 30000, // 30 second timeout
+      timeout: 30000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+                      'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+                      'Chrome/96.0.4664.110 Safari/537.36'
       }
     });
     
@@ -92,14 +94,24 @@ export async function scrapeMatchupDetail(matchupId) {
         }
       });
     }
-    
+    const pctEls = $('span.team-consensus strong');
+    const awayTicketPct = pctEls.eq(0).text().trim().replace('%','') || null;
+    const homeTicketPct = pctEls.eq(1).text().trim().replace('%','') || null;
+    // parse into integers
+    const awayTicket = awayTicketPct ? parseInt(awayTicketPct, 10) : null;
+    const homeTicket = homeTicketPct ? parseInt(homeTicketPct,  10) : null;
     return {
       matchupId,
       awayTeam: awayTeamName,
       homeTeam: homeTeamName,
       homePitcher,
       awayPitcher,
-      bullpens
+      bullpens,
+      
+      // ─────────────── NEW FIELDS ───────────────
+      awayTicketPct: awayTicket,
+      homeTicketPct: homeTicket
+      // ────────────────────────────────────────────
     };
   } catch (err) {
     console.error(`❌ Failed to fetch matchup details for ID ${matchupId}:`, err.message);
