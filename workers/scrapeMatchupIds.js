@@ -22,7 +22,7 @@ const TEAM_NAME_TO_ID = {
 };
 
 /*───────────────────────────────────────────────────────────────
-  Scrape Covers.com for today’s matchup IDs
+  Scrape Covers.com for today’s matchup IDs + ticket consensus%
 ───────────────────────────────────────────────────────────────*/
 async function scrapeTodayMatchups () {
   console.log('→ Launching browser and navigating to Covers.com MLB matchups…');
@@ -30,7 +30,7 @@ async function scrapeTodayMatchups () {
   const browser = await puppeteer.launch({
     headless: 'new',
     channel:  'chrome',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox','--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
@@ -46,9 +46,9 @@ async function scrapeTodayMatchups () {
   await page.waitForSelector('a.matchup-btn-link', { timeout: 30_000 });
   await page.waitForTimeout(1_000);
 
-  /* Pass `today` so the fallback works inside the browser context */
+  /* scrape game info + consensus percentages */
   const matchups = await page.$$eval(
-    'article.gamebox',
+    'article.gamebox', 
     (games, today) =>
       games
         .map(game => {
@@ -66,18 +66,37 @@ async function scrapeTodayMatchups () {
           if (!teamsText?.includes('@')) return null;
           const [away_team, home_team] = teamsText
             .split('@')
-            .map(t => t.replace(/\u202F/g, ' ').trim());
+            .map(t => t.replace(/\u202F/g,' ').trim());
 
-          const dateText  = game
+          const dateText = game
             .querySelector('strong.preGame-status')
             ?.innerText.trim();
-          const dt        = dateText
+          const dt = dateText
             ? new Date(`${dateText} ${new Date().getFullYear()}`)
             : null;
-
           const game_date = dt ? dt.toISOString().slice(0, 10) : today;
 
-          return { game_id, matchup_id, away_team, home_team, game_date };
+          // — scrape the two ticket % consensus elements —
+          const pctEls = Array.from(
+            game.querySelectorAll('span.team-consensus strong')
+          );
+          const away_ticket_pct = pctEls[0]
+            ? parseInt(pctEls[0].innerText.replace('%','').trim(), 10)
+            : null;
+          const home_ticket_pct = pctEls[1]
+            ? parseInt(pctEls[1].innerText.replace('%','').trim(), 10)
+            : null;
+          // — end consensus scrape —
+
+          return {
+            game_id,
+            matchup_id,
+            away_team,
+            home_team,
+            game_date,
+            away_ticket_pct,
+            home_ticket_pct
+          };
         })
         .filter(Boolean),
     today
@@ -117,10 +136,13 @@ export async function scrapeAndSaveTodayMatchups () {
       new Map(matchups.map(m => [m.matchup_id, m])).values()
     );
 
+    /* enrich with team IDs + consensus pct */
     const enriched = matchups.map(m => ({
       ...m,
-      away_team_id: TEAM_NAME_TO_ID[m.away_team] ?? null,
-      home_team_id: TEAM_NAME_TO_ID[m.home_team] ?? null
+      away_team_id:    TEAM_NAME_TO_ID[m.away_team] ?? null,
+      home_team_id:    TEAM_NAME_TO_ID[m.home_team] ?? null,
+      away_ticket_pct: m.away_ticket_pct,
+      home_ticket_pct: m.home_ticket_pct
     }));
 
     console.log(`→ Upserting ${enriched.length} records to Supabase…`);
