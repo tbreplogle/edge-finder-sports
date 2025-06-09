@@ -1,143 +1,172 @@
 // workers/scrapeDailyResults.js
-//------------------------------------------------------------
-//  • pulls yesterday’s predictions that actually ran
-//  • keeps only bets with confidence ≥ 7.0
-//  • scrapes final scores from Covers
-//  • calculates P/L on a $100 stake
-//  • inserts rows into mlb_daily_results
-//------------------------------------------------------------
-import puppeteer from "puppeteer";
-import { supabase, testConnection } from "./lib/supabaseClient.js";
+import puppeteer from 'puppeteer';
+import { supabase, testConnection } from './lib/supabaseClient.js';
 
-// ────────────────────────────────────────────────────────────
-// helper: convert American odds → profit on $100 stake
-// ────────────────────────────────────────────────────────────
-function profitFromMoneyline(ml, stake = 100) {
-  return ml > 0 ? (ml / 100) * stake : (100 / Math.abs(ml)) * stake;
+/* ---------------------------------------------------------- */
+/*  1. helpers                                                */
+/* ---------------------------------------------------------- */
+
+/** Midnight-to-midnight ISO strings for “yesterday” in UTC */
+function getYesterdayRange() {
+  const end   = new Date();          // now
+  end.setUTCHours(0, 0, 0, 0);       // today 00:00 UTC
+  const start = new Date(end);       // copy
+  start.setUTCDate(start.getUTCDate() - 1); // yesterday 00:00 UTC
+  return {
+    yDate:   start.toISOString().slice(0, 10),   // YYYY-MM-DD
+    startISO: start.toISOString(),               // YYYY-MM-DDT00:00:00Z
+    endISO:   end.toISOString()                  // today 00:00:00Z
+  };
 }
 
-// ────────────────────────────────────────────────────────────
-async function scrapeYesterdayScores(isoDate) {
-  const url = `https://www.covers.com/sports/mlb/matchups?selectedDate=${isoDate}`;
+/** Convert American odds to profit on \$stake */
+function oddsToProfit(ml, stake = 100) {
+  return ml > 0
+    ?  (ml / 100)      * stake           // under-dog
+    : (100 / Math.abs(ml)) * stake;      // favourite
+}
+
+/* ---------------------------------------------------------- */
+/*  2. scrape yesterday’s final scores from Covers            */
+/* ---------------------------------------------------------- */
+async function scrapeYesterdayScores(date) {
   const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+  await page.setViewport({ width: 1920, height: 1080 });
+  await page.goto(
+    `https://www.covers.com/sports/mlb/matchups?selectedDate=${date}`,
+    { waitUntil: 'networkidle2', timeout: 60000 }
+  );
 
-  const rows = await page.$$eval("article.gamebox", els =>
-    els.flatMap(el => {
-      const link = el.querySelector("a.matchup-btn-link")?.href;
-      const idMatch = link?.match(/\/matchup\/(\d+)$/);
-      const scores = [...el.querySelectorAll(".team-score")].map(e =>
-        parseInt(e.textContent.trim(), 10)
-      );
-      if (!idMatch || scores.length !== 2 || Number.isNaN(scores[0]) || Number.isNaN(scores[1]))
-        return [];
-      return [{ matchup_id: idMatch[1], away_score: scores[0], home_score: scores[1] }];
-    })
+  const rows = await page.$$eval('article.gamebox', boxes =>
+    boxes.map(box => {
+      const link = box.querySelector('a.matchup-btn-link')?.href ?? '';
+      const m    = link.match(/\/matchup\/(\d+)$/);
+      const id   = m ? m[1] : null;
+
+      const scores = Array.from(
+        box.querySelectorAll('.team-score')
+      ).map(el => parseInt(el.textContent.trim(), 10));
+
+      if (!id || scores.length !== 2) return null;
+      return {
+        matchup_id: id,
+        away_score : scores[0],
+        home_score : scores[1]
+      };
+    }).filter(Boolean)
   );
 
   await browser.close();
   return rows;
 }
 
-// ────────────────────────────────────────────────────────────
+/* ---------------------------------------------------------- */
+/*  3. main                                                   */
+/* ---------------------------------------------------------- */
 async function run() {
+  /* ─── DB ready? ────────────────────────────────────────── */
   if (!(await testConnection())) {
-    console.error("❌ Supabase connection failed, aborting.");
+    console.error('❌ Supabase connection failed - aborting.');
     process.exit(1);
   }
 
-  // compute yesterday in US-Central (UTC-5/-6)
-  const nowUtc  = new Date();
-  const offset  = 6 * 60 + nowUtc.getTimezoneOffset();          // rough CST/CDT
-  const yester  = new Date(nowUtc.getTime() - (24 + offset / 60) * 3600 * 1000);
-  const isoDate = yester.toISOString().slice(0, 10);            // YYYY-MM-DD
+  /* ─── date literals for yesterday ─────────────────────── */
+  const { yDate, startISO, endISO } = getYesterdayRange();
 
-  // 1) pull yesterday’s predictions WITH market data
+  /* ─── pull predictions generated for yesterday ────────── */
   const { data: preds, error: predErr } = await supabase
-    .from("mlb_predictions_with_market")
+    .from('mlb_predictions_with_market')
     .select(`
       matchup_id,
-      game_date,
+      game_time_ct,
       home_confidence,
       away_confidence,
       home_pred_ml,
       away_pred_ml
     `)
-    .eq("game_date", isoDate);                                   // *** key change ***
+    .gte('game_time_ct', startISO)
+    .lt('game_time_ct', endISO);
 
   if (predErr) throw predErr;
 
-  // 2) confidence filter (≥ 7.0)
-  const bets = preds.filter(p =>
-    Math.max(p.home_confidence ?? 0, p.away_confidence ?? 0) >= 7
-  );
-  if (!bets.length) {
-    console.log(`No ≥7-confidence predictions for ${isoDate}`);
-    return;
-  }
-
-  // 3) lookup matchup → teams
+  /* ─── matchups table (team IDs) ───────────────────────── */
   const { data: metas, error: metaErr } = await supabase
-    .from("mlb_matchups")
-    .select("matchup_id, home_team_id, away_team_id")
-    .eq("game_date", isoDate);
+    .from('mlb_matchups')
+    .select('matchup_id, home_team_id, away_team_id')
+    .eq('game_date', yDate);
 
   if (metaErr) throw metaErr;
-  const metaById = Object.fromEntries(metas.map(m => [m.matchup_id, m]));
 
-  // 4) scrape scores
-  const scores = await scrapeYesterdayScores(isoDate);
-  const scoreById = Object.fromEntries(scores.map(s => [s.matchup_id, s]));
+  const metaById = Object.fromEntries(
+    metas.map(m => [m.matchup_id, m])
+  );
 
-  // 5) build result rows
-  const rows = bets.flatMap(p => {
-    const meta = metaById[p.matchup_id];
-    const sc   = scoreById[p.matchup_id];
-    if (!meta || !sc) return [];
+  /* ─── only high-confidence edges ( >= 7 ) ─────────────── */
+  const toBet = preds.filter(p =>
+    Math.max(p.home_confidence ?? 0, p.away_confidence ?? 0) >= 7
+  );
 
-    const homeBetter = (p.home_confidence ?? 0) > (p.away_confidence ?? 0);
-    const chosen_ml  = homeBetter ? p.home_pred_ml : p.away_pred_ml;
-    if (chosen_ml == null) return [];                             // skip if ML missing
-
-    const stake      = 100;
-    const homeWon    = sc.home_score > sc.away_score;
-    const betWon     = homeBetter === homeWon;
-    const profit     = betWon ? profitFromMoneyline(chosen_ml, stake) : -stake;
-
-    return [{
-      matchup_id:      p.matchup_id,
-      game_date:       isoDate,
-      chosen_team_id:  homeBetter ? meta.home_team_id : meta.away_team_id,
-      confidence:      Math.max(p.home_confidence, p.away_confidence),
-      moneyline:       chosen_ml,
-      stake,
-      profit:          +profit.toFixed(2),
-      outcome:         betWon ? "win" : "loss"
-    }];
-  });
-
-  if (!rows.length) {
-    console.log(`Nothing to insert for ${isoDate}`);
+  if (toBet.length === 0) {
+    console.log(`No ≥7-confidence bets for ${yDate}`);
     return;
   }
 
-  // 6) insert
-  const { error: insErr } = await supabase.from("mlb_daily_results").insert(rows);
-  if (insErr) throw insErr;
+  /* ─── final scores scrape ─────────────────────────────── */
+  const scores = await scrapeYesterdayScores(yDate);
+  const scoreById = Object.fromEntries(
+    scores.map(s => [s.matchup_id, s])
+  );
 
-  console.log(`✅ Inserted ${rows.length} results for ${isoDate}`);
+  /* ─── assemble P/L rows ───────────────────────────────── */
+  const stake = 100;
+  const rows = toBet.map(p => {
+    const meta  = metaById[p.matchup_id];
+    const score = scoreById[p.matchup_id];
+    if (!meta || !score) return null;
+
+    const betHome   = (p.home_confidence ?? 0) >= (p.away_confidence ?? 0);
+    const chosenML  = betHome ? p.home_pred_ml : p.away_pred_ml;
+    const winnerIsHome = score.home_score > score.away_score;
+    const win        = winnerIsHome === betHome;
+
+    return {
+      matchup_id       : p.matchup_id,
+      game_date        : yDate,
+      chosen_team_id   : betHome ? meta.home_team_id : meta.away_team_id,
+      confidence       : Math.max(p.home_confidence, p.away_confidence),
+      moneyline        : chosenML,
+      stake,
+      profit           : win ? +oddsToProfit(chosenML, stake).toFixed(2) : -stake,
+      outcome          : win ? 'win' : 'loss'
+    };
+  }).filter(Boolean);
+
+  /* ─── insert into mlb_daily_results ───────────────────── */
+  if (!rows.length) {
+    console.warn('No complete rows to insert – aborting write.');
+    return;
+  }
+
+  const { error: insErr } = await supabase
+    .from('mlb_daily_results')
+    .insert(rows);
+
+  if (insErr) throw insErr;
+  console.log(`✅ Saved ${rows.length} results for ${yDate}`);
 }
 
-// ── run if called directly
-if (import.meta.url.endsWith("scrapeDailyResults.js")) {
+/* ---------------------------------------------------------- */
+/*  4. run if executed directly                               */
+/* ---------------------------------------------------------- */
+if (import.meta.url.endsWith('scrapeDailyResults.js')) {
   run()
     .then(() => process.exit(0))
     .catch(err => {
-      console.error("❌", err);
+      console.error('❌', err);
       process.exit(1);
     });
 }
