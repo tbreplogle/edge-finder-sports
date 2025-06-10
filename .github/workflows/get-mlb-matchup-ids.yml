@@ -2,8 +2,8 @@ name: Daily MLB Matchup IDs Scraper
 
 on:
   schedule:
-    - cron: '0  14 * * *'   # 09:00 AM CT
-    - cron: '15 14 * * *'   # 09:15 AM CT
+    - cron: '0  15 * * *'   # 09:00 AM CT
+    - cron: '15 15 * * *'   # 09:15 AM CT
   workflow_dispatch:
 
 
