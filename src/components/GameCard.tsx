@@ -230,13 +230,13 @@ export function GameCard(p: GameCardProps) {
       {showInfo && (
         <CardContent className="pt-2">
           <div className="space-y-4">
+          <div>
+              <div className="text-sm font-medium mb-1">Away Confidence</div>
+              <HorizontalConfidenceMeter value={p.away_confidence} />
+            </div>
             <div>
               <div className="text-sm font-medium mb-1">Home Confidence</div>
               <HorizontalConfidenceMeter value={p.home_confidence} />
-            </div>
-            <div>
-              <div className="text-sm font-medium mb-1">Away Confidence</div>
-              <HorizontalConfidenceMeter value={p.away_confidence} />
             </div>
           </div>
         </CardContent>
