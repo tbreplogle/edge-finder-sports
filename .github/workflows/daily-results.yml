@@ -2,7 +2,7 @@ name: Daily MLB Results Scraper
 
 on:
   schedule:
-    - cron: '0 12 * * *'    # 07:00 AM CT
+    - cron: '0 14 * * *'    # 07:00 AM CT
   workflow_dispatch:
 
 jobs:

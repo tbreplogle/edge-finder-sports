@@ -8,7 +8,7 @@ import { supabase, testConnection } from "./lib/supabaseClient.js";
 /* -------------------------------------------------------------------------- */
 /* Config                                                                     */
 /* -------------------------------------------------------------------------- */
-const ODDS_API_KEY = "ca659a5203c1cfc6a0275ebd54c57262";
+const ODDS_API_KEY = "907b67e00fc14e6f4a501355026dba0e";
 const ODDS_API_URL = "https://api.the-odds-api.com/v4/sports";
 const SPORT_KEY = "baseball_mlb";
 
