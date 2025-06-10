@@ -1,7 +1,7 @@
-// src/utils/fetchMlbPredictions.ts
+//fetchMlbPredictions.ts
 import { supabase } from "@/integrations/supabase/client";
 
-/* ─ helpers ───────────────────────────────────────────────────── */
+/* ─ helpers ─────────────────────────────────────────────────────────────── */
 const mlToPct = (ml: number | null) =>
   ml == null ? null : ml > 0 ? 100 / (ml + 100) : Math.abs(ml) / (Math.abs(ml) + 100);
 
@@ -12,14 +12,12 @@ const pctToMl = (p: number | null) =>
     ? -Math.round((p / (1 - p)) * 100)
     : Math.round(((1 - p) / p) * 100);
 
-/* ─ types ─────────────────────────────────────────────────────── */
+/* ─ types ────────────────────────────────────────────────────────────────── */
 export interface ProcessedMlbPrediction {
   matchup_id: string;
   game_id: string;
   game_time_ct: string;
 
-  home_team_id: number;   // NEW
-  away_team_id: number;   // NEW
   home_team: string;
   away_team: string;
 
@@ -36,42 +34,24 @@ export interface ProcessedMlbPrediction {
   home_edge_pct: number | null;
   away_edge_pct: number | null;
 
-  home_confidence: number;
-  away_confidence: number;
+  home_confidence: number
+  away_confidence: number
 
   home_pitcher: string | null;
   away_pitcher: string | null;
 }
 
-/* ─ fetcher ───────────────────────────────────────────────────── */
+/* ─ fetcher ─────────────────────────────────────────────────────────────── */
 export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
-  // 1) query the view
+  // 1.  Query the view directly (no RPC)  
   const { data, error } = await supabase
     .from("mlb_predictions_with_market")
-    .select(`
-      matchup_id,
-      game_id,
-      game_time_ct,
-      home_team_id,           -- make sure these columns exist in the view
-      away_team_id,
-      home_team,
-      away_team,
-      home_market_ml,
-      away_market_ml,
-      home_market_pct,
-      away_market_pct,
-      home_pred_pct,
-      away_pred_pct,
-      home_pitcher,
-      away_pitcher,
-      home_confidence,
-      away_confidence
-    `);
+    .select("*");
 
   if (error) throw new Error(error.message);
   if (!data)   return [];
 
-  // 2) massage fields for the frontend
+  // 2.  Massage fields for the frontend
   return data.map((r: any) => {
     const homeMktPct = r.home_market_pct ?? mlToPct(r.home_market_ml);
     const awayMktPct = r.away_market_pct ?? mlToPct(r.away_market_ml);
@@ -84,8 +64,6 @@ export async function fetchMlbPredictions(): Promise<ProcessedMlbPrediction[]> {
       game_id:     r.game_id,
       game_time_ct:r.game_time_ct,
 
-      home_team_id:r.home_team_id,   // NEW
-      away_team_id:r.away_team_id,   // NEW
       home_team:   r.home_team,
       away_team:   r.away_team,
 

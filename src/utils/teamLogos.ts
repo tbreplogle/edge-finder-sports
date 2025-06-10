@@ -1,4 +1,4 @@
-// src/constants/teamLogos.ts
+// src/utils/teamLogos.ts
 /**
  * Maps internal `teams_mlb.team_id` → Covers.com SVG logo URL.
  * If you add expansion clubs later, just append to this object.
