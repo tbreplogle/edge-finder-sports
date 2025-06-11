@@ -30,7 +30,8 @@ async function lockDailyBets() {
       home_market_ml,
       away_market_ml,
       home_team,
-      away_team
+      away_team,
+      pred_total
     `)
     .gte('game_time_ct', `${today}T00:00:00-05:00`)
     .lt ('game_time_ct', `${today}T23:59:59-05:00`);
@@ -70,7 +71,10 @@ async function lockDailyBets() {
         confidence : Math.max(r.home_confidence, r.away_confidence),
         moneyline,
         stake,
-        to_win     : 100
+        to_win     : 100,
+        pred_total
+
+
       };
     });
 
