@@ -2,11 +2,11 @@ name: MLB – lock bets & grade results
 
 on:
   schedule:
-    # 12 PM Central  (17 UTC summer, 18 UTC winter)
+    # 17 UTC = 12 PM CDT / 11 AM CST  → lock today’s bets
     - cron: '0 17 * * *'
-    # 09 AM Central  (14 UTC winter, 15 UTC summer)
+    # 15 UTC = 10 AM CDT / 09 AM CST  → grade yesterday’s bets
     - cron: '0 15 * * *'
-  workflow_dispatch:
+  workflow_dispatch:           # lets you trigger either job manually
 
 jobs:
   run:
@@ -17,12 +17,12 @@ jobs:
       PUPPETEER_SKIP_DOWNLOAD:    'true'
 
     steps:
-      # ── checkout & Node version ───────────────────────────
+      # ───────── Checkout & Node ─────────
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 18 }
 
-      # ── Restore workers/ cache ───────────────────────────
+      # ───────── Restore workers/ cache ─────────
       - name: Restore npm cache (workers/)
         id: cache-workers
         uses: actions/cache@v4
@@ -32,20 +32,16 @@ jobs:
           restore-keys: |
             linux-npm-workers-
 
-      # ── Install deps (lock-file optional) ────────────────
+      # ───────── Install deps once (≈ fast after cache) ─────────
       - name: Install JS deps (workers/)
         working-directory: workers
-        # If we have a lock-file: npm ci  • else: npm install
         run: |
           if [ -f package-lock.json ]; then
-            echo "▶︎ package-lock.json found – using npm ci"
             npm ci --no-audit --no-fund
           else
-            echo "▶︎ No lock-file – using npm install"
             npm install --no-audit --no-fund
           fi
 
-      # ── Save cache if miss ───────────────────────────────
       - name: Save workers cache
         if: steps.cache-workers.outputs.cache-hit != 'true'
         uses: actions/cache@v4
@@ -53,14 +49,19 @@ jobs:
           path: workers/node_modules
           key: linux-npm-workers-${{ hashFiles('workers/package.json', 'workers/package-lock.json') }}-v1
 
-      # ── Decide which script to run by UTC hour ───────────
-      - name: Lock bets at noon / grade results in morning
+      # ───────── Decide which job to run based on cron string ─────────
+      # github.event.schedule is exactly the cron that triggered the run
+      - name: Run locker or grader
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
-          HOUR=$(date -u +"%H")
-          if [ "$HOUR" = "17" ]; then     # 17 UTC = 12 PM CDT
-            echo "▶︎ Noon CT – locking bets"
+          echo "Triggered by schedule: $SCHEDULE"
+          if [[ "$SCHEDULE" == "0 17 * * *" ]]; then
+            echo "▶︎ 12 PM CT — locking bets"
             node workers/lockDailyBets.js
+          elif [[ "$SCHEDULE" == "0 15 * * *" ]]; then
+            echo "▶︎ 09 AM CT — grading yesterday"
+            node workers/gradeDailyBets.js
           else
-            echo "▶︎ Morning CT – grading yesterday"
-            node workers/scrapeDailyResults.js
+            echo "Unexpected schedule; doing nothing." && exit 1
           fi
