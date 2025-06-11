@@ -1,15 +1,15 @@
 // workers/syncCfbSeasonMetrics.js
-// at top of syncCfbSeasonMetrics.js
+// OPTIONAL: load .env only when the package is present (i.e. local dev)
 try {
     const { config } = await import('dotenv');
     config();
-  } catch (e) {
-    console.log('dotenv not found – assuming env vars are already set');
+  } catch {
+    console.log('dotenv not installed – skipping .env load');
   }
-import fetch from 'node-fetch';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config();
+  
+  import fetch from 'node-fetch';
+  import { createClient } from '@supabase/supabase-js';
+  
 
 /* --- env vars -------------------------------------------------- */
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CFBD_API_KEY } = process.env;
