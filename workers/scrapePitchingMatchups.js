@@ -41,98 +41,115 @@
      ).values());
    }
    
-   /* ─────────────────────────────────────────────────────────────
-      2)  Scrape a single Covers matchup page
-      ────────────────────────────────────────────────────────────*/
-   async function scrapeMatchupPage (page, { matchup_id, game_id }) {
-     const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
-     console.log(`→ Loading ${url}`);
-     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60_000 });
-     await page.waitForSelector('a[href="#away-team-last-5"]', { timeout: 30_000 });
-   
-     const rows = [];
-   
-     for (const role of ['away', 'home']) {
-       const tabId = role === 'away' ? '#away-team-last-5' : '#home-team-last-5';
-   
-       /* team name / id */
-       let team_name = null;
-       let team_id   = null;
-       try {
-         team_name = await page.$eval(
-           `a[href="${tabId}"]`,
-           el => el.innerText.trim().toUpperCase()
-         );
-         team_id = TEAM_ALT_NAME_TO_ID[team_name] ?? null;
-       } catch {/* no team header, skip */ }
-   
-       /* pitcher name (required) */
-       let pitcher_name;
-       try {
-         pitcher_name = await page.$eval(
-           `${tabId} a.anchor-with-border`,
-           el => el.innerText.trim()
-         );
-       } catch { continue; }
-   
-       /* find the “last-X avg” row */
-       const rowHandle = await page.$$eval(
-         `${tabId} table tr`,
-         trs => {
-           for (const tr of trs) {
-             const b = tr.querySelector('td b');
-             if (!b) continue;
-             const t = b.textContent.trim().toLowerCase();
-             if (t.includes('last') && t.includes('avg')) return tr.innerHTML;
-           }
-           return null;
-         }
-       );
-   
-       if (!rowHandle) continue;
-   
-       /* extract the ten numeric cells in that row */
-       const nums = await page.evaluate(html => {
-         const div = document.createElement('table');
-         div.innerHTML = html;
-         return Array.from(div.querySelectorAll('td b'))
-           .slice(1)          // skip label cell
-           .map(b => parseFloat(b.textContent.trim()) || 0);
-       }, rowHandle);
-   
-       if (nums.length < 10) continue;   // unexpected layout
-   
-       const [ip, h, r, er, so, bb, hr, pit, pip, gbfb] = nums;
-   
-       const era      = ip ? +((er / ip) * 9).toFixed(2) : null;
-       const era_plus = era ? Math.round((100 * 4.1) / era) : null;
-       const whip     = ip ? +(((bb + h) / ip).toFixed(3)) : null;
-   
-       rows.push({
-         game_id,
-         matchup_id,
-         pitcher_role: role,
-         team_name,
-         team_id,
-         pitcher_name,
-         ip,
-         h,
-         r,
-         er,
-         so,
-         bb,
-         hr,
-         pit,
-         pip,
-         gbfb,
-         era,
-         era_plus,
-         whip
-       });
-     }
-   
-     return rows;
-   }
+/*───────────────────────────────────────────────────────────────
+  2) Scrape a single Covers matchup page  (patched)
+───────────────────────────────────────────────────────────────*/
+async function scrapeMatchupPage(page, { matchup_id, game_id }) {
+  const url = `https://www.covers.com/sport/baseball/mlb/matchup/${matchup_id}`;
+  console.log(`→ Loading ${url}`);
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: 60_000 });
+  await page.waitForSelector('a[href="#away-team-last-5"]', { timeout: 30_000 });
+
+  /* helper: “4.1” → 4 + 1/3, “3.2” → 3 + 2/3 */
+  const toDecInnings = ipRaw => {
+    if (ipRaw == null) return null;
+    const [whole, frac = '0'] = ipRaw.toString().split('.');
+    const outs = Number(frac);
+    return Number(whole) + outs / 3;
+  };
+
+  const rows = [];
+
+  for (const role of ['away', 'home']) {
+    const tabId = role === 'away' ? '#away-team-last-5' : '#home-team-last-5';
+
+    /* ◼ team  -------------------------------------------------- */
+    let team_name = null;
+    let team_id   = null;
+    try {
+      team_name = await page.$eval(
+        `a[href="${tabId}"]`,
+        el => el.innerText.trim().toUpperCase()
+      );
+      team_id = TEAM_ALT_NAME_TO_ID[team_name] ?? null;
+    } catch {/* ignore if missing */ }
+
+    /* ◼ pitcher name  ---------------------------------------- */
+    let pitcher_name;
+    try {
+      pitcher_name = await page.$eval(
+        `${tabId} a.anchor-with-border`,
+        el => el.innerText.trim()
+      );
+    } catch { continue; }
+
+    /* ◼ ERA from “record-block” ------------------------------- */
+    const era = await page.$$eval(
+      `${tabId} .record-block`,
+      blocks => {
+        for (const blk of blocks) {
+          const label = blk.querySelector('.record-label')?.innerText.trim();
+          if (label && label.toUpperCase() === 'ERA') {
+            const val = blk.querySelector('.record-value')?.innerText.trim();
+            return parseFloat(val);
+          }
+        }
+        return null;
+      }
+    );
+
+    /* ◼ find the “Last 5 Avg.” row in the table --------------- */
+    const avgRowHTML = await page.$$eval(
+      `${tabId} table tr`,
+      trs => {
+        for (const tr of trs) {
+          const bold = tr.querySelector('td b');
+          if (bold && /last\s+\d+\s+avg/i.test(bold.textContent)) {
+            return tr.innerHTML;
+          }
+        }
+        return null;
+      }
+    );
+    if (!avgRowHTML) continue;
+
+    /* ten numeric cells from that row ------------------------ */
+    const nums = await page.evaluate(html => {
+      const tbl = document.createElement('table');
+      tbl.innerHTML = html;
+      return Array.from(tbl.querySelectorAll('td b'))
+        .slice(1)                              // skip label
+        .map(b => parseFloat(b.textContent.trim()) || 0);
+    }, avgRowHTML);
+
+    if (nums.length < 10) continue;            // unexpected layout
+    const [ipRaw, h, r, er, so, bb, hr, pit, pip, gbfb] = nums;
+
+    /* convert innings to decimal before WHIP calc ------------ */
+    const ipDec = toDecInnings(ipRaw);
+    const whip  = ipDec ? +(((bb + h) / ipDec).toFixed(3)) : null;
+    const era_plus = era ? Math.round((100 * 4.10) / era) : null;
+
+    rows.push({
+      game_id,
+      matchup_id,
+      pitcher_role : role,
+      team_name,
+      team_id,
+      pitcher_name,
+
+      ip           : ipRaw,       // keep original “4.1” style if you want
+      h, r, er, so, bb, hr, pit, pip, gbfb,
+
+      era,                       // ← scraped exact ERA
+      era_plus,
+      whip
+    });
+  }
+
+  return rows;
+}
+
    
    /* ─────────────────────────────────────────────────────────────
       3)  Master routine
