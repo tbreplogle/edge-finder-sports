@@ -1,10 +1,11 @@
 // workers/syncCfbGames.js
 // ────────────────────────────────────────────────────────────────
-// Upserts every FBS game for a given season into cfb.team_games.
-// Default = current year; override via CLI arg.
+// • Pull FBS games for a season from CFBD
+// • Auto-insert any team_id not yet in cfb.teams
+// • Upsert into cfb.team_games
 // ────────────────────────────────────────────────────────────────
 
-try { (await import('dotenv')).config(); } catch {/* no dotenv on CI */}
+try { (await import('dotenv')).config(); } catch {/* CI has env vars */}
 
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
@@ -16,17 +17,49 @@ const supabase = createClient(
   { auth: { persistSession: false }, db: { schema: 'cfb' } }
 );
 
-const targetSeason = Number(process.argv[2]) || new Date().getFullYear();
+const season = Number(process.argv[2]) || new Date().getFullYear();
 
-async function run() {
-  const url = `https://api.collegefootballdata.com/games?year=${targetSeason}&classification=fbs`;
+// ── helper: fetch schedule ──────────────────────────────────────
+async function fetchSchedule() {
+  const url = `https://api.collegefootballdata.com/games?year=${season}&classification=fbs`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } });
   if (!res.ok) throw new Error(`CFBD ${res.status}: ${await res.text()}`);
-  const games = await res.json();               // array of games
+  return res.json();           // array of games
+}
 
-  if (!games.length) { console.log('No games returned.'); return; }
+// ── helper: insert unknown teams ────────────────────────────────
+async function ensureTeamsExist(games) {
+  const seen = new Map();                           // id → {name, conf, div}
 
-  const rows = games.map(g => ({
+  games.forEach(g => {
+    seen.set(g.homeId, { name: g.homeTeam, conf: g.homeConference, div: g.homeClassification });
+    seen.set(g.awayId, { name: g.awayTeam, conf: g.awayConference, div: g.awayClassification });
+  });
+
+  const allIds = [...seen.keys()];
+  const { data: known, error: kErr } = await supabase.from('teams').select('team_id');
+  if (kErr) throw kErr;
+
+  const knownSet = new Set(known.map(t => t.team_id));
+  const newRows = allIds
+    .filter(id => !knownSet.has(id))
+    .map(id => ({
+      team_id:    id,
+      team_name:  seen.get(id).name || `UNKNOWN_${id}`,
+      conference: seen.get(id).conf || 'Unknown',
+      division:   seen.get(id).div  || 'fbs'
+    }));
+
+  if (newRows.length) {
+    const { error } = await supabase.from('teams').upsert(newRows);
+    if (error) throw error;
+    console.log(`ℹ️  Inserted ${newRows.length} previously-unknown team IDs`);
+  }
+}
+
+// ── helper: build game rows ─────────────────────────────────────
+function mapGame(g) {
+  return {
     id:                   g.id,
     season:               g.season,
     week:                 g.week,
@@ -47,14 +80,23 @@ async function run() {
     away_points:          g.awayPoints,
 
     updated_at:           new Date().toISOString()
-  }));
+  };
+}
 
+// ── main run ────────────────────────────────────────────────────
+async function run() {
+  const games = await fetchSchedule();
+  if (!games.length) { console.log('No games returned.'); return; }
+
+  await ensureTeamsExist(games);
+
+  const rows = games.map(mapGame);
   const { error, count } = await supabase
     .from('team_games')
     .upsert(rows, { ignoreDuplicates: false, count: 'exact' });
 
   if (error) throw error;
-  console.log(`✅ Upserted ${count} game rows for ${targetSeason}`);
+  console.log(`✅ Upserted ${count} game rows for ${season}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
