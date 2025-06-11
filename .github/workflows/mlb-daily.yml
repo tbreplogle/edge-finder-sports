@@ -2,11 +2,11 @@ name: MLB – lock bets & grade results
 
 on:
   schedule:
-    # 17 UTC = 12 PM CDT / 11 AM CST  → lock today’s bets
+    # ─── 12 PM Central (17 UTC summer, 18 UTC winter) ───
     - cron: '0 17 * * *'
-    # 15 UTC = 10 AM CDT / 09 AM CST  → grade yesterday’s bets
+    # ─── 09 AM Central (15 UTC summer, 14 UTC winter) ───
     - cron: '0 15 * * *'
-  workflow_dispatch:           # lets you trigger either job manually
+  workflow_dispatch:              # allow manual run from UI
 
 jobs:
   run:
@@ -17,12 +17,16 @@ jobs:
       PUPPETEER_SKIP_DOWNLOAD:    'true'
 
     steps:
-      # ───────── Checkout & Node ─────────
+      # ─────────────────────────────────────────────────────
+      # Checkout + Node
+      # ─────────────────────────────────────────────────────
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 18 }
 
-      # ───────── Restore workers/ cache ─────────
+      # ─────────────────────────────────────────────────────
+      # Re-use workers/node_modules cache
+      # ─────────────────────────────────────────────────────
       - name: Restore npm cache (workers/)
         id: cache-workers
         uses: actions/cache@v4
@@ -32,36 +36,58 @@ jobs:
           restore-keys: |
             linux-npm-workers-
 
-      # ───────── Install deps once (≈ fast after cache) ─────────
       - name: Install JS deps (workers/)
         working-directory: workers
         run: |
           if [ -f package-lock.json ]; then
+            echo "Using npm ci"
             npm ci --no-audit --no-fund
           else
+            echo "No lock-file – using npm install"
             npm install --no-audit --no-fund
           fi
 
-      - name: Save workers cache
+      - name: Save npm cache (workers/)
         if: steps.cache-workers.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: workers/node_modules
           key: linux-npm-workers-${{ hashFiles('workers/package.json', 'workers/package-lock.json') }}-v1
 
-      # ───────── Decide which job to run based on cron string ─────────
-      # github.event.schedule is exactly the cron that triggered the run
+      # ─────────────────────────────────────────────────────
+      # Decide: locker @ noon  or  grader @ next morning
+      # ─────────────────────────────────────────────────────
       - name: Run locker or grader
         env:
-          SCHEDULE: ${{ github.event.schedule }}
+          SCHEDULE: ${{ github.event.schedule }}   # empty for manual runs
         run: |
-          echo "Triggered by schedule: $SCHEDULE"
-          if [[ "$SCHEDULE" == "0 17 * * *" ]]; then
-            echo "▶︎ 12 PM CT — locking bets"
-            node workers/lockDailyBets.js
-          elif [[ "$SCHEDULE" == "0 15 * * *" ]]; then
-            echo "▶︎ 09 AM CT — grading yesterday"
-            node workers/gradeDailyBets.js
+          echo "Triggered by schedule: '$SCHEDULE'"
+
+          if [[ -n "$SCHEDULE" ]]; then
+            # ── Cron-triggered run ────────────────────────
+            if [[ "$SCHEDULE" == "0 17 * * *" ]]; then
+              echo "▶︎ 12 PM CT — locking bets"
+              node workers/lockDailyBets.js
+            elif [[ "$SCHEDULE" == "0 15 * * *" ]]; then
+              echo "▶︎ 09 AM CT — grading yesterday"
+              node workers/gradeDailyBets.js
+            else
+              echo "Unknown cron value '$SCHEDULE'"; exit 1
+            fi
+
           else
-            echo "Unexpected schedule; doing nothing." && exit 1
+            # ── Manual run (workflow_dispatch or re-run) ──
+            HOUR=$(date -u +"%H")
+            echo "Manual run; current UTC hour = $HOUR"
+
+            if [[ "$HOUR" == "17" ]]; then               # ≈ Noon CT
+              echo "▶︎ 12 PM CT — locking bets"
+              node workers/lockDailyBets.js
+            elif [[ "$HOUR" == "15" || "$HOUR" == "14" ]]; then  # 09 AM CT winter/summer
+              echo "▶︎ 09 AM CT — grading yesterday"
+              node workers/gradeDailyBets.js
+            else
+              echo "Run manually at 17 UTC (locker) or 15/14 UTC (grader)."
+              exit 1
+            fi
           fi
