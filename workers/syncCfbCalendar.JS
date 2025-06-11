@@ -6,7 +6,7 @@
 // Usage (local):
 //   node syncCfbCalendar.js [year]
 // ────────────────────────────────────────────────────────────────
-
+//
 try {
     const { config } = await import('dotenv');
     config();
