@@ -72,7 +72,7 @@ async function lockDailyBets() {
         moneyline,
         stake,
         to_win     : 100,
-        pred_total_runs
+        pred_total_runs : r.pred_total_runs
 
 
       };
