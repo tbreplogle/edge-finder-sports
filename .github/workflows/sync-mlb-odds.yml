@@ -2,7 +2,7 @@ name: Sync MLB Odds
 
 on:
   schedule:
-    - cron: '05 17 * * *'          # 09:05 AM CT
+    - cron: '10 17 * * *'          # 09:05 AM CT
   workflow_dispatch:
 
 jobs:

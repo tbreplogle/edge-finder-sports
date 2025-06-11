@@ -2,10 +2,10 @@ name: MLB – lock bets & grade results
 
 on:
   schedule:
-    # ➜ 12:00 PM Central  (17 UTC in summer, 18 UTC in winter)
-    - cron:  '0 17 * * *'
-    # ➜ 09:00 AM Central  (14 UTC winter, 15 UTC summer)
-    - cron:  '0 14 * * *'
+    # 12 PM Central  (17 UTC summer, 18 UTC winter)
+    - cron: '0 17 * * *'
+    # 09 AM Central  (14 UTC winter, 15 UTC summer)
+    - cron: '0 15 * * *'
   workflow_dispatch:
 
 jobs:
@@ -17,17 +17,47 @@ jobs:
       PUPPETEER_SKIP_DOWNLOAD:    'true'
 
     steps:
-      # checkout & deps
+      # ── checkout & Node version ───────────────────────────
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 18 }
-      - run: npm ci --prefix workers
 
-      # choose which script to run based on UTC hour
+      # ── Restore workers/ cache ───────────────────────────
+      - name: Restore npm cache (workers/)
+        id: cache-workers
+        uses: actions/cache@v4
+        with:
+          path: workers/node_modules
+          key: linux-npm-workers-${{ hashFiles('workers/package.json', 'workers/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-workers-
+
+      # ── Install deps (lock-file optional) ────────────────
+      - name: Install JS deps (workers/)
+        working-directory: workers
+        # If we have a lock-file: npm ci  • else: npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "▶︎ package-lock.json found – using npm ci"
+            npm ci --no-audit --no-fund
+          else
+            echo "▶︎ No lock-file – using npm install"
+            npm install --no-audit --no-fund
+          fi
+
+      # ── Save cache if miss ───────────────────────────────
+      - name: Save workers cache
+        if: steps.cache-workers.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: workers/node_modules
+          key: linux-npm-workers-${{ hashFiles('workers/package.json', 'workers/package-lock.json') }}-v1
+
+      # ── Decide which script to run by UTC hour ───────────
       - name: Lock bets at noon / grade results in morning
         run: |
-          hour=$(date -u +'%H')
-          if [[ "$hour" == "17" ]]; then
+          HOUR=$(date -u +"%H")
+          if [ "$HOUR" = "17" ]; then     # 17 UTC = 12 PM CDT
             echo "▶︎ Noon CT – locking bets"
             node workers/lockDailyBets.js
           else

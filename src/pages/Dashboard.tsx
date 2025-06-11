@@ -1,5 +1,6 @@
 /* -------------------------------------------------------------------------- */
-/*  Dashboard – MLB predictions                                               */
+/*  Dashboard – MLB predictions  
+// src/pages/Dashboard.tsx                                             */
 /* -------------------------------------------------------------------------- */
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
