@@ -1,4 +1,11 @@
 // workers/syncCfbSeasonMetrics.js
+// at top of syncCfbSeasonMetrics.js
+try {
+    const { config } = await import('dotenv');
+    config();
+  } catch (e) {
+    console.log('dotenv not found – assuming env vars are already set');
+  }
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';

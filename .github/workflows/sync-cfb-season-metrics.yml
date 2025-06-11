@@ -2,8 +2,8 @@ name: Sync CFB Season Metrics
 
 on:
   schedule:
-    # 12:00 UTC Monday ⇒ 07:00 US-Central
-    - cron:  '0 12 * * 1'
+    
+    - cron:  '0 15 * * 1'
   workflow_dispatch:
 
 jobs:
