@@ -1,0 +1,39 @@
+name: Sync CFB Calendar
+
+on:
+  # Run at 05:00 AM US-Central (11:00 UTC) on the 1st of each month
+  schedule:
+    - cron: '0 11 1 * *'
+  workflow_dispatch:      # manual trigger
+
+jobs:
+  sync-calendar:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CFBD_API_KEY:              ${{ secrets.CFBD_API_KEY }}
+      PUPPETEER_SKIP_DOWNLOAD:   'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 18 }
+
+      - name: Restore npm cache
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
+
+      - name: Install deps (workers/)
+        working-directory: workers
+        run: npm install --no-audit --no-fund
+
+      - name: Sync CFB season calendar
+        working-directory: workers
+        run: node syncCfbCalendar.js 2024   # change arg or omit for current year
