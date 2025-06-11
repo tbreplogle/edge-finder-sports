@@ -25,7 +25,8 @@
          away_pred_ml,
          mlb_matchups!inner(home_team_id, away_team_id)
        `)
-       .eq('game_date', today);
+       .gte('game_time_ct', `${today}T00:00:00-05:00`)   // 00:00 CT
+       .lt ('game_time_ct', `${today}T23:59:59-05:00`);
    
      if (error) throw error;
    
