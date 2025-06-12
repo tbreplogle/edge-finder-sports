@@ -1,0 +1,30 @@
+name: Truncate MLB Tables
+
+# 05:00 AM Central Standard  ==  11:00 UTC
+on:
+  schedule:
+    - cron:  '0 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  truncate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run truncate script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          PGHOST=$(echo $DATABASE_URL | sed -n 's/.*@\(.*\):.*/\1/p')
+          PGPORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+          PGDATABASE=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
+          PGUSER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+          PGPASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
+          export PGSSLMODE=require
+          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" \
+               --file sql/truncate_mlb_tables.sql \
+               --set ON_ERROR_STOP=1

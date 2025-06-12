@@ -1,6 +1,6 @@
 name: MLB Predictions
 
-# Run every day at 10:30 AM Central (CDT = UTC−5 → 13:30 UTC)
+# Run every day at 12:20 PM CT  (17:20 UTC)
 on:
   schedule:
     - cron: '20 17 * * *'
@@ -11,74 +11,73 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Check out your repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    # 1️⃣  Check out your repo
+    - uses: actions/checkout@v4
 
-      # 2) Install psql client + network tools
-      - name: Install PostgreSQL client & network tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client traceroute dnsutils
+    # 2️⃣  Restore cached APT packages (speeds up apt-get install)
+    - name: Restore APT cache
+      id: apt-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
+        key: ${{ runner.os }}-apt-v1
 
-      # 3) Verify network connectivity to your Supabase host
-      - name: Verify database connectivity
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
-          echo "Testing connectivity to $DB_HOST:5432…"
-          # Force IPv4 with -4 flag
-          if nc -4 -zv $DB_HOST 5432 -w 5 > /dev/null 2>&1; then
-            echo "✅ Network connectivity to database verified"
-          else
-            echo "❌ Cannot connect to database server"
-            echo "Resolving $DB_HOST…"
-            # Force IPv4 resolution
-            nslookup -type=A $DB_HOST
-            echo "Tracing route to $DB_HOST (IPv4 only)…"
-            # Force IPv4 with -4 flag
-            traceroute -4 -m 15 $DB_HOST
-            exit 1
-          fi
+    # 3️⃣  Install psql client & network tools
+    - name: Install PostgreSQL client & network tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+             postgresql-client traceroute dnsutils netcat-openbsd
 
-      # 4) Run your predictions SQL against Supabase
-      - name: Run MLB predictions SQL
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          echo "Running MLB predictions SQL…"
-          # Force IPv4 with -h option
-          PGHOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
-          PGPORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-          PGDATABASE=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
-          PGUSER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-          PGPASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
-          
-          # Use -h to force TCP connection and specify IPv4 address in /etc/hosts if needed
-          export PGSSLMODE=require
-          
-          # Get IPv4 address for the host
-          echo "Getting IPv4 address for $PGHOST..."
-          IPV4_ADDRESS=$(dig +short -t A $PGHOST | head -n 1)
-          
-          if [ -z "$IPV4_ADDRESS" ]; then
-            echo "❌ Could not resolve IPv4 address for $PGHOST"
-            exit 1
-          fi
-          
-          echo "Connecting using IPv4 address: $IPV4_ADDRESS"
-          
-          # Add the IPv4 address to /etc/hosts temporarily
-          echo "$IPV4_ADDRESS    $PGHOST" | sudo tee -a /etc/hosts
-          
-           psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
-             --set=ON_ERROR_STOP=1 \
-             -f sql/mlb_predictions.sql || {
-              echo "❌ SQL execution failed"
-              echo "Testing basic connection…"
-              psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
-                -c "SELECT 1;" || echo "Could not connect at all"
-              exit 1
-            }
-          echo "✅ MLB predictions completed successfully"
+    # 4️⃣  Save updated APT cache (runs only if cache key missed)
+    - name: Save APT cache
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
+        key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+
+    # 5️⃣  Verify network connectivity to Supabase
+    - name: Verify database connectivity
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\).*/\1/p')
+        echo "Testing connectivity to $DB_HOST:5432…"
+        if nc -4 -zv "$DB_HOST" 5432 -w 5 >/dev/null 2>&1; then
+          echo "✅ Network connectivity verified"
+        else
+          echo "❌ Cannot reach database"
+          nslookup -type=A "$DB_HOST" || true
+          traceroute -4 -m 15 "$DB_HOST" || true
+          exit 1
+        fi
+
+    # 6️⃣  Run MLB-predictions SQL
+    - name: Run MLB predictions SQL
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\).*/\1/p')
+        PGPORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+        PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+        PGUSER=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+        PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
+
+        export PGSSLMODE=require
+
+        echo "▶︎ Deleting today’s predictions"
+        psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
+          --set=ON_ERROR_STOP=1 \
+          -c "DELETE FROM public.mlb_predictions WHERE game_date = CURRENT_DATE;"
+
+        echo "▶︎ Running MLB predictions SQL…"
+        psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
+          --set=ON_ERROR_STOP=1 \
+          -f sql/mlb_predictions.sql
+
+        echo "✅ MLB predictions completed successfully"
