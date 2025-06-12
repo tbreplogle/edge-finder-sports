@@ -1,30 +1,64 @@
 name: Truncate MLB Tables
 
-# 05:00 AM Central Standard  ==  11:00 UTC
+# 05:00 AM Central Standard  (= 11:00 UTC)
 on:
   schedule:
-    - cron:  '0 11 * * *'
+    - cron: '0 11 * * *'
   workflow_dispatch:
 
 jobs:
   truncate:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+    # 1️⃣  Check out repo (not strictly needed but nice for consistency)
+    - uses: actions/checkout@v4
 
-      - name: Install psql client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+    # 2️⃣  Restore APT cache to skip most of apt-get download time
+    - name: Restore APT cache
+      id: apt-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
+        key: ${{ runner.os }}-apt-psql-v1
 
-      - name: Run truncate script
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          PGHOST=$(echo $DATABASE_URL | sed -n 's/.*@\(.*\):.*/\1/p')
-          PGPORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-          PGDATABASE=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
-          PGUSER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-          PGPASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
-          export PGSSLMODE=require
-          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" \
-               --file sql/truncate_mlb_tables.sql \
-               --set ON_ERROR_STOP=1
+    # 3️⃣  Install psql client (will be fast if cache hit)
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends postgresql-client
+
+    # 4️⃣  Save updated APT cache (only runs when key missed)
+    - name: Save APT cache
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
+        key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+
+    # 5️⃣  Truncate the five tables
+    - name: Truncate MLB tables
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\).*/\1/p')
+        PGPORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+        PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+        PGUSER=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+        PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
+        export PGSSLMODE=require
+
+        cat <<'SQL' | psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" --set ON_ERROR_STOP=1
+        TRUNCATE TABLE
+            public.mlb_team_hitting_stats,
+            public.mlb_predictions,
+            public.mlb_matchups,
+            public.mlb_market_odds,
+            public.pitching_matchups;
+        SQL
+
+        echo "✅ Tables truncated at $(date -u)"
