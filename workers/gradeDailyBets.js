@@ -4,7 +4,7 @@
     • Scrapes final scores from Covers.com
     • Saves P/L rows to public.mlb_daily_results
 */
-
+//
 import puppeteer from 'puppeteer';
 import { supabase, testConnection } from './lib/supabaseClient.js';
 
