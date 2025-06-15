@@ -43,7 +43,7 @@ WITH ratings AS (
   JOIN   mlb_matchups      m  ON m.matchup_id = pm.matchup_id
   JOIN   mlb_team_hitting_stats hs
          ON hs.team_id        = pm.team_id
-        AND hs.game_date      = m.game_date
+        
         AND hs.timeframe_days = 14
 ),
 
@@ -91,7 +91,6 @@ last14 AS (
     ops               AS ops_14
   FROM mlb_team_hitting_stats
   WHERE timeframe_days = 14
-    AND game_date      = CURRENT_DATE   -- same day slate
 ),
 sp AS (
   SELECT
@@ -100,7 +99,6 @@ sp AS (
     pm.era
   FROM   pitching_matchups pm
   JOIN   mlb_matchups m ON m.matchup_id = pm.matchup_id
-  WHERE  m.game_date = CURRENT_DATE
 ),
 totals AS (
   /* one row per matchup with the calculated total */
@@ -120,7 +118,6 @@ totals AS (
                       AND sp_home.pitcher_role = 'home'
   LEFT JOIN sp sp_away ON sp_away.matchup_id = mu.matchup_id
                       AND sp_away.pitcher_role = 'away'
-  WHERE  mu.game_date = CURRENT_DATE          -- today’s slate only
 ),
 
 /*----------------------------------------------------------------
