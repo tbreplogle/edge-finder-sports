@@ -1,6 +1,6 @@
 name: MLB Predictions
 
-# Run every day at 12:20 PM CT  (17:20 UTC)
+# Run every day at 12:20 PM CT (17:20 UTC)
 on:
   schedule:
     - cron: '20 17 * * *'
@@ -57,7 +57,7 @@ jobs:
           exit 1
         fi
 
-    # 6️⃣  Run MLB-predictions SQL
+    # 6️⃣  Run MLB-predictions SQL (no pre-run delete)
     - name: Run MLB predictions SQL
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -69,11 +69,6 @@ jobs:
         PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
 
         export PGSSLMODE=require
-
-        echo "▶︎ Deleting today’s predictions"
-        psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
-          --set=ON_ERROR_STOP=1 \
-          -c "DELETE FROM public.mlb_predictions WHERE game_date = CURRENT_DATE;"
 
         echo "▶︎ Running MLB predictions SQL…"
         psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD sslmode=require" \
