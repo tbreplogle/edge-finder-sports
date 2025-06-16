@@ -1,5 +1,5 @@
 -- ================================================================
---  sql/mlb_predictions.sql
+--  sql/mlb_predictions.sql               (fixed 2025-06-16)
 --  Run from GitHub Action via:  psql -f sql/mlb_predictions.sql
 -- ================================================================
 
@@ -9,18 +9,20 @@
 CREATE TABLE IF NOT EXISTS public.mlb_predictions (
   matchup_id       TEXT    NOT NULL,
   team_id          INT     NOT NULL,
+  game_date        DATE    NOT NULL,          -- 🆕 actual game day
   rating           NUMERIC,
   adjusted_rating  NUMERIC,
   win_pct          NUMERIC,
   moneyline        INT,
-  pred_total       NUMERIC,          -- 🆕  new column
+  pred_total       NUMERIC,
   created_at       TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (matchup_id, team_id)
 );
 
--- add column if table was created earlier
+-- add columns that might be missing on an older table
 ALTER TABLE public.mlb_predictions
-  ADD COLUMN IF NOT EXISTS pred_total NUMERIC;
+  ADD COLUMN IF NOT EXISTS game_date   DATE,
+  ADD COLUMN IF NOT EXISTS pred_total  NUMERIC;
 
 /*----------------------------------------------------------------
   1) Raw rating (capped at 143) + 14-day hitting adjust
@@ -43,7 +45,6 @@ WITH ratings AS (
   JOIN   mlb_matchups      m  ON m.matchup_id = pm.matchup_id
   JOIN   mlb_team_hitting_stats hs
          ON hs.team_id        = pm.team_id
-        
         AND hs.timeframe_days = 14
 ),
 
@@ -83,12 +84,12 @@ prob AS (
 ),
 
 /*----------------------------------------------------------------
-  4) Helper CTEs for TOTAL runs prediction
+  4) Helper CTEs for TOTAL-runs prediction
 ----------------------------------------------------------------*/
 last14 AS (
   SELECT
     team_id,
-    ops               AS ops_14
+    ops AS ops_14
   FROM mlb_team_hitting_stats
   WHERE timeframe_days = 14
 ),
@@ -101,7 +102,6 @@ sp AS (
   JOIN   mlb_matchups m ON m.matchup_id = pm.matchup_id
 ),
 totals AS (
-  /* one row per matchup with the calculated total */
   SELECT
     mu.matchup_id,
     ROUND(
@@ -110,7 +110,7 @@ totals AS (
       + 11.5 * la.ops_14
       +  0.65 * COALESCE(sp_home.era , 4.00)
       +  0.65 * COALESCE(sp_away.era , 4.00)
-  , 1) AS pred_total
+    , 1) AS pred_total
   FROM   mlb_matchups mu
   LEFT JOIN last14    lh ON lh.team_id = mu.home_team_id
   LEFT JOIN last14    la ON la.team_id = mu.away_team_id
@@ -121,14 +121,14 @@ totals AS (
 ),
 
 /*----------------------------------------------------------------
-  5) Convert win % → moneyline  + attach pred_total
+  5) Convert win % → moneyline + attach pred_total + game_date
 ----------------------------------------------------------------*/
 final AS (
   SELECT
     p.matchup_id,
     p.team_id,
     p.rating,
-    p.adj_rating       AS adjusted_rating,
+    p.adj_rating                    AS adjusted_rating,
     p.win_pct,
     /* moneyline clamp */
     LEAST(
@@ -142,9 +142,11 @@ final AS (
         END
       )
     ) AS moneyline,
-    t.pred_total
+    t.pred_total,
+    mu.game_time_ct::date           AS game_date          -- 🆕
   FROM prob p
-  JOIN totals t ON t.matchup_id = p.matchup_id
+  JOIN totals      t   ON t.matchup_id = p.matchup_id
+  JOIN mlb_matchups mu ON mu.matchup_id = p.matchup_id
 )
 
 /*----------------------------------------------------------------
@@ -153,21 +155,23 @@ final AS (
 INSERT INTO public.mlb_predictions (
   matchup_id,
   team_id,
+  game_date,         -- 🆕
   rating,
   adjusted_rating,
   win_pct,
   moneyline,
-  pred_total,        -- 🆕
+  pred_total,
   created_at
 )
 SELECT
   matchup_id,
   team_id,
+  game_date,         -- 🆕
   rating,
   adjusted_rating,
   win_pct,
   moneyline,
-  pred_total,        -- 🆕
+  pred_total,
   now()
 FROM final
 ON CONFLICT (matchup_id, team_id) DO UPDATE
@@ -175,5 +179,6 @@ SET rating          = EXCLUDED.rating,
     adjusted_rating = EXCLUDED.adjusted_rating,
     win_pct         = EXCLUDED.win_pct,
     moneyline       = EXCLUDED.moneyline,
-    pred_total      = EXCLUDED.pred_total,   -- 🆕
+    pred_total      = EXCLUDED.pred_total,
+    game_date       = EXCLUDED.game_date,     -- 🆕
     created_at      = EXCLUDED.created_at;
