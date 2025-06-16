@@ -1,5 +1,5 @@
 -- ================================================================
---  sql/mlb_predictions.sql        (de-duped version – 2025-06-16)
+--  sql/mlb_predictions.sql        (uses mu.game_date – 2025-06-16)
 --  Run from GitHub Action with:  psql -f sql/mlb_predictions.sql
 -- ================================================================
 
@@ -142,7 +142,7 @@ final AS (
       )
     ) AS moneyline,
     t.pred_total,
-    mu.game_time_ct::date           AS game_date
+    mu.game_date                    AS game_date          -- ✅ correct column
   FROM prob p
   JOIN totals      t   ON t.matchup_id = p.matchup_id
   JOIN mlb_matchups mu ON mu.matchup_id = p.matchup_id
