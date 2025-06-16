@@ -1,5 +1,5 @@
 -- ================================================================
---  sql/mlb_predictions.sql        (fully fixed – 2025-06-16)
+--  sql/mlb_predictions.sql        (de-duped version – 2025-06-16)
 --  Run from GitHub Action with:  psql -f sql/mlb_predictions.sql
 -- ================================================================
 
@@ -23,12 +23,6 @@ CREATE TABLE IF NOT EXISTS public.mlb_predictions (
 ALTER TABLE public.mlb_predictions
   ADD COLUMN IF NOT EXISTS game_date   DATE,
   ADD COLUMN IF NOT EXISTS pred_total  NUMERIC;
-
-/*----------------------------------------------------------------
-  0a) Wipe any prior run for **today** (now that the column exists)
-----------------------------------------------------------------*/
-DELETE FROM public.mlb_predictions
-WHERE game_date = CURRENT_DATE;
 
 /*----------------------------------------------------------------
   1) Raw rating (capped at 143) + 14-day hitting adjust
