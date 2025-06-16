@@ -1,6 +1,6 @@
 -- ================================================================
---  sql/mlb_predictions.sql               (fixed 2025-06-16)
---  Run from GitHub Action via:  psql -f sql/mlb_predictions.sql
+--  sql/mlb_predictions.sql        (fully fixed – 2025-06-16)
+--  Run from GitHub Action with:  psql -f sql/mlb_predictions.sql
 -- ================================================================
 
 /*----------------------------------------------------------------
@@ -9,7 +9,7 @@
 CREATE TABLE IF NOT EXISTS public.mlb_predictions (
   matchup_id       TEXT    NOT NULL,
   team_id          INT     NOT NULL,
-  game_date        DATE    NOT NULL,          -- 🆕 actual game day
+  game_date        DATE    NOT NULL,          -- actual game day
   rating           NUMERIC,
   adjusted_rating  NUMERIC,
   win_pct          NUMERIC,
@@ -19,10 +19,16 @@ CREATE TABLE IF NOT EXISTS public.mlb_predictions (
   PRIMARY KEY (matchup_id, team_id)
 );
 
--- add columns that might be missing on an older table
+-- idempotent ALTERs for older tables
 ALTER TABLE public.mlb_predictions
   ADD COLUMN IF NOT EXISTS game_date   DATE,
   ADD COLUMN IF NOT EXISTS pred_total  NUMERIC;
+
+/*----------------------------------------------------------------
+  0a) Wipe any prior run for **today** (now that the column exists)
+----------------------------------------------------------------*/
+DELETE FROM public.mlb_predictions
+WHERE game_date = CURRENT_DATE;
 
 /*----------------------------------------------------------------
   1) Raw rating (capped at 143) + 14-day hitting adjust
@@ -99,7 +105,6 @@ sp AS (
     pm.pitcher_role,
     pm.era
   FROM   pitching_matchups pm
-  JOIN   mlb_matchups m ON m.matchup_id = pm.matchup_id
 ),
 totals AS (
   SELECT
@@ -143,7 +148,7 @@ final AS (
       )
     ) AS moneyline,
     t.pred_total,
-    mu.game_time_ct::date           AS game_date          -- 🆕
+    mu.game_time_ct::date           AS game_date
   FROM prob p
   JOIN totals      t   ON t.matchup_id = p.matchup_id
   JOIN mlb_matchups mu ON mu.matchup_id = p.matchup_id
@@ -155,7 +160,7 @@ final AS (
 INSERT INTO public.mlb_predictions (
   matchup_id,
   team_id,
-  game_date,         -- 🆕
+  game_date,
   rating,
   adjusted_rating,
   win_pct,
@@ -166,7 +171,7 @@ INSERT INTO public.mlb_predictions (
 SELECT
   matchup_id,
   team_id,
-  game_date,         -- 🆕
+  game_date,
   rating,
   adjusted_rating,
   win_pct,
@@ -180,5 +185,5 @@ SET rating          = EXCLUDED.rating,
     win_pct         = EXCLUDED.win_pct,
     moneyline       = EXCLUDED.moneyline,
     pred_total      = EXCLUDED.pred_total,
-    game_date       = EXCLUDED.game_date,     -- 🆕
+    game_date       = EXCLUDED.game_date,
     created_at      = EXCLUDED.created_at;
