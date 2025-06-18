@@ -58,15 +58,18 @@ async function scrapeBox(matchupId, browser) {
 async function gradeAll() {
   if (!(await testConnection())) throw new Error('DB connection failed');
 
-  const { data:bets } = await supabase
+  const { data: bets } = await supabase
         .from('mlb_daily_bets')
         .select('*')
         .lt('game_date', todayISO());
 
   if (!bets?.length) return console.log('Nothing to grade.');
 
-  /* group by date */
-  const byDate = bets.reduce((m,b)=>(m[b.game_date]=(m[b.game_date]||[]).push(b),m),{});
+  /* group by game_date  🚩 fixed reducer */
+  const byDate = bets.reduce((map, bet) => {
+    (map[bet.game_date] = map[bet.game_date] || []).push(bet);
+    return map;
+  }, {});
 
   for (const gDate of Object.keys(byDate).sort()) {
     const dateBets = byDate[gDate];
