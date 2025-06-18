@@ -1,3 +1,4 @@
+# .github/workflows/mlb-daily.yml
 name: MLB 🔒 lock & grade (single step)
 
 on:
@@ -11,53 +12,53 @@ jobs:
     env:
       SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      PUPPETEER_CACHE_DIR:       /home/runner/puppeteer-cache      # <─ browser cache
+      PUPPETEER_CACHE_DIR:       /home/runner/puppeteer-cache   # <─ where Chrome lives
+      # ⚠️  DO **NOT** set PUPPETEER_SKIP_DOWNLOAD here
 
     steps:
-      # 1️⃣  Check out code
-      - name: Check out repo
-        uses: actions/checkout@v4
+    # ───── 1)  Check out the repo ─────
+    - name: Check out repo
+      uses: actions/checkout@v4
 
-      # 2️⃣  Set up Node.js
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+    # ───── 2)  Set up Node.js ─────
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with: { node-version: 18 }
 
-      # 3️⃣  Restore workers/node_modules cache
-      - name: Restore node-modules cache
-        uses: actions/cache@v4
-        with:
-          path: workers/node_modules
-          key: linux-npm-workers-${{ hashFiles('workers/package*.json') }}-v1
-          restore-keys: |
-            linux-npm-workers-
+    # ───── 3)  Restore node_modules cache ─────
+    - name: Restore node-modules cache
+      uses: actions/cache@v4
+      with:
+        path: workers/node_modules
+        key: linux-npm-workers-${{ hashFiles('workers/package*.json') }}-v1
+        restore-keys: |
+          linux-npm-workers-
 
-      # 4️⃣  Restore Puppeteer browser cache
-      - name: Restore Puppeteer cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.PUPPETEER_CACHE_DIR }}
-          key: puppeteer-cache-${{ runner.os }}-v1
+    # ───── 4)  Restore Puppeteer-browser cache ─────
+    - name: Restore Puppeteer cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.PUPPETEER_CACHE_DIR }}
+        key: puppeteer-cache-${{ runner.os }}-v1
 
-      # 5️⃣  Install JS dependencies in workers/
-      - name: Install deps (workers/)
-        working-directory: workers
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            npm install --no-audit --no-fund
-          fi
+    # ───── 5)  Install JS deps in workers/ ─────
+    - name: Install deps (workers/)
+      working-directory: workers
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci --no-audit --no-fund
+        else
+          npm install --no-audit --no-fund
+        fi
 
-      # 6️⃣  Download Chrome into the cache if it isn’t there yet
-      - name: Ensure Chrome present
-        run: npx puppeteer browsers install chrome
+    # ───── 6)  *Download Chrome if not already cached* ─────
+    - name: Ensure Chrome present
+      run: npx puppeteer browsers install chrome
 
-      # 7️⃣  Lock today’s bets & grade yesterday’s
-      - name: Lock today & grade yesterday
-        run: |
-          echo "▶︎ Locking bets"
-          node workers/lockDailyBets.js
-          echo "▶︎ Grading yesterday"
-          node workers/gradeDailyBets.js
+    # ───── 7)  Run your workers ─────
+    - name: Lock today & grade yesterday
+      run: |
+        echo "▶︎ Locking bets"
+        node workers/lockDailyBets.js
+        echo "▶︎ Grading yesterday"
+        node workers/gradeDailyBets.js
