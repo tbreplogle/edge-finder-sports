@@ -1,0 +1,1 @@
+- run: npx ts-node scripts/cbkPredictGames.ts
