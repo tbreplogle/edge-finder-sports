@@ -1,9 +1,8 @@
-# .github/workflows/mlb-daily.yml
 name: MLB 🔒 lock & grade (single step)
 
 on:
   schedule:
-    - cron: '0 17 * * *'        # 12 PM CT
+    - cron: '0 17 * * *'          # 12 PM CT
   workflow_dispatch:
 
 jobs:
@@ -12,20 +11,15 @@ jobs:
     env:
       SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      PUPPETEER_CACHE_DIR:       /home/runner/puppeteer-cache   # <─ where Chrome lives
-      # ⚠️  DO **NOT** set PUPPETEER_SKIP_DOWNLOAD here
+      PUPPETEER_CACHE_DIR:       /home/runner/puppeteer-cache
+      CHROME_REVISION:           121.0.6167.85   # puppeteer-core v21 target
 
     steps:
-    # ───── 1)  Check out the repo ─────
-    - name: Check out repo
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # ───── 2)  Set up Node.js ─────
-    - name: Set up Node
-      uses: actions/setup-node@v4
+    - uses: actions/setup-node@v4
       with: { node-version: 18 }
 
-    # ───── 3)  Restore node_modules cache ─────
     - name: Restore node-modules cache
       uses: actions/cache@v4
       with:
@@ -34,14 +28,12 @@ jobs:
         restore-keys: |
           linux-npm-workers-
 
-    # ───── 4)  Restore Puppeteer-browser cache ─────
     - name: Restore Puppeteer cache
       uses: actions/cache@v4
       with:
         path: ${{ env.PUPPETEER_CACHE_DIR }}
         key: puppeteer-cache-${{ runner.os }}-v1
 
-    # ───── 5)  Install JS deps in workers/ ─────
     - name: Install deps (workers/)
       working-directory: workers
       run: |
@@ -51,11 +43,11 @@ jobs:
           npm install --no-audit --no-fund
         fi
 
-    # ───── 6)  *Download Chrome if not already cached* ─────
+    # *** key fix ***
     - name: Ensure Chrome present
-      run: npx puppeteer browsers install chrome
+      run: |
+        npx puppeteer@21.7.0 browsers install chrome@${CHROME_REVISION}
 
-    # ───── 7)  Run your workers ─────
     - name: Lock today & grade yesterday
       run: |
         echo "▶︎ Locking bets"
