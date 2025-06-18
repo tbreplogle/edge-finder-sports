@@ -4,7 +4,6 @@
     • Scrapes final scores from Covers.com
     • Saves P/L rows to public.mlb_daily_results
 */
-//
 import puppeteer from 'puppeteer';
 import { supabase, testConnection } from './lib/supabaseClient.js';
 
@@ -20,18 +19,22 @@ function yesterdayCT() {
 /* Scrape final scores from Covers */
 async function scrapeScores(date) {
   const url = `https://www.covers.com/sports/mlb/matchups?selectedDate=${date}`;
+
+  // ▶︎ use runner’s system Chrome
   const browser = await puppeteer.launch({
+    channel : 'chrome',                          // <── key line
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args    : ['--no-sandbox', '--disable-setuid-sandbox']
   });
+
   const page = await browser.newPage();
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 60_000 });
 
   const map = await page.$$eval('article.gamebox', boxes =>
     Object.fromEntries(
       boxes.map(box => {
-        const href = box.querySelector('a.matchup-btn-link')?.href ?? '';
-        const m    = href.match(/(\d+)$/);
+        const href   = box.querySelector('a.matchup-btn-link')?.href ?? '';
+        const m      = href.match(/(\d+)$/);
         const scores = Array.from(box.querySelectorAll('.team-score'))
                       .map(el => parseInt(el.textContent.trim(), 10));
         return (m && scores.length === 2)
