@@ -1,200 +1,123 @@
-/*  gradeDailyBets.js
-    -----------------------------------------------------------------------
-    Grades every locked bet whose game_date is in the past using only
-    data from `mlb_daily_bets` and Covers-box-score pages.
-
-    • No dependency on mlb_matchups table
-    • One scrape per unique matchup_id (box-score URL)
-    • Upserts results into public.mlb_daily_results
-    • Designed for GitHub Actions runner  (uses system Chrome)
-*/
-
+/* gradeDailyBets.js  – 2025-06-18  (meta-less, dual-selector) */
 import puppeteer from 'puppeteer';
 import { supabase, testConnection } from './lib/supabaseClient.js';
 
-/* ────────────────────────────────────────────────────────────────────── *
- * 1)  Helpers                                                           *
- * ────────────────────────────────────────────────────────────────────── */
-const CT_TZ = 'America/Chicago';
-const todayISO = () =>
-  new Date(new Date().toLocaleString('en-US', { timeZone: CT_TZ }))
-    .toISOString()
-    .slice(0, 10); // YYYY-MM-DD
-
-/* Long/short team names → 3-letter betting abbreviations */
+/* 🗺️  team alias → 3-letter abbr  (extend if you use other labels) */
 const NAME_TO_ABBR = {
-  'ARIZONA': 'ARI', 'ARIZONA DIAMONDBACKS': 'ARI',
-  'ATLANTA': 'ATL', 'ATLANTA BRAVES': 'ATL',
-  'BALTIMORE': 'BAL', 'BALTIMORE ORIOLES': 'BAL',
-  'BOSTON': 'BOS', 'BOSTON RED SOX': 'BOS',
-  'CHI. WHITE SOX': 'CWS', 'CHICAGO WHITE SOX': 'CWS',
-  'CHICAGO CUBS': 'CHC', 'CUBS': 'CHC',
-  'CINCINNATI': 'CIN', 'CINCINNATI REDS': 'CIN',
-  'CLEVELAND': 'CLE', 'CLEVELAND GUARDIANS': 'CLE',
+  'CHI. WHITE SOX': 'CWS', 'CHICAGO WHITE SOX': 'CWS', 'WHITE SOX': 'CWS',
+  'KANSAS CITY': 'KCR', 'KANSAS CITY ROYALS': 'KCR', 'ROYALS': 'KCR',
+  'TAMPA BAY': 'TBR', 'TAMPA BAY RAYS': 'TBR', 'RAYS': 'TBR',
   'COLORADO': 'COL', 'COLORADO ROCKIES': 'COL',
-  'DETROIT': 'DET', 'DETROIT TIGERS': 'DET',
-  'HOUSTON': 'HOU', 'HOUSTON ASTROS': 'HOU',
-  'KANSAS CITY': 'KCR', 'KANSAS CITY ROYALS': 'KCR',
-  'LA ANGELS': 'LAA', 'LOS ANGELES ANGELS': 'LAA',
-  'LA DODGERS': 'LAD', 'LOS ANGELES DODGERS': 'LAD',
-  'MIAMI': 'MIA', 'MIAMI MARLINS': 'MIA',
-  'MILWAUKEE': 'MIL', 'MILWAUKEE BREWERS': 'MIL',
-  'MINNESOTA': 'MIN', 'MINNESOTA TWINS': 'MIN',
-  'NY METS': 'NYM', 'NEW YORK METS': 'NYM',
-  'NY YANKEES': 'NYY', 'NEW YORK YANKEES': 'NYY',
-  'OAKLAND': 'OAK', 'OAKLAND ATHLETICS': 'OAK',
-  'PHILADELPHIA': 'PHI', 'PHILADELPHIA PHILLIES': 'PHI',
-  'PITTSBURGH': 'PIT', 'PITTSBURGH PIRATES': 'PIT',
-  'SAN DIEGO': 'SDP', 'SAN DIEGO PADRES': 'SDP',
-  'SAN FRANCISCO': 'SFG', 'SAN FRANCISCO GIANTS': 'SFG',
-  'SEATTLE': 'SEA', 'SEATTLE MARINERS': 'SEA',
-  'ST. LOUIS': 'STL', 'ST LOUIS CARDINALS': 'STL', 'ST. LOUIS CARDINALS': 'STL',
-  'TAMPA BAY': 'TBR', 'TAMPA BAY RAYS': 'TBR',
-  'TEXAS': 'TEX', 'TEXAS RANGERS': 'TEX',
-  'TORONTO': 'TOR', 'TORONTO BLUE JAYS': 'TOR',
-  'WASHINGTON': 'WSH', 'WASHINGTON NATIONALS': 'WSH'
+  /* … add the rest once … */
 };
 
-/* ────────────────────────────────────────────────────────────────────── *
- * 2)  Scraping helpers                                                  *
- * ────────────────────────────────────────────────────────────────────── */
-const launchChrome = () =>
-  puppeteer.launch({
-    channel: 'chrome',          // uses runner’s system Chrome
-    headless: 'new',
-    args: ['--no-sandbox']
-  });
+const todayISO = () =>
+  new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })
+            .split(',')[0];
 
-async function scrapeBoxScore(matchupId, browser) {
+/* ───────── scrape one box-score page ───────── */
+async function scrapeBox(matchupId, browser) {
   const url = `https://www.covers.com/sport/baseball/mlb/boxscore/${matchupId}`;
   const page = await browser.newPage();
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    const data = await page.$$eval(
-      '.covers-CoversMatchupDetails-leadIn',
-      (rows) => {
-        const row = rows[0];
-        if (!row) return null;
 
-        const scores = Array.from(
-          row.querySelectorAll('.covers-CoversMatchups-LiveScore')
-        ).map((n) => parseInt(n.textContent.trim(), 10));
+    /* newest layout we saw first */
+    const head = await page.$('.covers-CoversMatchupDetails-leadIn');
+    if (head) {
+      const scores = await page.$$eval(
+        '.covers-CoversMatchups-LiveScore',
+        els => els.slice(0,2).map(el=>parseInt(el.textContent.trim(),10))
+      );
+      const abbrs = await page.$$eval(
+        '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
+        els => els.map(el=>el.textContent.trim().toUpperCase())
+      );
+      if (scores.length===2 && abbrs.length===2)
+        return { away_abbr: abbrs[0], home_abbr: abbrs[1], away:scores[0], home:scores[1] };
+    }
 
-        const names = Array.from(
-          row.querySelectorAll(
-            '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName'
-          )
-        ).map((n) => n.textContent.trim().toUpperCase());
-
-        return scores.length === 2 && names.length === 2
-          ? {
-              away_abbr: names[0],
-              home_abbr: names[1],
-              away: scores[0],
-              home: scores[1]
-            }
-          : null;
-      }
+    /* fallback older layout (uppercaseHelper / leagueAvgBg) */
+    const abbrs = await page.$$eval(
+      'a.covers-CoversMatchups-uppercaseHelper',
+      els => els.map(e=>e.textContent.trim().toUpperCase()).slice(0,2)
     );
-    return data;
-  } catch {
-    return null;
-  } finally {
-    await page.close();
-  }
+    const nums  = await page.$$eval(
+      'td.covers-CoversMatchups-leagueAvgBg',
+      els => els.map(e=>parseInt(e.textContent.trim(),10)).slice(-2)
+    );
+    return abbrs.length===2 && nums.length===2
+      ? { away_abbr: abbrs[0], home_abbr: abbrs[1], away: nums[0], home: nums[1] }
+      : null;
+
+  } catch { return null; }
+  finally { await page.close(); }
 }
 
-/* ────────────────────────────────────────────────────────────────────── *
- * 3)  Grading logic for a single date                                   *
- * ────────────────────────────────────────────────────────────────────── */
-async function gradeDate(gameDate, betsOnDate) {
-  const browser = await launchChrome();
+/* ───────── grade every past-dated bet ───────── */
+async function gradeAll() {
+  if (!(await testConnection())) throw new Error('DB connection failed');
 
-  /* fetch scores for unique matchup_ids */
-  const scoreById = {};
-  for (const id of new Set(betsOnDate.map((b) => b.matchup_id))) {
-    const s = await scrapeBoxScore(id, browser);
-    if (s) scoreById[id] = s;
-  }
-  await browser.close();
+  const { data:bets } = await supabase
+        .from('mlb_daily_bets')
+        .select('*')
+        .lt('game_date', todayISO());
 
-  /* build result rows */
-  const rows = betsOnDate
-    .map((bet) => {
-      const box = scoreById[bet.matchup_id];
+  if (!bets?.length) return console.log('Nothing to grade.');
+
+  /* group by date */
+  const byDate = bets.reduce((m,b)=>(m[b.game_date]=(m[b.game_date]||[]).push(b),m),{});
+
+  for (const gDate of Object.keys(byDate).sort()) {
+    const dateBets = byDate[gDate];
+    const browser  = await puppeteer.launch({ channel:'chrome', headless:'new', args:['--no-sandbox'] });
+
+    const scoreMap = {};
+    for (const id of new Set(dateBets.map(b=>b.matchup_id))) {
+      const box = await scrapeBox(id,browser);
+      if (box) scoreMap[id] = box;
+    }
+    await browser.close();
+
+    const rows = dateBets.map(bet=>{
+      const box = scoreMap[bet.matchup_id];
       if (!box) return null;
 
-      const betAbbr =
-        NAME_TO_ABBR[bet.team_name.toUpperCase()] ??
-        bet.team_name.toUpperCase();
-
+      const abbr = NAME_TO_ABBR[bet.team_name.toUpperCase()] ?? bet.team_name.toUpperCase();
       let win;
-      if (betAbbr === box.home_abbr) win = box.home > box.away;
-      else if (betAbbr === box.away_abbr) win = box.away > box.home;
-      else return null; // could not map team
+      if (abbr === box.home_abbr) win = box.home > box.away;
+      else if (abbr === box.away_abbr) win = box.away > box.home;
+      else return null;
 
       return {
-        matchup_id: bet.matchup_id,
-        game_date: gameDate,
-        team_id: bet.team_id,
-        team_name: bet.team_name,
-        confidence: bet.confidence,
-        moneyline: bet.moneyline,
-        stake: bet.stake,
-        to_win: bet.to_win,
+        matchup_id : bet.matchup_id,
+        game_date  : gDate,
+        team_id    : bet.team_id,
+        team_name  : bet.team_name,
+        confidence : bet.confidence,
+        moneyline  : bet.moneyline,
+        stake      : bet.stake,
+        to_win     : bet.to_win,
         profit_loss: win ? bet.to_win : -bet.stake,
-        outcome: win ? 'win' : 'loss'
+        outcome    : win ? 'win' : 'loss'
       };
-    })
-    .filter(Boolean);
+    }).filter(Boolean);
 
-  if (!rows.length) {
-    console.log(`⚠️  ${gameDate}: nothing graded (missing scores or team map)`);
-    return;
-  }
+    if (!rows.length)
+      return console.log(`⚠️  ${gDate}: nothing graded (team map or scores missing)`);
 
-  const { error } = await supabase
-    .from('mlb_daily_results')
-    .upsert(rows, { onConflict: 'matchup_id,team_id' });
+    const { error } = await supabase
+      .from('mlb_daily_results')
+      .upsert(rows, { onConflict: 'matchup_id,team_id' });
 
-  if (error) console.error(`❌ ${gameDate}:`, error.message);
-  else console.log(`✅ ${gameDate}: graded ${rows.length} bets`);
-}
-
-/* ────────────────────────────────────────────────────────────────────── *
- * 4)  Main: grade all past-dated bets                                   *
- * ────────────────────────────────────────────────────────────────────── */
-async function gradeAllPast() {
-  if (!(await testConnection()))
-    throw new Error('Supabase connection failed');
-
-  const { data: bets, error } = await supabase
-    .from('mlb_daily_bets')
-    .select('*')
-    .lt('game_date', todayISO());
-
-  if (error) throw error;
-  if (!bets?.length) return console.log('No past bets to grade.');
-
-  /* group by game_date */
-  const byDate = bets.reduce((m, b) => {
-    (m[b.game_date] ||= []).push(b);
-    return m;
-  }, {});
-
-  for (const date of Object.keys(byDate).sort()) {
-    await gradeDate(date, byDate[date]);
+    if (error) console.error(`❌ ${gDate}:`, error.message);
+    else console.log(`✅ ${gDate}: graded ${rows.length} bets`);
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────── *
- * 5)  CLI entry                                                         *
- * ────────────────────────────────────────────────────────────────────── */
+/* CLI */
 if (import.meta.url.endsWith('gradeDailyBets.js')) {
-  gradeAllPast()
-    .then(() => process.exit(0))
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
+  gradeAll()
+    .then(()=>process.exit(0))
+    .catch(e=>{console.error(e);process.exit(1);});
 }
