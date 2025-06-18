@@ -40,7 +40,18 @@ const NAME_TO_ABBR = {
   'TAMPA BAY RAYS': 'TBR', 'TAMPA BAY': 'TBR', 'TB RAYS': 'TBR',
   'TEXAS RANGERS': 'TEX', 'TEXAS': 'TEX',
   'TORONTO BLUE JAYS': 'TOR', 'TORONTO': 'TOR',
-  'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON': 'WSH'
+  'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON': 'WSH',
+  'CHICAGO WHITE SOX': 'CHW',
+  'CHI. WHITE SOX'   : 'CHW',
+  'WHITE SOX'        : 'CHW',
+
+  'KANSAS CITY ROYALS': 'KC',
+  'KANSAS CITY'       : 'KC',
+  'ROYALS'            : 'KC',
+
+  'TAMPA BAY RAYS': 'TB',
+  'TAMPA BAY'     : 'TB',
+  'TB RAYS'       : 'TB',
 };
 
 /* ensure every 3-letter code maps to itself */
