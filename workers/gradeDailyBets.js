@@ -142,6 +142,24 @@ async function gradeAll() {
     else console.log(`✅ ${gDate}: graded ${rows.length} bets`);
   }
 }
+    /* debug ─ show why each bet failed (remove after you fix mappings) */
+    if (!rows.length) {
+      console.table(
+        dateBets.map(b => {
+          const bx = scoreMap[b.matchup_id];
+          return {
+            matchup_id : b.matchup_id,
+            bet_name   : b.team_name,
+            map_abbr   : (NAME_TO_ABBR[b.team_name.toUpperCase()] ?? b.team_name).toUpperCase(),
+            box_home   : bx?.home_abbr,
+            box_away   : bx?.away_abbr,
+            scores     : bx ? `${bx.away}-${bx.home}` : 'NO SCORES'
+          };
+        })
+      );
+      console.log(`⚠️  ${gDate}: nothing graded (team map or scores missing)`);
+      return;
+    }
 
 /* CLI */
 if (import.meta.url.endsWith('gradeDailyBets.js')) {
