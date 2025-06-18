@@ -1,6 +1,5 @@
 name: 3-MLB Predictions
 
-# Run every day at 12:20 PM CT (17:20 UTC)
 on:
   schedule:
     - cron: '20 14 * * *'
