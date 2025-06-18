@@ -1,31 +1,46 @@
-# .github/workflows/mlb-daily.yml  (snippet)
+name: MLB 🔒 lock & grade (single step)
+
+on:
+  schedule:
+    - cron: '0 17 * * *'        # 12 PM CT
+  workflow_dispatch:
+
 jobs:
   run:
     runs-on: ubuntu-latest
     env:
       SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      PUPPETEER_CACHE_DIR:       /home/runner/puppeteer-cache   # <- job-level env
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 18 }
+      PUPPETEER_CACHE_DIR:       /home/runner/puppeteer-cache      # <─ browser cache
 
-      # ① Restore node_modules
-      - uses: actions/cache@v4
+    steps:
+      # 1️⃣  Check out code
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      # 2️⃣  Set up Node.js
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # 3️⃣  Restore workers/node_modules cache
+      - name: Restore node-modules cache
+        uses: actions/cache@v4
         with:
           path: workers/node_modules
           key: linux-npm-workers-${{ hashFiles('workers/package*.json') }}-v1
           restore-keys: |
             linux-npm-workers-
 
-      # ② Restore Puppeteer browser cache
-      - uses: actions/cache@v4
+      # 4️⃣  Restore Puppeteer browser cache
+      - name: Restore Puppeteer cache
+        uses: actions/cache@v4
         with:
           path: ${{ env.PUPPETEER_CACHE_DIR }}
           key: puppeteer-cache-${{ runner.os }}-v1
 
-      # ③ Install deps
+      # 5️⃣  Install JS dependencies in workers/
       - name: Install deps (workers/)
         working-directory: workers
         run: |
@@ -35,11 +50,11 @@ jobs:
             npm install --no-audit --no-fund
           fi
 
-      # ④ **Download Chrome if the cache is empty**  (CRUCIAL)
+      # 6️⃣  Download Chrome into the cache if it isn’t there yet
       - name: Ensure Chrome present
         run: npx puppeteer browsers install chrome
 
-      # ⑤ Run your workers
+      # 7️⃣  Lock today’s bets & grade yesterday’s
       - name: Lock today & grade yesterday
         run: |
           echo "▶︎ Locking bets"
