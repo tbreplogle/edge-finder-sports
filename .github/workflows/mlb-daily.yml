@@ -47,8 +47,8 @@ jobs:
 
     - name: Ensure Chrome present
       run: |
-      npx --yes puppeteer@21.7.0 browsers install chrome@$CHROME_REVISION \
-      --path $PUPPETEER_CACHE_DIR --log-level verbose
+        npx --yes puppeteer@21.7.0 browsers install chrome@$CHROME_REVISION \
+        --path $PUPPETEER_CACHE_DIR --log-level verbose
 
 
     - name: Ensure Chrome present
