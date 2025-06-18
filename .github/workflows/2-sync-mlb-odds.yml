@@ -1,4 +1,4 @@
-name: Sync MLB Odds
+name: 2-Sync MLB Odds
 
 on:
   schedule:

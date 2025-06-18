@@ -1,4 +1,4 @@
-name: Daily MLB Team Hitting Stats Update
+name: 1-Daily MLB Team Hitting Stats Update
 
 on:
   schedule:

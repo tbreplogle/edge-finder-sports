@@ -1,4 +1,4 @@
-name: Daily MLB Matchup IDs Scraper
+name: 1-Daily MLB Matchup IDs Scraper
 
 on:
   schedule:
