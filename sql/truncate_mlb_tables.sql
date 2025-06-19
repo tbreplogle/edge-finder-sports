@@ -1,46 +1,38 @@
-* ────────────────────────────────────────────────────────────────
-   1.  Create the history table once (if it doesn’t exist)
-       – structure = all columns from the view  +  snapshot_dts
-   ────────────────────────────────────────────────────────────────*/
+/* 1. Create history table if it doesn’t exist (structure only) */
+CREATE TABLE IF NOT EXISTS public.mlb_predictions_with_market_history
+LIKE public.mlb_predictions_with_market                          -- copy ALL cols
+INCLUDING ALL;                                                   -- defaults, indexes, etc.
+
+/* 1-b.  Add snapshot column the first time this runs */
 DO
 $$
 BEGIN
   IF NOT EXISTS (
         SELECT 1
-        FROM   pg_class c
-        JOIN   pg_namespace n ON n.oid = c.relnamespace
-        WHERE  n.nspname = 'public'
-          AND  c.relname = 'mlb_predictions_with_market_history'
+        FROM   information_schema.columns
+        WHERE  table_schema = 'public'
+          AND  table_name   = 'mlb_predictions_with_market_history'
+          AND  column_name  = 'snapshot_dts'
   ) THEN
-     EXECUTE $ctas$
-        CREATE TABLE public.mlb_predictions_with_market_history AS
-        SELECT
-          now()::timestamptz   AS snapshot_dts,
-          pm.*
-        FROM public.mlb_predictions_with_market pm
-        WHERE false;                 -- create structure only
-     $ctas$;
-
-     /* optional index to speed date look-ups */
      ALTER TABLE public.mlb_predictions_with_market_history
-       ADD CONSTRAINT pk_mlb_pmw_hist PRIMARY KEY (snapshot_dts, matchup_id);
-
+       ADD COLUMN snapshot_dts timestamptz NOT NULL;
+     /* optional composite primary key */
+     ALTER TABLE public.mlb_predictions_with_market_history
+       ADD PRIMARY KEY (snapshot_dts, matchup_id);
   END IF;
 END;
 $$ LANGUAGE plpgsql;
 
-/* ────────────────────────────────────────────────────────────────
-   2.  Append today’s snapshot (runs every morning *before* truncate)
-   ────────────────────────────────────────────────────────────────*/
+/* 2. Append the current view rows with time-stamp */
 INSERT INTO public.mlb_predictions_with_market_history
+        (snapshot_dts,            -- first column
+         SELECT * FROM public.mlb_predictions_with_market LIMIT 0)  -- column list
 SELECT
-  now()::timestamptz      AS snapshot_dts,
+  now() AS snapshot_dts,
   pm.*
-FROM public.mlb_predictions_with_market pm;
+FROM public.mlb_predictions_with_market AS pm;
 
-/* ────────────────────────────────────────────────────────────────
-   3.  Truncate your working tables (unchanged)
-   ────────────────────────────────────────────────────────────────*/
+/* 3. Truncate live tables for today’s fresh load */
 TRUNCATE TABLE
     public.mlb_team_hitting_stats,
     public.mlb_predictions,
