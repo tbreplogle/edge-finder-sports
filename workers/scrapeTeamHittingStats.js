@@ -7,7 +7,17 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 const DEBUG = process.env.DEBUG === 'true';
 
 // Only 7 days needed
-const TIMEFRAME_DAYS = 14;
+async function scrapeWindow(days) {
+    const url =
+      days === 0
+        ? 'https://www.mlb.com/stats/team/hitting'          // season-to-date ⬅️
+        : `https://www.mlb.com/stats/team/hitting?timeframe=-${days}`;
+  
+    /* (everything inside scrapeTeamHittingStats but return array) */
+    /* …… unchanged code …… */
+  
+    return stats;          // ← array of 30 rows for this window
+  }
 
 /**
  * Maps a raw team name to its proper name, abbreviation, and ID
@@ -514,16 +524,56 @@ export async function updateTeamHittingStats() {
     
     // Scrape team stats (7-day only)
     console.log(`Scraping ${TIMEFRAME_DAYS}-day team stats...`);
-    const teamStats = await scrapeTeamHittingStats();
+      console.log('Scraping season-to-date window…');
+      const seasonStats = await scrapeWindow(0);      // season
+    
+      console.log('Scraping last-7-days window…');
+      const last7Stats  = await scrapeWindow(7);      // last 7
+    
+      // join on team_id
+      const joined = seasonStats.map(seasonRow => {
+        const short = last7Stats.find(r => r.team_id === seasonRow.team_id);
+        if (!short) return null;   // safety
+    
+        // helper to blend a numeric field
+        const blend = fld =>
+          0.7 * seasonRow[fld] + 0.3 * short[fld];
+    
+        return {
+          /* id / meta */
+          team_id          : seasonRow.team_id,
+          team_name        : seasonRow.team_name,
+          game_date        : seasonRow.game_date,
+    
+          /* season raw */
+          avg_season       : seasonRow.avg,
+          obp_season       : seasonRow.obp,
+          slg_season       : seasonRow.slg,
+          ops_season       : seasonRow.ops,
+    
+          /* last-7 raw */
+          avg_7            : short.avg,
+          obp_7            : short.obp,
+          slg_7            : short.slg,
+          ops_7            : short.ops,
+    
+          /* blended */
+          avg_blend        : blend('avg'),
+          obp_blend        : blend('obp'),
+          slg_blend        : blend('slg'),
+          ops_blend        : blend('ops'),
+    
+          timeframe_days   : 7,            // keep 7 to tag the run
+        };
+      }).filter(Boolean);
     console.log(`Fetched ${teamStats.length} team stats`);
-    results.stats.seven_day = teamStats.length;
+    results.stats.seven_day = joined.length;
     
     // Save stats to Supabase only if we have data
     let saveSuccess = true;
     
-    if (teamStats.length > 0) {
-      console.log('Saving stats to Supabase...');
-      saveSuccess = await saveTeamStatsToSupabase(teamStats);
+      if (joined.length > 0) {
+            saveSuccess = await saveTeamStatsToSupabase(joined);
     } else {
       console.warn('No stats to save to Supabase');
       saveSuccess = false;
