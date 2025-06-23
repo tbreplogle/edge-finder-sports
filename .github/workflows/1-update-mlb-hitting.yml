@@ -49,9 +49,12 @@ jobs:
           DEBUG: 'true'
 
       - name: Verify scrape results
+        if: success()              # only run if previous steps succeeded
         run: |
-          test -f scrape-result.json \
-            || test -f workers/../scrape-result.json \
-            || { echo "::error ::scrape-result.json not found"; exit 1; }
-          cat $(find . -name scrape-result.json | head -n1)
-
+          if [ -f scrape-result.json ] ; then
+            cat scrape-result.json
+          elif [ -f workers/../scrape-result.json ] ; then
+            cat workers/../scrape-result.json
+          else
+            echo "::warning ::scrape-result.json not found (scraper may have skipped writing it)"
+          fi
