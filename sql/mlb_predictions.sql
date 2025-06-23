@@ -45,7 +45,7 @@ WITH ratings AS (
   JOIN   mlb_matchups      m  ON m.matchup_id = pm.matchup_id
   JOIN   mlb_team_hitting_stats hs
          ON hs.team_id        = pm.team_id
-        AND hs.timeframe_days = 14
+        AND hs.timeframe_days = 7
 ),
 
 /*----------------------------------------------------------------
@@ -91,7 +91,7 @@ last14 AS (
     team_id,
     ops AS ops_14
   FROM mlb_team_hitting_stats
-  WHERE timeframe_days = 14
+  WHERE timeframe_days = 7
 ),
 sp AS (
   SELECT
