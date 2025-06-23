@@ -14,7 +14,78 @@ async function scrapeWindow(days) {
         : `https://www.mlb.com/stats/team/hitting?timeframe=-${days}`;
   
     /* (everything inside scrapeTeamHittingStats but return array) */
-    /* …… unchanged code …… */
+  /* ───────────────────── actual scraping logic ───────────────────── */
+  try {
+    console.log(`🕵️‍♂️  Launching browser for ${days === 0 ? 'season-to-date' : `last-${days}` } window`);
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      channel : 'chrome',
+      args    : ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+    );
+
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60_000 });
+    await page.waitForSelector('table.bui-table tbody tr', { timeout: 30_000 });
+    await page.waitForTimeout(3_000);      // ensure table fully painted
+
+    const rawRows = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('table.bui-table tbody tr'));
+      return rows.map(row => {
+        const cells = Array.from(row.querySelectorAll('th,td'));
+        const link  = cells[0]?.querySelector('a');
+        if (!link || cells.length < 18) return null;
+
+        return {
+          team_name   : link.textContent.trim(),
+          league      : cells[1].textContent.trim(),
+          games_played: +cells[2].textContent.trim()  || 0,
+          at_bats     : +cells[3].textContent.trim()  || 0,
+          runs        : +cells[4].textContent.trim()  || 0,
+          hits        : +cells[5].textContent.trim()  || 0,
+          doubles     : +cells[6].textContent.trim()  || 0,
+          triples     : +cells[7].textContent.trim()  || 0,
+          home_runs   : +cells[8].textContent.trim()  || 0,
+          rbi         : +cells[9].textContent.trim()  || 0,
+          bb          : +cells[10].textContent.trim() || 0,
+          so          : +cells[11].textContent.trim() || 0,
+          sb          : +cells[12].textContent.trim() || 0,
+          cs          : +cells[13].textContent.trim() || 0,
+          avg         : parseFloat(cells[14].textContent.trim()) || 0,
+          obp         : parseFloat(cells[15].textContent.trim()) || 0,
+          slg         : parseFloat(cells[16].textContent.trim()) || 0,
+          ops         : parseFloat(cells[17].textContent.trim()) || 0
+        };
+      }).filter(Boolean);
+    });
+
+    await browser.close();
+
+    const gameDate = new Date().toISOString().slice(0,10);
+    const stats = rawRows.map(r => {
+      const info = mapTeamInfo(r.team_name);
+      return {
+        ...r,
+        actual_team_name: info.actual_team_name,
+        team_abbr       : info.team_abbr,
+        team_id         : info.team_id,
+        timeframe_days  : days,           // 0 = season, 7 = last-7
+        game_date       : gameDate
+      };
+    });
+
+    return stats;        // ← array of 30 objects
+  } catch (err) {
+    console.error(`Scrape failed for window ${days}:`, err);
+    return [];           // fail-safe empty array
+  }
+  /* ──────────────────────────────────────────────────────────────── */
+
   
     return stats;          // ← array of 30 rows for this window
   }
