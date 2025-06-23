@@ -5,7 +5,7 @@ import { supabase, testConnection, createScrapeReport } from './lib/supabaseClie
 
 // Enable debug mode when environment variable is set
 const DEBUG = process.env.DEBUG === 'true';
-
+const TIMEFRAME_DAYS = 7; 
 // Only 7 days needed
 async function scrapeWindow(days) {
     const url =
