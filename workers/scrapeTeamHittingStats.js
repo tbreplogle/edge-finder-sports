@@ -566,8 +566,8 @@ export async function updateTeamHittingStats() {
           timeframe_days   : 7,            // keep 7 to tag the run
         };
       }).filter(Boolean);
-    console.log(`Fetched ${teamStats.length} team stats`);
-    results.stats.seven_day = joined.length;
+          console.log(`Fetched ${joined.length} blended team stats`);
+          results.stats.seven_day = joined.length;
     
     // Save stats to Supabase only if we have data
     let saveSuccess = true;
@@ -594,7 +594,7 @@ export async function updateTeamHittingStats() {
     createScrapeReport(results);
     
     return {
-      stats: teamStats,
+      stats: joined,
       success: saveSuccess
     };
   } catch (error) {
