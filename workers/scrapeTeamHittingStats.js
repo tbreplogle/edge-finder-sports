@@ -602,39 +602,44 @@ export async function updateTeamHittingStats() {
       const last7Stats  = await scrapeWindow(7);      // last 7
     
       // join on team_id
-      const joined = seasonStats.map(seasonRow => {
-        const short = last7Stats.find(r => r.team_id === seasonRow.team_id);
-        if (!short) return null;   // safety
-    
-        // helper to blend a numeric field
-        const blend = fld =>
+      const joined = seasonStats.map((seasonRow) => {
+        const short = last7Stats.find((r) => r.team_id === seasonRow.team_id);
+        if (!short) return null;           // safety
+      
+        // helper: blended = 0.70 × season + 0.30 × last-7
+        const blend = (fld) =>
           0.7 * seasonRow[fld] + 0.3 * short[fld];
-    
+      
         return {
-          /* id / meta */
-          team_id          : seasonRow.team_id,
-          team_name        : seasonRow.team_name,
-          game_date        : seasonRow.game_date,
-    
-          /* season raw */
-          avg_season       : seasonRow.avg,
-          obp_season       : seasonRow.obp,
-          slg_season       : seasonRow.slg,
-          ops_season       : seasonRow.ops,
-    
-          /* last-7 raw */
-          avg_7            : short.avg,
-          obp_7            : short.obp,
-          slg_7            : short.slg,
-          ops_7            : short.ops,
-    
-          /* blended */
-          avg_blend        : blend('avg'),
-          obp_blend        : blend('obp'),
-          slg_blend        : blend('slg'),
-          ops_blend        : blend('ops'),
-    
-          timeframe_days   : 7,            // keep 7 to tag the run
+          // identifiers / meta
+          team_id        : seasonRow.team_id,
+          team_name      : seasonRow.team_name,   // keep clean name
+          game_date      : seasonRow.game_date,   // today
+          timeframe_days : 7,                     // tag this load
+      
+          // **blended rate stats written into the existing columns**
+          avg            : blend('avg'),
+          obp            : blend('obp'),
+          slg            : blend('slg'),
+          ops            : blend('ops'),
+      
+          // for counting stats you can keep season-to-date (or drop if not needed)
+          games_played   : seasonRow.games_played,
+          at_bats        : seasonRow.at_bats,
+          runs           : seasonRow.runs,
+          hits           : seasonRow.hits,
+          doubles        : seasonRow.doubles,
+          triples        : seasonRow.triples,
+          home_runs      : seasonRow.home_runs,
+          rbi            : seasonRow.rbi,
+          bb             : seasonRow.bb,
+          so             : seasonRow.so,
+          sb             : seasonRow.sb,
+          cs             : seasonRow.cs,
+      
+          // optional IDs
+          team_abbr      : seasonRow.team_abbr,
+          actual_team_name : seasonRow.actual_team_name
         };
       }).filter(Boolean);
           console.log(`Fetched ${joined.length} blended team stats`);
