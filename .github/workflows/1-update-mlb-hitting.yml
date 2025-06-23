@@ -49,6 +49,9 @@ jobs:
           DEBUG: 'true'
 
       - name: Verify scrape results
-        if: always()
         run: |
-          test -f scrape-result.json && cat scrape-result.json || { echo "::error::scrape-result.json not found"; exit 1; }
+          test -f scrape-result.json \
+            || test -f workers/../scrape-result.json \
+            || { echo "::error ::scrape-result.json not found"; exit 1; }
+          cat $(find . -name scrape-result.json | head -n1)
+
