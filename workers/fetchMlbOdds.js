@@ -146,10 +146,24 @@ async function upsertOdds(records) {
   return data.length;
 }
 
-// ---------------------------------------------------------------------------
-// Helper – fetch Pitcher-Outs prop for one event and return the LOWER line
-// (so if books hang 17.5 & 18.5 we grab 17.5; tweak as you like)
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------------- */
+/* NEW helper: robustly extract the numeric line                             */
+/* ------------------------------------------------------------------------- */
+function extractLine(outcome) {
+  // 1) direct field (rare but exists at some books)
+  if (outcome.point != null) return outcome.point;
+  if (outcome.line  != null) return outcome.line;
+
+  // 2) scrape from name / description  →  "Over 17.5", "Under 18"
+  const txt =
+    `${outcome.name ?? ""} ${outcome.description ?? ""}`.replace(",", ".");
+  const m = txt.match(/(\d+(?:\.\d+)?)/);           // first number in string
+  return m ? parseFloat(m[1]) : null;
+}
+
+/* ------------------------------------------------------------------------- */
+/* replace getPitcherOuts() with version that uses extractLine()             */
+/* ------------------------------------------------------------------------- */
 async function getPitcherOuts(eventId) {
   try {
     const { data } = await axios.get(
@@ -158,7 +172,7 @@ async function getPitcherOuts(eventId) {
         params: {
           apiKey: ODDS_API_KEY,
           regions: REGIONS,
-          bookmakers: BOOKMAKERS,          // same const you use for h2h
+          bookmakers: BOOKMAKERS,
           markets: "pitcher_outs",
           oddsFormat: "american",
           dateFormat: "iso",
@@ -166,20 +180,18 @@ async function getPitcherOuts(eventId) {
       }
     );
 
-    let bestLine = null;                  // numeric — 17.5, 18.0, …
-
+    let best = null;                                // take lowest threshold
     for (const bm of data.bookmakers ?? []) {
       const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
       if (!mkt) continue;
 
       for (const o of mkt.outcomes ?? []) {
-        // o.point is always the threshold (outs); if missing, skip.
-        const line = o.point ?? null;
+        const line = extractLine(o);
         if (line == null) continue;
-        bestLine = bestLine == null ? line : Math.min(bestLine, line);
+        best = best == null ? line : Math.min(best, line);
       }
     }
-    return bestLine;                      // may be null if market absent
+    return best;                                    // numeric or null
   } catch (err) {
     console.warn(`⚠️  pitcher_outs fetch failed for ${eventId}`);
     return null;
