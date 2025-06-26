@@ -181,6 +181,10 @@ async function getPitcherOuts(eventId) {
      return null // AVG of both lines
   } catch (err) {
     console.warn(`⚠️  pitcher_outs fetch failed for ${eventId}`);
+    console.dir(
+      data.bookmakers?.[0]?.markets?.filter(m => m.key === "pitcher_outs"),
+      { depth: null }
+    );
     return null;
   }
 }
