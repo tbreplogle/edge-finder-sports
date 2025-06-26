@@ -12,7 +12,7 @@ const ODDS_API_KEY = "907b67e00fc14e6f4a501355026dba0e";
 const ODDS_API_URL = "https://api.the-odds-api.com/v4/sports";
 const SPORT_KEY = "baseball_mlb";
 const REGIONS     = "us";                                   // required param
-const BOOKMAKERS  = "draftkings";
+const BOOKMAKERS  = "draftkings,fanduel,betmgm,caesars";
 /* -------------------------------------------------------------------------- */
 /* Team‑name → team_id map                                                    */
 /* -------------------------------------------------------------------------- */
@@ -159,7 +159,7 @@ async function getPitcherOuts(eventId) {
           apiKey: ODDS_API_KEY,
           regions: REGIONS,
           markets: "pitcher_outs",
-          bookmakers: "draftkings",
+          bookmakers: BOOKMAKERS,
           oddsFormat: "american",
           dateFormat: "iso",
         },
