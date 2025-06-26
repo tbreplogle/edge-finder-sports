@@ -91,18 +91,6 @@ async function mapGame(game) {
 
   const utc = new Date(game.commence_time);
   const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
-    const outsMap      = await getPitcherOuts(game.id) || {};
-
-  // look up by pitcher name in your pitching_matchups table
-  const { data: pms } = await supabase
-        .from("pitching_matchups")
-        .select("pitcher_name, pitcher_role")
-        .eq("game_id", game.id);
-  const homeName = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
-  const awayName = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
-
-  const homePitcherOuts = outsMap[homeName] ?? null;
-  const awayPitcherOuts = outsMap[awayName] ?? null;
 
   return {
     game_id: game.id,
@@ -112,8 +100,8 @@ async function mapGame(game) {
     away_team_id,
     home_ml: hML,
     away_ml: aML,
-    home_pitcher_outs: homePitcherOuts,
-    away_pitcher_outs: awayPitcherOuts,
+    home_pitcher_outs: null,
+    away_pitcher_outs: null,
     matchup_id: null, // filled in later
   };
 }
@@ -216,12 +204,14 @@ async function fetchAndSyncMlbOdds() {
     const raw = await fetchOddsApi();
     stats.fetched = raw.length;
 
-    const mapped = (await Promise.all(raw.map(mapGame))).filter(Boolean);
-    stats.mapped = mapped.length;
-    if (!mapped.length) throw new Error("No mapped games");
-
-      /* ── add pitcher-outs to rows that now have matchup_id ─────────────── */
-      for (const rec of joined) {
+        const mapped = (await Promise.all(raw.map(mapGame))).filter(Boolean);
+        stats.mapped = mapped.length;
+        if (!mapped.length) throw new Error("No mapped games");
+    
+        const joined = await attachMatchupIds(mapped);     /*  ← now defined  */
+    
+        /* ── add pitcher-outs to rows that now have matchup_id ─────────────── */
+        for (const rec of joined) {
         if (!rec.matchup_id) continue;          // skip rows we can’t match yet
     
         /* 1) get the two starters’ names for this matchup */
@@ -239,7 +229,7 @@ async function fetchAndSyncMlbOdds() {
         rec.home_pitcher_outs = outsMap[homeName] ?? null;
         rec.away_pitcher_outs = outsMap[awayName] ?? null;
       }
-    const ready = joined.filter((r) => r.matchup_id);
+      const ready = joined.filter((r) => r.matchup_id)
     stats.with_matchup = ready.length;
     if (!ready.length)
       throw new Error("No games matched to matchup_id (scraper out of sync)");
