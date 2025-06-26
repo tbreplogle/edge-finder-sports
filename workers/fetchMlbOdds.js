@@ -157,7 +157,6 @@ async function getPitcherOuts(eventId) {
         params: {
           apiKey: ODDS_API_KEY,
           regions: REGIONS,
-          bookmakers: BOOKMAKERS,
           markets: "pitcher_outs",
           oddsFormat: "american",
         },
@@ -173,12 +172,13 @@ async function getPitcherOuts(eventId) {
 
        for (const o of mkt.outcomes ?? []) {
 
-        if (typeof o.point === "number") outs.push(o.point); // keep them all
+                if (typeof o.point === "number") {
+                    return o.point;      // take the first line and bail
+                  } // keep them all
        }
      }
 
-    if (!outs.length) return null;                 // market absent
-    return outs.reduce((a, b) => a + b, 0) / outs.length;  // AVG of both lines
+     return null // AVG of both lines
   } catch (err) {
     console.warn(`⚠️  pitcher_outs fetch failed for ${eventId}`);
     return null;
