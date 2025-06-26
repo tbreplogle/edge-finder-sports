@@ -152,51 +152,50 @@ async function upsertOdds(records) {
 // ───────────────────────────────────────────────────────────────────────────
 async function getPitcherOuts(eventId) {
   try {
-    const { data } = await axios.get/* TEMP: see exactly what the player-props payload looks like  */
-    if (process.env.DEBUG_OUTS === "1") {
-      console.dir(
-        data.bookmakers?.map(bm => ({
-          book: bm.key,
-          markets: bm.markets?.filter(m => m.key === "pitcher_outs")
-        })),
-        { depth: null }
-      );
-    }
-    (
+    const resp = await axios.get(
       `${ODDS_API_URL}/${SPORT_KEY}/events/${eventId}/odds`,
       {
         params: {
           apiKey: ODDS_API_KEY,
           regions: REGIONS,
           markets: "pitcher_outs",
-          bookmakers: BOOKMAKERS,
+          bookmakers: BOOKMAKERS,          // draftkings,fanduel,betmgm,caesars
           oddsFormat: "american",
           dateFormat: "iso",
         },
+        validateStatus: () => true         // don’t throw on 404 / 204
       }
     );
 
+    /* If the book(s) haven’t posted this prop yet, bail gracefully */
+    if (!resp.data || !resp.data.bookmakers?.length) return null;
 
+    const outs = {};                       // { player → line }
 
+    for (const bm of resp.data.bookmakers) {
+      const mkt = bm.markets?.find(m => m.key === "pitcher_outs");
+      if (!mkt) continue;
 
-        const outs = {};                               // { "Luis Castillo":18.5, … }
-    
-        for (const bm of data.bookmakers ?? []) {
-          const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
-          if (!mkt) continue;
-    
-          for (const o of mkt.outcomes ?? []) {
-            if (typeof o.point === "number" && o.player) {
-              outs[o.player] ??= o.point;              // first book wins
-            }
-          }
+      for (const o of mkt.outcomes ?? []) {
+        // ① use the point field when it exists
+        let line = o.point;
+
+        // ② else scrape "Over 18.5" / "Under 17.5" style descriptions
+        if (line == null && typeof o.description === "string") {
+          const m = o.description.match(/(\d+(?:\.\d+)?)/);
+          if (m) line = parseFloat(m[1]);
         }
-        return Object.keys(outs).length ? outs : null; // null if market absent// AVG of both lines
+
+        if (line != null && o.player) outs[o.player] ??= line; // first book wins
+      }
+    }
+
+    return Object.keys(outs).length ? outs : null;
   } catch (err) {
-        console.warn(
-            `⚠️  pitcher_outs fetch failed for ${eventId}:`,
-            err.response?.status ?? err.message
-          );
+    console.warn(
+      `⚠️  pitcher_outs fetch failed for ${eventId}:`,
+      err.response?.status ?? err.message
+    );
     return null;
   }
 }
