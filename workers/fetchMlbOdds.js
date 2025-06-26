@@ -199,7 +199,7 @@ async function fetchAndSyncMlbOdds() {
     const raw = await fetchOddsApi();
     stats.fetched = raw.length;
 
-    const mapped = raw.map(mapGame).filter(Boolean);
+    const mapped = (await Promise.all(raw.map(mapGame))).filter(Boolean);
     stats.mapped = mapped.length;
     if (!mapped.length) throw new Error("No mapped games");
 
