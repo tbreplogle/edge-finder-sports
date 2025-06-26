@@ -228,7 +228,8 @@ async function fetchAndSyncMlbOdds() {
 const { data: pms } = await supabase
 .from("pitching_matchups")
 .select("pitcher_name, pitcher_role, team_id")
-.in("team_id", [rec.home_team_id, rec.away_team_id]);
+.in("team_id", [rec.home_team_id, rec.away_team_id])
+.eq("game_date", rec.game_date);   // ← only today’s starters
 
 const homeRaw = pms.find(p => p.team_id === rec.home_team_id)?.pitcher_name ?? "";
 const awayRaw = pms.find(p => p.team_id === rec.away_team_id)?.pitcher_name ?? "";
@@ -249,6 +250,7 @@ for (const [player, line] of Object.entries(outsMap)) {
 const ln = lastName(player);
 if (!homeOuts && ln === homeLN) homeOuts = line;
 else if (!awayOuts && ln === awayLN) awayOuts = line;
+
 }
 
 /* 4️⃣  write back to the record */
