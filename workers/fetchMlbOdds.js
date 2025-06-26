@@ -152,7 +152,17 @@ async function upsertOdds(records) {
 // ───────────────────────────────────────────────────────────────────────────
 async function getPitcherOuts(eventId) {
   try {
-    const { data } = await axios.get(
+    const { data } = await axios.get/* TEMP: see exactly what the player-props payload looks like  */
+    if (process.env.DEBUG_OUTS === "1") {
+      console.dir(
+        data.bookmakers?.map(bm => ({
+          book: bm.key,
+          markets: bm.markets?.filter(m => m.key === "pitcher_outs")
+        })),
+        { depth: null }
+      );
+    }
+    (
       `${ODDS_API_URL}/${SPORT_KEY}/events/${eventId}/odds`,
       {
         params: {
