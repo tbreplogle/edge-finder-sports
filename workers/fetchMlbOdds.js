@@ -204,82 +204,89 @@ async function getPitcherOuts(eventId) {
 /* -------------------------------------------------------------------------- */
 /* 5. Orchestrator                                                            */
 /* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* 5. Orchestrator                                                            */
+/* -------------------------------------------------------------------------- */
 async function fetchAndSyncMlbOdds() {
   console.log(`🏁 Sync started ${new Date().toISOString()}`);
   const stats = { fetched: 0, mapped: 0, with_matchup: 0, upserted: 0 };
 
   try {
+    /* ── DB connectivity check ──────────────────────────────────────────── */
     if (!(await testConnection())) throw new Error("DB connection failed");
 
+    /* ── 1) pull H-2-H board ────────────────────────────────────────────── */
     const raw = await fetchOddsApi();
     stats.fetched = raw.length;
 
-        const mapped = (await Promise.all(raw.map(mapGame))).filter(Boolean);
-        stats.mapped = mapped.length;
-        if (!mapped.length) throw new Error("No mapped games");
-    
-        const joined = await attachMatchupIds(mapped);     /*  ← now defined  */
-    
-        /* ── add pitcher-outs to rows that now have matchup_id ─────────────── */
-        for (const rec of joined) {
-        if (!rec.matchup_id) continue;          // skip rows we can’t match yet
-    
-        /* 1️⃣  grab the two starters USING team_id */
-/* 1️⃣  grab the two starters USING team_id
-       first try with game_date, then fall back if nothing returned
--------------------------------------------------------------------*/
-let { data: pms, error } = await supabase
-  .from("pitching_matchups")
-  .select("pitcher_name, pitcher_role, team_id")
-  .in("team_id", [rec.home_team_id, rec.away_team_id])
-  .eq("game_date", rec.game_date);               // today only
+    /* ── 2) shape into local skeletons ─────────────────────────────────── */
+    const mapped = (await Promise.all(raw.map(mapGame))).filter(Boolean);
+    stats.mapped = mapped.length;
+    if (!mapped.length) throw new Error("No mapped games");
 
-if (error) throw error;
-if (!pms?.length) {
-  // fallback: any row for those teams, most-recent first
-  ({ data: pms } = await supabase
-    .from("pitching_matchups")
-    .select("pitcher_name, pitcher_role, team_id")
-    .in("team_id", [rec.home_team_id, rec.away_team_id])
-    .order("game_date", { ascending: false })
-    .limit(2)
-  );
-}
+    /* ── 3) attach our matchup_id  ─────────────────────────────────────── */
+    const joined = await attachMatchupIds(mapped);
 
-const homeRaw = pms.find(p => p.team_id === rec.home_team_id)?.pitcher_name ?? "";
-const awayRaw = pms.find(p => p.team_id === rec.away_team_id)?.pitcher_name ?? "";
+    /* ── 4) enrich with Pitcher-Outs lines ─────────────────────────────── */
+    for (const rec of joined) {
+      if (!rec.matchup_id) continue;          // nothing to match yet
 
-/* helper – LAST NAME in all-caps, strip dots/commas (unchanged) */
-const lastName = s =>
-  s.toUpperCase().replace(/[^A-Z ]/g, " ").trim().split(/\s+/).pop() || "";
+      /* 4-a  pull the two most-recent starters for these team_ids */
+      const { data: pms, error } = await supabase
+        .from("pitching_matchups")
+        .select("pitcher_name, team_id, created_at")
+        .in("team_id", [rec.home_team_id, rec.away_team_id])
+        .order("created_at", { ascending: false })
+        .limit(4);                            // safety – expect 2 rows
 
-/* 2️⃣  pull the prop once for this event (unchanged) */
-const outsMap = await getPitcherOuts(rec.game_id) || {};
+      if (error) throw error;
 
-/* 3️⃣  match by last name (unchanged) */
-let homeOuts = null, awayOuts = null;
-const homeLN = lastName(homeRaw);
-const awayLN = lastName(awayRaw);
+      const homeRaw =
+        pms.find(p => p.team_id === rec.home_team_id)?.pitcher_name ?? "";
+      const awayRaw =
+        pms.find(p => p.team_id === rec.away_team_id)?.pitcher_name ?? "";
 
-for (const [player, line] of Object.entries(outsMap)) {
-  const ln = lastName(player);
-  if (!homeOuts && ln === homeLN) homeOuts = line;
-  else if (!awayOuts && ln === awayLN) awayOuts = line;
-}
+      /* helper → LAST name, strips “(R)/(L)”, dots, commas */
+      const lastName = s =>
+        s
+          .replace(/\([^)]*\)/g, "")          // remove (R) / (L)
+          .toUpperCase()
+          .replace(/[^A-Z ]/g, " ")
+          .trim()
+          .split(/\s+/)
+          .pop() || "";
 
-/* 4️⃣  final safeguard – if only one side matched, use the other line */
-if (!homeOuts && awayOuts) homeOuts = awayOuts;
-if (!awayOuts && homeOuts) awayOuts = homeOuts;
+      /* 4-b  one API call → { "Griffin Canning": 15.5, … } */
+      const outsMap = await getPitcherOuts(rec.game_id) || {};
 
-/* 5️⃣  write back to the record */
-rec.home_pitcher_outs = homeOuts;
-rec.away_pitcher_outs = awayOuts;
+      /* 4-c  match by last name */
+      let homeOuts = null,
+          awayOuts = null;
 
+      const homeLN = lastName(homeRaw);
+      const awayLN = lastName(awayRaw);
+
+      for (const [player, line] of Object.entries(outsMap)) {
+        const ln = lastName(player);
+        if (!homeOuts && ln === homeLN) homeOuts = line;
+        else if (!awayOuts && ln === awayLN) awayOuts = line;
       }
-      const ready = joined.filter((r) => r.matchup_id)
+
+      /* 4-d  if only one matched, copy that value to the other side */
+      if (!homeOuts && awayOuts) homeOuts = awayOuts;
+      if (!awayOuts && homeOuts) awayOuts = homeOuts;
+
+      /* 4-e  write into the record (null if still unmatched) */
+      rec.home_pitcher_outs = homeOuts;
+      rec.away_pitcher_outs = awayOuts;
+    }
+
+    /* ── 5) upsert only rows with a matchup_id ─────────────────────────── */
+    const ready = joined.filter(r => r.matchup_id);
     stats.with_matchup = ready.length;
-    if (!ready.length)
+    if (!ready.length) {
       throw new Error("No games matched to matchup_id (scraper out of sync)");
+    }
 
     stats.upserted = await upsertOdds(ready);
 
@@ -290,6 +297,7 @@ rec.away_pitcher_outs = awayOuts;
     return { success: false, error: err.message, stats };
   }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* CLI entry                                                                  */
