@@ -186,7 +186,8 @@ async function getPitcherOuts(eventId) {
           if (m) line = parseFloat(m[1]);
         }
 
-        if (line != null && o.player) outs[o.player] ??= line; // first book wins
+        const who = o.player ?? o.participant ?? o.description;   // DK / FD use description
+        if (line != null && who) outs[who] ??= line;
       }
     }
 
