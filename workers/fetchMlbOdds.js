@@ -220,12 +220,27 @@ async function fetchAndSyncMlbOdds() {
           .select("pitcher_name, pitcher_role")
           .eq("matchup_id", rec.matchup_id);
     
-        const homeName = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
-        const awayName = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
-    
+          const homeRaw = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
+          const awayRaw = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
+           /* helper – returns “CASTILLO” from “Luis Castillo” or “Castillo, Luis” */
+          const lastName = (s) =>
+          s.toUpperCase().replace(/[^A-Z]/g, " ").trim().split(/\s/).pop() || "";
+
+ /* 2) pull outs map once */
         /* 2) pull the pitcher-outs market once */
         const outsMap = await getPitcherOuts(rec.game_id) || {};
-    
+         /* 3) fuzzy-match by last-name */
+         let homeOuts = null,
+             awayOuts = null;
+         const homeLN = lastName(homeRaw);
+         const awayLN = lastName(awayRaw);
+        
+         for (const [player, line] of Object.entries(outsMap)) {
+           const ln = lastName(player);
+           if (!homeOuts && ln === homeLN) homeOuts = line;
+           else if (!awayOuts && ln === awayLN) awayOuts = line;
+         }
+        
         rec.home_pitcher_outs = outsMap[homeName] ?? null;
         rec.away_pitcher_outs = outsMap[awayName] ?? null;
       }
