@@ -199,10 +199,6 @@ async function getPitcherOuts(eventId) {
             `⚠️  pitcher_outs fetch failed for ${eventId}:`,
             err.response?.status ?? err.message
           );
-    console.dir(
-      data.bookmakers?.[0]?.markets?.filter(m => m.key === "pitcher_outs"),
-      { depth: null }
-    );
     return null;
   }
 }
@@ -224,7 +220,25 @@ async function fetchAndSyncMlbOdds() {
     stats.mapped = mapped.length;
     if (!mapped.length) throw new Error("No mapped games");
 
-    const joined = await attachMatchupIds(mapped);
+      /* ── add pitcher-outs to rows that now have matchup_id ─────────────── */
+      for (const rec of joined) {
+        if (!rec.matchup_id) continue;          // skip rows we can’t match yet
+    
+        /* 1) get the two starters’ names for this matchup */
+        const { data: pms } = await supabase
+          .from("pitching_matchups")
+          .select("pitcher_name, pitcher_role")
+          .eq("matchup_id", rec.matchup_id);
+    
+        const homeName = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
+        const awayName = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
+    
+        /* 2) pull the pitcher-outs market once */
+        const outsMap = await getPitcherOuts(rec.game_id) || {};
+    
+        rec.home_pitcher_outs = outsMap[homeName] ?? null;
+        rec.away_pitcher_outs = outsMap[awayName] ?? null;
+      }
     const ready = joined.filter((r) => r.matchup_id);
     stats.with_matchup = ready.length;
     if (!ready.length)
