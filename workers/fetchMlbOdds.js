@@ -91,7 +91,18 @@ async function mapGame(game) {
 
   const utc = new Date(game.commence_time);
   const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
-  const pitcher_outs = await getPitcherOuts(game.id)
+    const outsMap      = await getPitcherOuts(game.id) || {};
+
+  // look up by pitcher name in your pitching_matchups table
+  const { data: pms } = await supabase
+        .from("pitching_matchups")
+        .select("pitcher_name, pitcher_role")
+        .eq("game_id", game.id);
+  const homeName = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
+  const awayName = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
+
+  const homePitcherOuts = outsMap[homeName] ?? null;
+  const awayPitcherOuts = outsMap[awayName] ?? null;
 
   return {
     game_id: game.id,
@@ -101,14 +112,15 @@ async function mapGame(game) {
     away_team_id,
     home_ml: hML,
     away_ml: aML,
-    pitcher_outs,
+    home_pitcher_outs: homePitcherOuts,
+    away_pitcher_outs: awayPitcherOuts,
     matchup_id: null, // filled in later
   };
 }
 
 /* -------------------------------------------------------------------------- */
 /* 3. Attach matchup_id                                                      */
-/*    1) by game_id, 2) fallback composite (home+away+date)                   */
+/*    1) by game_id, 2) fallback composite (homeawaydate)                   */
 /* -------------------------------------------------------------------------- */
 async function attachMatchupIds(records) {
   const { data, error } = await supabase
@@ -167,21 +179,21 @@ async function getPitcherOuts(eventId) {
     );
 
 
-    const outs = [];
 
-     for (const bm of data.bookmakers ?? []) {
-       const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
-       if (!mkt) continue;
 
-       for (const o of mkt.outcomes ?? []) {
-
-                if (typeof o.point === "number") {
-                    return o.point;      // take the first line and bail
-                  } // keep them all
-       }
-     }
-
-     return null // AVG of both lines
+        const outs = {};                               // { "Luis Castillo":18.5, … }
+    
+        for (const bm of data.bookmakers ?? []) {
+          const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
+          if (!mkt) continue;
+    
+          for (const o of mkt.outcomes ?? []) {
+            if (typeof o.point === "number" && o.player) {
+              outs[o.player] ??= o.point;              // first book wins
+            }
+          }
+        }
+        return Object.keys(outs).length ? outs : null; // null if market absent// AVG of both lines
   } catch (err) {
         console.warn(
             `⚠️  pitcher_outs fetch failed for ${eventId}:`,
