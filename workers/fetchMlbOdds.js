@@ -170,28 +170,50 @@ async function getPitcherOuts(eventId) {
     /* If the book(s) haven’t posted this prop yet, bail gracefully */
     if (!resp.data || !resp.data.bookmakers?.length) return null;
 
-    const outs = {};                       // { player → line }
+/* ------------------------------------------------------------------
+   Build ladders of prices per pitcher, then pick the point whose
+   worst-leg price is closest to –110 / –110.  Returns { player → point }
+-------------------------------------------------------------------*/
+const ladders = {};   // { player: { '16.5': [125,-165], '17.5':[100,-130] } }
 
-    for (const bm of resp.data.bookmakers) {
-      const mkt = bm.markets?.find(m => m.key === "pitcher_outs");
-      if (!mkt) continue;
+for (const bm of resp.data.bookmakers ?? []) {
+  const mkt = bm.markets?.find(m => m.key === "pitcher_outs");
+  if (!mkt) continue;
 
-      for (const o of mkt.outcomes ?? []) {
-        // ① use the point field when it exists
-        let line = o.point;
+  for (const o of mkt.outcomes ?? []) {
+    const player = o.player ?? o.participant ?? o.description;   // DK/FD use description
+    if (!player || o.point == null) continue;
 
-        // ② else scrape "Over 18.5" / "Under 17.5" style descriptions
-        if (line == null && typeof o.description === "string") {
-          const m = o.description.match(/(\d+(?:\.\d+)?)/);
-          if (m) line = parseFloat(m[1]);
-        }
+    const key = String(o.point);
+    (ladders[player] ??= {})[key] ??= [];
+    ladders[player][key].push(o.price);
+  }
+}
 
-        const who = o.player ?? o.participant ?? o.description;   // DK / FD use description
-        if (line != null && who) outs[who] ??= line;
-      }
+/* helper: distance of an American price from -110 */
+const dist = (price) => Math.abs(price + 110);
+
+const outs = {};  // final { player → bestPoint }
+
+for (const [player, pts] of Object.entries(ladders)) {
+  let bestPt  = null;
+  let bestErr = Infinity;
+
+  for (const [pt, prices] of Object.entries(pts)) {
+    if (prices.length < 2) continue;              // need both Over & Under
+    const worstSide = Math.max(dist(prices[0]), dist(prices[1]));
+    if (worstSide < bestErr) {
+      bestErr = worstSide;
+      bestPt  = parseFloat(pt);
     }
+  }
 
-    return Object.keys(outs).length ? outs : null;
+  if (bestPt != null) outs[player] = bestPt;
+}
+
+return Object.keys(outs).length ? outs : null;
+
+
   } catch (err) {
     console.warn(
       `⚠️  pitcher_outs fetch failed for ${eventId}:`,
@@ -204,9 +226,7 @@ async function getPitcherOuts(eventId) {
 /* -------------------------------------------------------------------------- */
 /* 5. Orchestrator                                                            */
 /* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-/* 5. Orchestrator                                                            */
-/* -------------------------------------------------------------------------- */
+
 async function fetchAndSyncMlbOdds() {
   console.log(`🏁 Sync started ${new Date().toISOString()}`);
   const stats = { fetched: 0, mapped: 0, with_matchup: 0, upserted: 0 };
