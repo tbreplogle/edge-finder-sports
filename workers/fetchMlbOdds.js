@@ -90,7 +90,7 @@ async function mapGame(game) {
 
   const utc = new Date(game.commence_time);
   const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
-  const pitcher_outs = await getPitcherOuts(game.id);
+  const pitcher_outs = await getPitcherOuts(game.id)
 
   return {
     game_id: game.id,
@@ -146,24 +146,9 @@ async function upsertOdds(records) {
   return data.length;
 }
 
-/* ------------------------------------------------------------------------- */
-/* NEW helper: robustly extract the numeric line                             */
-/* ------------------------------------------------------------------------- */
-function extractLine(outcome) {
-  // 1) direct field (rare but exists at some books)
-  if (outcome.point != null) return outcome.point;
-  if (outcome.line  != null) return outcome.line;
-
-  // 2) scrape from name / description  →  "Over 17.5", "Under 18"
-  const txt =
-    `${outcome.name ?? ""} ${outcome.description ?? ""}`.replace(",", ".");
-  const m = txt.match(/(\d+(?:\.\d+)?)/);           // first number in string
-  return m ? parseFloat(m[1]) : null;
-}
-
-/* ------------------------------------------------------------------------- */
-/* replace getPitcherOuts() with version that uses extractLine()             */
-/* ------------------------------------------------------------------------- */
+// ───────────────────────────────────────────────────────────────────────────
+// Helper – return AVG outs line (numeric) or null
+// ───────────────────────────────────────────────────────────────────────────
 async function getPitcherOuts(eventId) {
   try {
     const { data } = await axios.get(
@@ -175,29 +160,30 @@ async function getPitcherOuts(eventId) {
           bookmakers: BOOKMAKERS,
           markets: "pitcher_outs",
           oddsFormat: "american",
-          dateFormat: "iso",
         },
       }
     );
 
-    let best = null;                                // take lowest threshold
-    for (const bm of data.bookmakers ?? []) {
-      const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
-      if (!mkt) continue;
 
-      for (const o of mkt.outcomes ?? []) {
-        const line = extractLine(o);
-        if (line == null) continue;
-        best = best == null ? line : Math.min(best, line);
-      }
-    }
-    return best;                                    // numeric or null
+    const outs = [];
+
+     for (const bm of data.bookmakers ?? []) {
+       const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
+       if (!mkt) continue;
+
+       for (const o of mkt.outcomes ?? []) {
+
+        if (typeof o.point === "number") outs.push(o.point); // keep them all
+       }
+     }
+
+    if (!outs.length) return null;                 // market absent
+    return outs.reduce((a, b) => a + b, 0) / outs.length;  // AVG of both lines
   } catch (err) {
     console.warn(`⚠️  pitcher_outs fetch failed for ${eventId}`);
     return null;
   }
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* 5. Orchestrator                                                            */
