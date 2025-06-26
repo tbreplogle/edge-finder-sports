@@ -226,14 +226,15 @@ async function fetchAndSyncMlbOdds() {
           const lastName = (s) =>
           s.toUpperCase().replace(/[^A-Z]/g, " ").trim().split(/\s/).pop() || "";
 
- /* 2) pull outs map once */
+
         /* 2) pull the pitcher-outs market once */
         const outsMap = await getPitcherOuts(rec.game_id) || {};
          /* 3) fuzzy-match by last-name */
          let homeOuts = null,
              awayOuts = null;
-         const homeLN = lastName(homeRaw);
-         const awayLN = lastName(awayRaw);
+             const homeLN = lastName(homeRaw);
+             const awayLN = lastName(awayRaw);
+             
         
          for (const [player, line] of Object.entries(outsMap)) {
            const ln = lastName(player);
@@ -241,8 +242,8 @@ async function fetchAndSyncMlbOdds() {
            else if (!awayOuts && ln === awayLN) awayOuts = line;
          }
         
-        rec.home_pitcher_outs = outsMap[homeName] ?? null;
-        rec.away_pitcher_outs = outsMap[awayName] ?? null;
+          rec.home_pitcher_outs = homeOuts;
+          rec.away_pitcher_outs = awayOuts;
       }
       const ready = joined.filter((r) => r.matchup_id)
     stats.with_matchup = ready.length;
