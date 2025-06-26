@@ -90,7 +90,7 @@ async function mapGame(game) {
 
   const utc = new Date(game.commence_time);
   const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
-  const pitcher_outs = await fetchPitcherOuts(game.id);
+  const pitcher_outs = await getPitcherOuts(game.id);
 
   return {
     game_id: game.id,
@@ -146,18 +146,19 @@ async function upsertOdds(records) {
   return data.length;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Helper: fetch “Pitcher Outs” prop for a single game (returns JSON or null) */
-/* -------------------------------------------------------------------------- */
-async function fetchPitcherOuts(eventId) {
+// ---------------------------------------------------------------------------
+// Helper – fetch Pitcher-Outs prop for one event and return the LOWER line
+// (so if books hang 17.5 & 18.5 we grab 17.5; tweak as you like)
+// ---------------------------------------------------------------------------
+async function getPitcherOuts(eventId) {
   try {
     const { data } = await axios.get(
       `${ODDS_API_URL}/${SPORT_KEY}/events/${eventId}/odds`,
       {
         params: {
           apiKey: ODDS_API_KEY,
-          regions: REGIONS,                   // use the same region set
-          bookmakers: "draftkings,fanduel,betmgm",
+          regions: REGIONS,
+          bookmakers: BOOKMAKERS,          // same const you use for h2h
           markets: "pitcher_outs",
           oddsFormat: "american",
           dateFormat: "iso",
@@ -165,26 +166,26 @@ async function fetchPitcherOuts(eventId) {
       }
     );
 
-    const outs = {}; // { "Pitcher Name": 17.5, ... }
+    let bestLine = null;                  // numeric — 17.5, 18.0, …
 
     for (const bm of data.bookmakers ?? []) {
-      for (const mkt of bm.markets ?? []) {
-        if (mkt.key !== "pitcher_outs") continue;
-        for (const o of mkt.outcomes ?? []) {
-          // Grab “Over” line once per pitcher
-          if (o.name === "Over" && o.player && outs[o.player] == null) {
-            outs[o.player] = o.point ?? parseFloat(
-              (o.description ?? "").match(/(\d+\.?\d*)/)?.[1] ?? ""
-            );
-          }
-        }
+      const mkt = bm.markets?.find((m) => m.key === "pitcher_outs");
+      if (!mkt) continue;
+
+      for (const o of mkt.outcomes ?? []) {
+        // o.point is always the threshold (outs); if missing, skip.
+        const line = o.point ?? null;
+        if (line == null) continue;
+        bestLine = bestLine == null ? line : Math.min(bestLine, line);
       }
     }
-    return Object.keys(outs).length ? outs : null; // null if market missing
-  } catch {
-    return null; // network / 404 / no market
+    return bestLine;                      // may be null if market absent
+  } catch (err) {
+    console.warn(`⚠️  pitcher_outs fetch failed for ${eventId}`);
+    return null;
   }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* 5. Orchestrator                                                            */
