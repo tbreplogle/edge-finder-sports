@@ -225,35 +225,53 @@ async function fetchAndSyncMlbOdds() {
         if (!rec.matchup_id) continue;          // skip rows we can’t match yet
     
         /* 1️⃣  grab the two starters USING team_id */
-const { data: pms } = await supabase
-.from("pitching_matchups")
-.select("pitcher_name, pitcher_role, team_id")
-.in("team_id", [rec.home_team_id, rec.away_team_id])
-.eq("game_date", rec.game_date);   // ← only today’s starters
+/* 1️⃣  grab the two starters USING team_id
+       first try with game_date, then fall back if nothing returned
+-------------------------------------------------------------------*/
+let { data: pms, error } = await supabase
+  .from("pitching_matchups")
+  .select("pitcher_name, pitcher_role, team_id")
+  .in("team_id", [rec.home_team_id, rec.away_team_id])
+  .eq("game_date", rec.game_date);               // today only
+
+if (error) throw error;
+if (!pms?.length) {
+  // fallback: any row for those teams, most-recent first
+  ({ data: pms } = await supabase
+    .from("pitching_matchups")
+    .select("pitcher_name, pitcher_role, team_id")
+    .in("team_id", [rec.home_team_id, rec.away_team_id])
+    .order("game_date", { ascending: false })
+    .limit(2)
+  );
+}
 
 const homeRaw = pms.find(p => p.team_id === rec.home_team_id)?.pitcher_name ?? "";
 const awayRaw = pms.find(p => p.team_id === rec.away_team_id)?.pitcher_name ?? "";
 
-/* helper – LAST NAME in all-caps, strip dots/commas */
-const lastName = (s) =>
-s.toUpperCase().replace(/[^A-Z ]/g, " ").trim().split(/\s+/).pop() || "";
+/* helper – LAST NAME in all-caps, strip dots/commas (unchanged) */
+const lastName = s =>
+  s.toUpperCase().replace(/[^A-Z ]/g, " ").trim().split(/\s+/).pop() || "";
 
-/* 2️⃣  pull the prop once for this event */
+/* 2️⃣  pull the prop once for this event (unchanged) */
 const outsMap = await getPitcherOuts(rec.game_id) || {};
 
-/* 3️⃣  match by last name (first book that posts wins) */
+/* 3️⃣  match by last name (unchanged) */
 let homeOuts = null, awayOuts = null;
 const homeLN = lastName(homeRaw);
 const awayLN = lastName(awayRaw);
 
 for (const [player, line] of Object.entries(outsMap)) {
-const ln = lastName(player);
-if (!homeOuts && ln === homeLN) homeOuts = line;
-else if (!awayOuts && ln === awayLN) awayOuts = line;
-
+  const ln = lastName(player);
+  if (!homeOuts && ln === homeLN) homeOuts = line;
+  else if (!awayOuts && ln === awayLN) awayOuts = line;
 }
 
-/* 4️⃣  write back to the record */
+/* 4️⃣  final safeguard – if only one side matched, use the other line */
+if (!homeOuts && awayOuts) homeOuts = awayOuts;
+if (!awayOuts && homeOuts) awayOuts = homeOuts;
+
+/* 5️⃣  write back to the record */
 rec.home_pitcher_outs = homeOuts;
 rec.away_pitcher_outs = awayOuts;
 
