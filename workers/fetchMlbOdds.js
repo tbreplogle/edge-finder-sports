@@ -223,36 +223,37 @@ async function fetchAndSyncMlbOdds() {
         for (const rec of joined) {
         if (!rec.matchup_id) continue;          // skip rows we can’t match yet
     
-        /* 1) get the two starters’ names for this matchup */
-        const { data: pms } = await supabase
-          .from("pitching_matchups")
-          .select("pitcher_name, pitcher_role, team_id")
-          .in("team_id", [rec.home_team_id, rec.away_team_id]);
-    
-          const homeRaw = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
-          const awayRaw = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
-           /* helper – returns “CASTILLO” from “Luis Castillo” or “Castillo, Luis” */
-          const lastName = (s) =>
-          s.toUpperCase().replace(/[^A-Z]/g, " ").trim().split(/\s/).pop() || "";
+        /* 1️⃣  grab the two starters USING team_id */
+const { data: pms } = await supabase
+.from("pitching_matchups")
+.select("pitcher_name, pitcher_role, team_id")
+.in("team_id", [rec.home_team_id, rec.away_team_id]);
 
+const homeRaw = pms.find(p => p.team_id === rec.home_team_id)?.pitcher_name ?? "";
+const awayRaw = pms.find(p => p.team_id === rec.away_team_id)?.pitcher_name ?? "";
 
-        /* 2) pull the pitcher-outs market once */
-        const outsMap = await getPitcherOuts(rec.game_id) || {};
-         /* 3) fuzzy-match by last-name */
-         let homeOuts = null,
-             awayOuts = null;
-             const homeLN = lastName(homeRaw);
-             const awayLN = lastName(awayRaw);
-             
-        
-         for (const [player, line] of Object.entries(outsMap)) {
-           const ln = lastName(player);
-           if (!homeOuts && ln === homeLN) homeOuts = line;
-           else if (!awayOuts && ln === awayLN) awayOuts = line;
-         }
-        
-          rec.home_pitcher_outs = homeOuts;
-          rec.away_pitcher_outs = awayOuts;
+/* helper – LAST NAME in all-caps, strip dots/commas */
+const lastName = (s) =>
+s.toUpperCase().replace(/[^A-Z ]/g, " ").trim().split(/\s+/).pop() || "";
+
+/* 2️⃣  pull the prop once for this event */
+const outsMap = await getPitcherOuts(rec.game_id) || {};
+
+/* 3️⃣  match by last name (first book that posts wins) */
+let homeOuts = null, awayOuts = null;
+const homeLN = lastName(homeRaw);
+const awayLN = lastName(awayRaw);
+
+for (const [player, line] of Object.entries(outsMap)) {
+const ln = lastName(player);
+if (!homeOuts && ln === homeLN) homeOuts = line;
+else if (!awayOuts && ln === awayLN) awayOuts = line;
+}
+
+/* 4️⃣  write back to the record */
+rec.home_pitcher_outs = homeOuts;
+rec.away_pitcher_outs = awayOuts;
+
       }
       const ready = joined.filter((r) => r.matchup_id)
     stats.with_matchup = ready.length;
