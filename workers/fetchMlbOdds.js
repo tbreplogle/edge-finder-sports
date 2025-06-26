@@ -73,7 +73,7 @@ async function fetchOddsApi() {
 /* -------------------------------------------------------------------------- */
 /* 2. Map API response → local skeleton                                       */
 /* -------------------------------------------------------------------------- */
-function mapGame(game) {
+async function mapGame(game) {
   const home_team_id = getTeamId(game.home_team);
   const away_team_id = getTeamId(game.away_team);
   if (!home_team_id || !away_team_id) {
@@ -90,6 +90,7 @@ function mapGame(game) {
 
   const utc = new Date(game.commence_time);
   const cdt = new Date(utc.getTime() - 5 * 60 * 60 * 1e3); // UTC‑5
+  const pitcher_outs = await fetchPitcherOuts(game.id);
 
   return {
     game_id: game.id,
@@ -99,6 +100,7 @@ function mapGame(game) {
     away_team_id,
     home_ml: hML,
     away_ml: aML,
+    pitcher_outs,
     matchup_id: null, // filled in later
   };
 }
@@ -142,6 +144,46 @@ async function upsertOdds(records) {
   if (error) throw error;
   console.log(`✅ Upserted ${data.length}`);
   return data.length;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Helper: fetch “Pitcher Outs” prop for a single game (returns JSON or null) */
+/* -------------------------------------------------------------------------- */
+async function fetchPitcherOuts(eventId) {
+  try {
+    const { data } = await axios.get(
+      `${ODDS_API_URL}/${SPORT_KEY}/events/${eventId}/odds`,
+      {
+        params: {
+          apiKey: ODDS_API_KEY,
+          regions: REGIONS,                   // use the same region set
+          bookmakers: "draftkings,fanduel,betmgm",
+          markets: "pitcher_outs",
+          oddsFormat: "american",
+          dateFormat: "iso",
+        },
+      }
+    );
+
+    const outs = {}; // { "Pitcher Name": 17.5, ... }
+
+    for (const bm of data.bookmakers ?? []) {
+      for (const mkt of bm.markets ?? []) {
+        if (mkt.key !== "pitcher_outs") continue;
+        for (const o of mkt.outcomes ?? []) {
+          // Grab “Over” line once per pitcher
+          if (o.name === "Over" && o.player && outs[o.player] == null) {
+            outs[o.player] = o.point ?? parseFloat(
+              (o.description ?? "").match(/(\d+\.?\d*)/)?.[1] ?? ""
+            );
+          }
+        }
+      }
+    }
+    return Object.keys(outs).length ? outs : null; // null if market missing
+  } catch {
+    return null; // network / 404 / no market
+  }
 }
 
 /* -------------------------------------------------------------------------- */
