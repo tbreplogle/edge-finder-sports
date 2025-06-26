@@ -226,8 +226,8 @@ async function fetchAndSyncMlbOdds() {
         /* 1) get the two starters’ names for this matchup */
         const { data: pms } = await supabase
           .from("pitching_matchups")
-          .select("pitcher_name, pitcher_role")
-          .eq("matchup_id", rec.matchup_id);
+          .select("pitcher_name, pitcher_role, team_id")
+          .in("team_id", [rec.home_team_id, rec.away_team_id]);
     
           const homeRaw = pms.find(p => p.pitcher_role === "home")?.pitcher_name ?? "";
           const awayRaw = pms.find(p => p.pitcher_role === "away")?.pitcher_name ?? "";
