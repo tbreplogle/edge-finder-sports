@@ -301,7 +301,16 @@ async function fetchAndSyncMlbOdds() {
       rec.home_pitcher_outs = homeOuts;
       rec.away_pitcher_outs = awayOuts;
     }
-
+    if (rec.matchup_id && !byGameId.has(r.game_id)) {
+      // we just found the matchup via composite key → make sure
+      // mlb_matchups now holds the time for next run
+      await supabase
+        .from('mlb_matchups')
+        .update({ game_time_ct: r.game_time_ct })
+        .eq('matchup_id', rec.matchup_id)
+        .is('game_time_ct', null);
+    }
+    
     /* ── 5) upsert only rows with a matchup_id ─────────────────────────── */
     const ready = joined.filter(r => r.matchup_id);
     stats.with_matchup = ready.length;
