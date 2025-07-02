@@ -346,19 +346,19 @@ async function fetchAndSyncMlbOdds() {
       rec.away_pitcher_outs = awayOuts;
     }
          /* 4-f  first time we see this matchup, store its start-time */
-         const startTimeStamps = joined
-        .filter(r => r.matchup_id)
-        .map(r => ({
-         matchup_id:   r.matchup_id,
-         game_time_ct: r.game_time_ct,
-  }));
-
-if (startTimeStamps.length) {
-  await supabase
-    .from('mlb_matchups')
-    .upsert(startTimeStamps, { onConflict: 'matchup_id', ignoreDuplicates: true })
-    .is('game_time_ct', null);          // only fill rows that are still NULL
-}
+           /* 4-f  back-fill game_time_ct the FIRST time we see a matchup */
+           const needsTime = joined
+             .filter(r => r.matchup_id && r.game_time_ct)      // we have a time for it
+             .map(r => r.matchup_id);                          // unique ids
+         
+           if (needsTime.length) {
+             // update ONLY rows whose time is still null
+             await supabase
+               .from("mlb_matchups")
+               .update({ game_time_ct: sql`EXCLUDED.game_time_ct` })  // keep pg-type
+               .in("matchup_id", needsTime)
+               .is("game_time_ct", null);
+           }
     
     /* ── 5) upsert only rows with a matchup_id ─────────────────────────── */
     const ready = joined.filter(r => r.matchup_id);
