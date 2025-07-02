@@ -113,7 +113,7 @@ async function mapGame(game) {
 async function attachMatchupIds(records) {
   const { data, error } = await supabase
     .from("mlb_matchups")
-    .select("matchup_id, game_id, home_team_id, away_team_id, game_date");
+    .select("matchup_id, game_id, home_team_id, away_team_id, game_date, game_time_ct");
   if (error) throw error;
 
   const byGameId = new Map(data.map((m) => [m.game_id, m.matchup_id]));
