@@ -113,25 +113,69 @@ async function mapGame(game) {
 async function attachMatchupIds(records) {
   const { data, error } = await supabase
     .from("mlb_matchups")
-    .select("matchup_id, game_id, home_team_id, away_team_id, game_date, game_time_ct");
+    .select(
+      "matchup_id, game_id, home_team_id, away_team_id, game_date, game_time_ct"
+    );
   if (error) throw error;
 
-  const byGameId = new Map(data.map((m) => [m.game_id, m.matchup_id]));
-   const byComposite = new Map(
-       data.map(m => [
-         `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${String(m.game_time_ct)}`,
-         m.matchup_id
-       ])
-     );
+  /* 1️⃣  direct game_id hit */
+  const byGameId = new Map(data.map(m => [m.game_id, m.matchup_id]));
 
-  return records.map((r) => {
-    const direct = byGameId.get(r.game_id);
-    if (direct) return { ...r, matchup_id: direct };
+  /* 2️⃣  4-part key (date+time) */
+  const byComposite4 = new Map(
+    data
+      .filter(m => m.game_time_ct)                       // only when time present
+      .map(m => [
+        `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${String(
+          m.game_time_ct
+        )}`,
+        m.matchup_id,
+      ])
+  );
 
-     const compKey =
-   `${r.home_team_id}_${r.away_team_id}_${r.game_date}_${r.game_time_ct}`;
-    return { ...r, matchup_id: byComposite.get(compKey) ?? null };
+  /* 3️⃣  3-part key (date only) – for rows still missing time */
+  const byComposite3 = new Map(
+    data
+      .filter(m => !m.game_time_ct)
+      .map(m => [
+        `${m.home_team_id}_${m.away_team_id}_${m.game_date}`,
+        m.matchup_id,
+      ])
+  );
+
+  const updates = [];      // rows that need game_time_ct back-filled
+
+  const out = records.map(r => {
+    /* shortcut 1 – exact game_id */
+    let muId = byGameId.get(r.game_id);
+
+    /* shortcut 2 – 4-part key */
+    if (!muId) {
+      const key4 = `${r.home_team_id}_${r.away_team_id}_${r.game_date}_${r.game_time_ct}`;
+      muId = byComposite4.get(key4);
+    }
+
+    /* fallback – 3-part key (date only) */
+    if (!muId) {
+      const key3 = `${r.home_team_id}_${r.away_team_id}_${r.game_date}`;
+      muId = byComposite3.get(key3);
+
+      /* if we matched here, schedule a back-fill of game_time_ct */
+      if (muId)
+        updates.push({ matchup_id: muId, game_time_ct: r.game_time_ct });
+    }
+
+    return { ...r, matchup_id: muId ?? null };
   });
+
+  /* one round-trip to patch missing times */
+  if (updates.length) {
+    await supabase
+      .from("mlb_matchups")
+      .upsert(updates, { onConflict: "matchup_id" });
+  }
+
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */
