@@ -34,4 +34,4 @@ jobs:
 
       - name: Sync DraftKings lines
         working-directory: workers
-        run: node syncCfbLines.js 2024      # omit arg for current year
+        run: node syncCfbLines.js 2025      # omit arg for current year
