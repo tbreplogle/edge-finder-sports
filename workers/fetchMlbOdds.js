@@ -302,13 +302,19 @@ async function fetchAndSyncMlbOdds() {
       rec.away_pitcher_outs = awayOuts;
     }
          /* 4-f  first time we see this matchup, store its start-time */
-         if (rec.matchup_id) {
-          await supabase
-            .from('mlb_matchups')
-            .update({ game_time_ct: rec.game_time_ct })
-            .eq('matchup_id', rec.matchup_id)
-            .is('game_time_ct', null);
-        }
+         const startTimeStamps = joined
+        .filter(r => r.matchup_id)
+        .map(r => ({
+         matchup_id:   r.matchup_id,
+         game_time_ct: r.game_time_ct,
+  }));
+
+if (startTimeStamps.length) {
+  await supabase
+    .from('mlb_matchups')
+    .upsert(startTimeStamps, { onConflict: 'matchup_id', ignoreDuplicates: true })
+    .is('game_time_ct', null);          // only fill rows that are still NULL
+}
     
     /* ── 5) upsert only rows with a matchup_id ─────────────────────────── */
     const ready = joined.filter(r => r.matchup_id);
