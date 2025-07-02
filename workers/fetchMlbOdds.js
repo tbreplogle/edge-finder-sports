@@ -119,7 +119,7 @@ async function attachMatchupIds(records) {
   const byGameId = new Map(data.map((m) => [m.game_id, m.matchup_id]));
    const byComposite = new Map(
        data.map(m => [
-         `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${m.game_time_ct.toISOString()}`,
+         `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${String(m.game_time_ct)}`,
          m.matchup_id
        ])
      );
