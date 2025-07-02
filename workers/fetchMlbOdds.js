@@ -110,63 +110,70 @@ async function mapGame(game) {
 /* 3. Attach matchup_id                                                      */
 /*    1) by game_id, 2) fallback composite (homeawaydate)                   */
 /* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   3. Attach matchup_id
+      – honour double-headers:     give each game its own matchup_id
+-------------------------------------------------------------------*/
 async function attachMatchupIds(records) {
-  const { data, error } = await supabase
+  /* pull every matchup row we’ll need (today … but cheap either way) */
+  const { data: matchups, error: e1 } = await supabase
     .from("mlb_matchups")
     .select(
       "matchup_id, game_id, home_team_id, away_team_id, game_date, game_time_ct"
     );
-  if (error) throw error;
+  if (e1) throw e1;
 
-  /* 1️⃣  direct game_id hit */
-  const byGameId = new Map(data.map(m => [m.game_id, m.matchup_id]));
+  /* find the ids we have *already* written to mlb_market_odds so we don’t
+     hand them out twice when today has a DH                                       */
+  const { data: existing, error: e2 } = await supabase
+    .from("mlb_market_odds")
+    .select("matchup_id")
+    .not("matchup_id", "is", null);
+  if (e2) throw e2;
+  const alreadyUsed = new Set(existing.map(r => r.matchup_id));
 
-  /* 2️⃣  4-part key (date+time) */
-  const byComposite4 = new Map(
-    data
-      .filter(m => m.game_time_ct)                       // only when time present
-      .map(m => [
-        `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${String(
-          m.game_time_ct
-        )}`,
-        m.matchup_id,
-      ])
-  );
+  /* lookup-tables for speed                                                       */
+  const byGameId = new Map(matchups.map(r => [r.game_id, r.matchup_id]));
 
-  /* 3️⃣  3-part key (date only) – for rows still missing time */
-  const byComposite3 = new Map(
-    data
-      .filter(m => !m.game_time_ct)
-      .map(m => [
-        `${m.home_team_id}_${m.away_team_id}_${m.game_date}`,
-        m.matchup_id,
-      ])
-  );
+  /*  home+away+date  →  [ list of matchup rows, earliest first ]                  */
+  const byKey = new Map();
+  for (const r of matchups) {
+    const k = `${r.home_team_id}_${r.away_team_id}_${r.game_date}`;
+    (byKey.get(k) ?? byKey.set(k, []).get(k)).push(r);
+  }
+  /* make sure the list is sorted by start-time so DH(1) comes before DH(2)        */
+  for (const list of byKey.values()) {
+    list.sort((a, b) => (a.game_time_ct ?? '').localeCompare(b.game_time_ct ?? ''));
+  }
 
-  const updates = [];      // rows that need game_time_ct back-filled
+  /* keep track of matchup_ids we hand out *during this run*                       */
+  const handedOut = new Set();
 
-  const out = records.map(r => {
-    /* shortcut 1 – exact game_id */
-    let muId = byGameId.get(r.game_id);
-
-    /* shortcut 2 – 4-part key */
-    if (!muId) {
-      const key4 = `${r.home_team_id}_${r.away_team_id}_${r.game_date}_${r.game_time_ct}`;
-      muId = byComposite4.get(key4);
+  return records.map(rec => {
+    /* ① direct match by Odds-API game_id                                           */
+    let mid = byGameId.get(rec.game_id);
+    if (mid) {
+      handedOut.add(mid);
+      return { ...rec, matchup_id: mid };
     }
 
-    /* fallback – 3-part key (date only) */
-    if (!muId) {
-      const key3 = `${r.home_team_id}_${r.away_team_id}_${r.game_date}`;
-      muId = byComposite3.get(key3);
+    /* ② find the list of candidate rows for this team/date                         */
+    const k = `${rec.home_team_id}_${rec.away_team_id}_${rec.game_date}`;
+    const candidates = byKey.get(k) || [];
 
-      /* if we matched here, schedule a back-fill of game_time_ct */
-      if (muId)
-        updates.push({ matchup_id: muId, game_time_ct: r.game_time_ct });
+    /*  → choose the *first* candidate whose id is not already in use               */
+    for (const row of candidates) {
+      if (!alreadyUsed.has(row.matchup_id) && !handedOut.has(row.matchup_id)) {
+        mid = row.matchup_id;
+        handedOut.add(mid);
+        break;
+      }
     }
 
-    return { ...r, matchup_id: muId ?? null };
+    return { ...rec, matchup_id: mid ?? null };      // null → skipped later
   });
+}
+
 
   /* one round-trip to patch missing times */
   if (updates.length) {
