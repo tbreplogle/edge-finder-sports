@@ -48,7 +48,7 @@ try {
   }
   
   // ── pull API + upsert ──────────────────────────────────────────
-  async function run(season = 2024) {
+  async function run(season = 2025) {
     const url = `https://api.collegefootballdata.com/stats/season/advanced?year=${season}&excludeGarbageTime=true&startWeek=1`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${CFBD_API_KEY}` }
