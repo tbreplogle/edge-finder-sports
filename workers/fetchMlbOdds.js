@@ -117,18 +117,19 @@ async function attachMatchupIds(records) {
   if (error) throw error;
 
   const byGameId = new Map(data.map((m) => [m.game_id, m.matchup_id]));
-  const byComposite = new Map(
-    data.map((m) => [
-      `${m.home_team_id}_${m.away_team_id}_${m.game_date}`,
-      m.matchup_id,
-    ])
-  );
+   const byComposite = new Map(
+       data.map(m => [
+         `${m.home_team_id}_${m.away_team_id}_${m.game_date}_${m.game_time_ct.toISOString()}`,
+         m.matchup_id
+       ])
+     );
 
   return records.map((r) => {
     const direct = byGameId.get(r.game_id);
     if (direct) return { ...r, matchup_id: direct };
 
-    const compKey = `${r.home_team_id}_${r.away_team_id}_${r.game_date}`;
+     const compKey =
+   `${r.home_team_id}_${r.away_team_id}_${r.game_date}_${r.game_time_ct}`;
     return { ...r, matchup_id: byComposite.get(compKey) ?? null };
   });
 }
