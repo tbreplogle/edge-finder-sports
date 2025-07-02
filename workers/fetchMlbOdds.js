@@ -175,16 +175,6 @@ async function attachMatchupIds(records) {
 }
 
 
-  /* one round-trip to patch missing times */
-  if (updates.length) {
-    await supabase
-      .from("mlb_matchups")
-      .upsert(updates, { onConflict: "matchup_id" });
-  }
-
-  return out;
-}
-
 /* -------------------------------------------------------------------------- */
 /* 4. Upsert                                                                 */
 /* -------------------------------------------------------------------------- */
