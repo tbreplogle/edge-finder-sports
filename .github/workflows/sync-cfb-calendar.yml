@@ -36,4 +36,4 @@ jobs:
 
       - name: Sync CFB season calendar
         working-directory: workers
-        run: node syncCfbCalendar.js 2024   # change arg or omit for current year
+        run: node syncCfbCalendar.js 2025   # change arg or omit for current year
