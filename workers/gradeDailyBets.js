@@ -111,10 +111,9 @@ async function scrapeBox(matchupId, browser) {
 async function gradeAll() {
   if (!(await testConnection())) throw new Error('DB connection failed');
 
-  const { data: bets } = await supabase
-    .from('mlb_daily_bets')
-    .select('*')
-    .lt('game_date', todayISO());
+   const { data: bets } = await supabase
+     .from('mlb_daily_bets')
+     .select('*');          // ← pull every row, no date filter
 
   if (!bets?.length) return console.log('Nothing to grade.');
 
