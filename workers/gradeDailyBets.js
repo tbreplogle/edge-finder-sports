@@ -80,47 +80,41 @@ async function scrapeBox(matchupId, browser) {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-    /* newest layout */
-    const head = await page.$('.covers-CoversMatchupDetails-leadIn');
-    if (head) {
-      const scores = await page.$$eval(
-        '.covers-CoversMatchups-LiveScore',
-        els => els.slice(0, 2).map(el => parseInt(el.textContent.trim(), 10))
-      );
-      const abbrs = await page.$$eval(
-        '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
-        els => els.map(el => el.textContent.trim().toUpperCase())
-      );
-      if (scores.length === 2 && abbrs.length === 2)
-        return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: scores[0], home: scores[1] };
-    }
-/* newest Covers layout (has --left / --right) */
-const left  = await page.$('.covers-CoversMatchups-LiveScore--left');
-const right = await page.$('.covers-CoversMatchups-LiveScore--right');
-if (left && right) {
-  const sHome = parseInt(await page.evaluate(el => el.textContent, right), 10);
-  const sAway = parseInt(await page.evaluate(el => el.textContent, left ), 10);
+    /* newest Covers layout (left / right blocks) */
+    await page.waitForSelector('.covers-CoversMatchups-LiveScore--left', {timeout: 15000});
+    const left  = await page.$('.covers-CoversMatchups-LiveScore--left');
+    const right = await page.$('.covers-CoversMatchups-LiveScore--right');
 
-  const abbrs = await page.$$eval(
-    '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
-    els => els.map(e => e.textContent.trim().toUpperCase())
-  ); // order: [away, home]
+    /* wait until both elements contain at least one digit (≤ 3 s) */
+    await page.waitForFunction(
+      (l, r) => /\d/.test(l.textContent) && /\d/.test(r.textContent),
+      { timeout: 3000 },
+      left, right
+    );
 
-  if (abbrs.length === 2 && !Number.isNaN(sHome) && !Number.isNaN(sAway))
-    return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: sAway, home: sHome };
-}
-    /* older fallback layout */
+    const sHome = parseInt(await page.evaluate(el => el.textContent, right), 10);
+    const sAway = parseInt(await page.evaluate(el => el.textContent, left ), 10);
+
     const abbrs = await page.$$eval(
-      'a.covers-CoversMatchups-uppercaseHelper',
-      els => els.map(e => e.textContent.trim().toUpperCase()).slice(0, 2)
-    );
-    const nums = await page.$$eval(
-      'td.covers-CoversMatchups-leagueAvgBg',
-      els => els.map(e => parseInt(e.textContent.trim(), 10)).slice(-2)
-    );
-    return abbrs.length === 2 && nums.length === 2
-      ? { away_abbr: abbrs[0], home_abbr: abbrs[1], away: nums[0], home: nums[1] }
-      : null;
+      '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
+      els => els.map(e => e.textContent.trim().toUpperCase())
+    ); // [away, home]
+
+    if (abbrs.length === 2 && !Number.isNaN(sHome) && !Number.isNaN(sAway))
+      return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: sAway, home: sHome };
+
+    /* older fallback layout */
+const abbrsOld = await page.$$eval(
+  'a.covers-CoversMatchups-uppercaseHelper',
+  els => els.map(e => e.textContent.trim().toUpperCase()).slice(0, 2)
+);
+const nums = await page.$$eval(
+  'td.covers-CoversMatchups-leagueAvgBg',
+  els => els.map(e => parseInt(e.textContent.trim(), 10)).slice(-2)
+);
+return abbrsOld.length === 2 && nums.length === 2
+  ? { away_abbr: abbrsOld[0], home_abbr: abbrsOld[1], away: nums[0], home: nums[1] }
+  : null;
   } catch {
     return null;
   } finally {
@@ -163,7 +157,8 @@ async function gradeAll() {
         const box = scoreMap[bet.matchup_id];
         if (!box) return null;
 
-        const abbr = NAME_TO_ABBR[bet.team_name.toUpperCase()] ?? bet.team_name.toUpperCase();
+        const raw  = bet.team_name.toUpperCase().replace(/\./g,'').replace(/\s+/g,' ').trim();
+        const abbr = NAME_TO_ABBR[raw] ?? raw;
         let win;
         if (abbr === box.home_abbr) win = box.home > box.away;
         else if (abbr === box.away_abbr) win = box.away > box.home;
