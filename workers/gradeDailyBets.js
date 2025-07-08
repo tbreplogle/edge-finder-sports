@@ -9,77 +9,58 @@
 import puppeteer from 'puppeteer';
 import { supabase, testConnection } from './lib/supabaseClient.js';
 
-/* ───── 1)  team-name → 3-letter abbr map  ───── */
+/* ───── 1)  team-name → 3-letter abbreviation map  ───── */
+
 const NAME_TO_ABBR = {
+  /* full team names (and common variants) */
   'ARIZONA DIAMONDBACKS': 'ARI', 'ARIZONA': 'ARI',
-  'ATLANTA BRAVES': 'ATL', 'ATLANTA': 'ATL',
-  'BALTIMORE ORIOLES': 'BAL', 'BALTIMORE': 'BAL',
-  'BOSTON RED SOX': 'BOS', 'BOSTON': 'BOS',
-  'CHICAGO WHITE SOX': 'CWS', 'CHI. WHITE SOX': 'CWS', 'WHITE SOX': 'CWS',
-  'CHICAGO CUBS': 'CHC', 'CUBS': 'CHC',
-  'CINCINNATI REDS': 'CIN', 'CINCINNATI': 'CIN',
-  'CLEVELAND GUARDIANS': 'CLE', 'CLEVELAND': 'CLE',
-  'COLORADO ROCKIES': 'COL', 'COLORADO': 'COL',
-  'DETROIT TIGERS': 'DET', 'DETROIT': 'DET',
-  'HOUSTON ASTROS': 'HOU', 'HOUSTON': 'HOU',
-  'KANSAS CITY ROYALS': 'KCR', 'KANSAS CITY': 'KCR',
-  'LOS ANGELES ANGELS': 'LAA', 'LA ANGELS': 'LAA',
-  'LOS ANGELES DODGERS': 'LAD', 'LA DODGERS': 'LAD',
-  'MIAMI MARLINS': 'MIA', 'MIAMI': 'MIA',
-  'MILWAUKEE BREWERS': 'MIL', 'MILWAUKEE': 'MIL',
-  'MINNESOTA TWINS': 'MIN', 'MINNESOTA': 'MIN',
-  'NEW YORK METS': 'NYM', 'NY METS': 'NYM',
-  'NEW YORK YANKEES': 'NYY', 'NY YANKEES': 'NYY',
-  'OAKLAND ATHLETICS': 'OAK', 'OAKLAND': 'OAK',
+  'ATLANTA BRAVES'     : 'ATL', 'ATLANTA'     : 'ATL',
+  'BALTIMORE ORIOLES'  : 'BAL', 'BALTIMORE'   : 'BAL',
+  'BOSTON RED SOX'     : 'BOS', 'BOSTON'      : 'BOS',
+  'CHICAGO WHITE SOX'  : 'CHW', 'CHI. WHITE SOX': 'CHW', 'WHITE SOX': 'CHW',
+  'CHICAGO CUBS'       : 'CHC', 'CHI. CUBS'   : 'CHC', 'CUBS' : 'CHC',
+  'CINCINNATI REDS'    : 'CIN', 'CINCINNATI'  : 'CIN',
+  'CLEVELAND GUARDIANS': 'CLE', 'CLEVELAND'   : 'CLE',
+  'COLORADO ROCKIES'   : 'COL', 'COLORADO'    : 'COL',
+  'DETROIT TIGERS'     : 'DET', 'DETROIT'     : 'DET',
+  'HOUSTON ASTROS'     : 'HOU', 'HOUSTON'     : 'HOU',
+  'KANSAS CITY ROYALS' : 'KCR', 'KANSAS CITY' : 'KC',  'ROYALS': 'KC',
+  'LOS ANGELES ANGELS' : 'LAA', 'LA ANGELS'   : 'LAA',
+  'LOS ANGELES DODGERS': 'LAD', 'LA DODGERS'  : 'LAD',
+  'MIAMI MARLINS'      : 'MIA', 'MIAMI'       : 'MIA',
+  'MILWAUKEE BREWERS'  : 'MIL', 'MILWAUKEE'   : 'MIL',
+  'MINNESOTA TWINS'    : 'MIN', 'MINNESOTA'   : 'MIN',
+  'NEW YORK METS'      : 'NYM', 'NY METS'     : 'NYM',
+  'NEW YORK YANKEES'   : 'NYY', 'NY YANKEES'  : 'NYY',
+  'OAKLAND ATHLETICS'  : 'OAK', 'OAKLAND'     : 'OAK', 'ATHLETICS': 'OAK',
   'PHILADELPHIA PHILLIES': 'PHI', 'PHILADELPHIA': 'PHI',
-  'PITTSBURGH PIRATES': 'PIT', 'PITTSBURGH': 'PIT',
-  'SAN DIEGO PADRES': 'SDP', 'SAN DIEGO': 'SDP',
-  'SAN FRANCISCO GIANTS': 'SFG', 'SAN FRANCISCO': 'SFG',
-  'SEATTLE MARINERS': 'SEA', 'SEATTLE': 'SEA',
+  'PITTSBURGH PIRATES' : 'PIT', 'PITTSBURGH'  : 'PIT',
+  'SAN DIEGO PADRES'   : 'SDP', 'SAN DIEGO'   : 'SDP', 'PADRES': 'SDP',
+  'SAN FRANCISCO GIANTS': 'SFG', 'SAN FRANCISCO': 'SFG', 'SF': 'SFG',
+  'SEATTLE MARINERS'   : 'SEA', 'SEATTLE'     : 'SEA',
   'ST. LOUIS CARDINALS': 'STL', 'ST LOUIS CARDINALS': 'STL', 'ST. LOUIS': 'STL',
-  'TAMPA BAY RAYS': 'TBR', 'TAMPA BAY': 'TBR', 'TB RAYS': 'TBR',
-  'TEXAS RANGERS': 'TEX', 'TEXAS': 'TEX',
-  'TORONTO BLUE JAYS': 'TOR', 'TORONTO': 'TOR',
-  'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON': 'WSH',
-  'CHICAGO WHITE SOX': 'CHW',
-  'CHI. WHITE SOX'   : 'CHW',
-  'WHITE SOX'        : 'CHW',
-
-  'KANSAS CITY ROYALS': 'KC',
-  'KANSAS CITY'       : 'KC',
-  'ROYALS'            : 'KC',
-
-  'TAMPA BAY RAYS': 'TB',
-  'TAMPA BAY'     : 'TB',
-  'TB RAYS'       : 'TB',
-  'CHW': 'CHW',
-  'CHI WHITE SOX': 'CHW',
-  'CHI. WHITE SOX': 'CHW',
-  'KC': 'KC', 'ROYALS': 'KC', 'KANSAS CITY':'KC',
-  'TB': 'TB', 'TAMPA BAY':'TB',
-  'ATHLETICS'      : 'OAK',   
-  'CHI.  CUBS'     : 'CHC'   
-  
+  'TAMPA BAY RAYS'     : 'TBR', 'TAMPA BAY'   : 'TB',  'TB RAYS': 'TB',
+  'TEXAS RANGERS'      : 'TEX', 'TEXAS'       : 'TEX',
+  'TORONTO BLUE JAYS'  : 'TOR', 'TORONTO'     : 'TOR',
+  'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON': 'WSH'
 };
+
+/* extra 2-/3-letter aliases that Covers pages sometimes use */
 Object.assign(NAME_TO_ABBR, {
-  /* aliases Covers sometimes shows in linescore table */
-  ATH : 'OAK',          // Athletics shortened code
-  OAK : 'OAK',          // just in case
-  WAS : 'WSH',          // Washington
-  SD  : 'SDP',          // Padres
-  ARZ : 'ARI',          // older “ARZ” for Arizona
-  CH  : 'CHC',          // Cubs (older mobile)
-  CUBS      : 'CHC',
-  ATHLETICS : 'OAK',
-  WASHINGTON: 'WSH',    // add full to be safe
-  PADRES    : 'SDP'
+  ATH : 'OAK',   // short for Athletics
+  KC  : 'KCR',   // Royals “KC”
+  TB  : 'TBR',   // Rays “TB”
+  WAS : 'WSH',   // Nationals “WAS”
+  SD  : 'SDP',   // Padres “SD”
+  AZ  : 'ARI',   // Diamondbacks “AZ”
+  ARZ : 'ARI',   // older “ARZ”
+  CH  : 'CHC'    // Cubs old mobile “CH”
 });
 
-
-/* ensure every 3-letter code maps to itself */
-'ARI ATL BAL BOS CHC CIN CLE COL CWS DET HOU KCR LAA LAD MIA MIL MIN NYM NYY OAK PHI PIT SDP SFG SEA STL TBR TEX TOR WSH'
+/* make sure every canonical 3-letter code maps to itself */
+'ARI ATL BAL BOS CHC CIN CLE COL CHW DET HOU KCR LAA LAD MIA MIL MIN NYM NYY OAK PHI PIT SDP SFG SEA STL TBR TEX TOR WSH'
   .split(' ')
-  .forEach(abbr => { NAME_TO_ABBR[abbr] = abbr; });
+  .forEach(code => { NAME_TO_ABBR[code] = code; });
 
 /* ───── 2)  utilities ───── */
 const todayISO = () =>
