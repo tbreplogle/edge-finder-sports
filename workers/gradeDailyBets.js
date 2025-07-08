@@ -57,6 +57,8 @@ const NAME_TO_ABBR = {
   'CHI. WHITE SOX': 'CHW',
   'KC': 'KC', 'ROYALS': 'KC', 'KANSAS CITY':'KC',
   'TB': 'TB', 'TAMPA BAY':'TB',
+  'ATHLETICS'      : 'OAK',   
+  'CHI.  CUBS'     : 'CHC',   
 };
 
 /* ensure every 3-letter code maps to itself */
@@ -92,7 +94,21 @@ async function scrapeBox(matchupId, browser) {
       if (scores.length === 2 && abbrs.length === 2)
         return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: scores[0], home: scores[1] };
     }
+/* newest Covers layout (has --left / --right) */
+const left  = await page.$('.covers-CoversMatchups-LiveScore--left');
+const right = await page.$('.covers-CoversMatchups-LiveScore--right');
+if (left && right) {
+  const sHome = parseInt(await page.evaluate(el => el.textContent, right), 10);
+  const sAway = parseInt(await page.evaluate(el => el.textContent, left ), 10);
 
+  const abbrs = await page.$$eval(
+    '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
+    els => els.map(e => e.textContent.trim().toUpperCase())
+  ); // order: [away, home]
+
+  if (abbrs.length === 2 && !Number.isNaN(sHome) && !Number.isNaN(sAway))
+    return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: sAway, home: sHome };
+}
     /* older fallback layout */
     const abbrs = await page.$$eval(
       'a.covers-CoversMatchups-uppercaseHelper',
