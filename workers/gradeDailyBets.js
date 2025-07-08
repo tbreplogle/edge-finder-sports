@@ -62,14 +62,19 @@ const NAME_TO_ABBR = {
   
 };
 Object.assign(NAME_TO_ABBR, {
-  /* Extra 3-letter codes seen on Covers */
-  ATH : 'OAK',       // “ATH” = Oakland Athletics
-  WAS : 'WSH',       // “WAS” = Washington Nationals
-  SD  : 'SDP',       // “SD”  = San Diego Padres
-  ARI : 'ARI',       // Covers uses ARI too, but add just in case
-  AZ  : 'ARI',       // “AZ”  = Arizona (rare older page)
-  CH  : 'CHC',       // “CH”  = Cubs (old mobile table)
+  /* aliases Covers sometimes shows in linescore table */
+  ATH : 'OAK',          // Athletics shortened code
+  OAK : 'OAK',          // just in case
+  WAS : 'WSH',          // Washington
+  SD  : 'SDP',          // Padres
+  ARZ : 'ARI',          // older “ARZ” for Arizona
+  CH  : 'CHC',          // Cubs (older mobile)
+  CUBS      : 'CHC',
+  ATHLETICS : 'OAK',
+  WASHINGTON: 'WSH',    // add full to be safe
+  PADRES    : 'SDP'
 });
+
 
 /* ensure every 3-letter code maps to itself */
 'ARI ATL BAL BOS CHC CIN CLE COL CWS DET HOU KCR LAA LAD MIA MIL MIN NYM NYY OAK PHI PIT SDP SFG SEA STL TBR TEX TOR WSH'
@@ -207,7 +212,14 @@ async function gradeAll() {
   const { data: bets } = await supabase
   .from('mlb_daily_bets')
   .select('*')
-  .lt('game_date', todayISO()); 
+  .lt('game_date', todayISO())
+  .not('matchup_id', 'in', `(${Object.keys(await supabase
+      .from('mlb_daily_results')
+      .select('matchup_id')
+      .lt('game_date', todayISO()))
+     .map(row => `'${row.matchup_id}'`)
+     .join(',') || "''"})`);
+
 
   if (!bets?.length) return console.log('Nothing to grade.');
 
