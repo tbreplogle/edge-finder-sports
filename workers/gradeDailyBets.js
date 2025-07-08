@@ -52,6 +52,11 @@ const NAME_TO_ABBR = {
   'TAMPA BAY RAYS': 'TB',
   'TAMPA BAY'     : 'TB',
   'TB RAYS'       : 'TB',
+  'CHW': 'CHW',
+  'CHI WHITE SOX': 'CHW',
+  'CHI. WHITE SOX': 'CHW',
+  'KC': 'KC', 'ROYALS': 'KC', 'KANSAS CITY':'KC',
+  'TB': 'TB', 'TAMPA BAY':'TB',
 };
 
 /* ensure every 3-letter code maps to itself */
@@ -111,9 +116,10 @@ async function scrapeBox(matchupId, browser) {
 async function gradeAll() {
   if (!(await testConnection())) throw new Error('DB connection failed');
 
-   const { data: bets } = await supabase
-     .from('mlb_daily_bets')
-     .select('*');          // ← pull every row, no date filter
+  const { data: bets } = await supabase
+  .from('mlb_daily_bets')
+  .select('*')
+  .lt('game_date', todayISO()); 
 
   if (!bets?.length) return console.log('Nothing to grade.');
 
