@@ -230,10 +230,14 @@ async function gradeAll() {
 
         const raw  = bet.team_name.toUpperCase().replace(/\./g,'').replace(/\s+/g,' ').trim();
         const abbr = NAME_TO_ABBR[raw] ?? raw;
-        let win;
-        if (abbr === box.home_abbr) win = box.home > box.away;
-        else if (abbr === box.away_abbr) win = box.away > box.home;
-        else return null; // alias missing
+                /* ✨ new: canonicalise box abbreviations too */
+                const homeAbbr = NAME_TO_ABBR[box.home_abbr] ?? box.home_abbr;
+                const awayAbbr = NAME_TO_ABBR[box.away_abbr] ?? box.away_abbr;
+        
+                let win;
+                if (abbr === homeAbbr)      win = box.home > box.away;
+               else if (abbr === awayAbbr) win = box.away > box.home;
+                else return null;           // alias still missing
 
         return {
           matchup_id: bet.matchup_id,
