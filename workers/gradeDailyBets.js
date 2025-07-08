@@ -58,8 +58,18 @@ const NAME_TO_ABBR = {
   'KC': 'KC', 'ROYALS': 'KC', 'KANSAS CITY':'KC',
   'TB': 'TB', 'TAMPA BAY':'TB',
   'ATHLETICS'      : 'OAK',   
-  'CHI.  CUBS'     : 'CHC',   
+  'CHI.  CUBS'     : 'CHC'   
+  
 };
+Object.assign(NAME_TO_ABBR, {
+  /* Extra 3-letter codes seen on Covers */
+  ATH : 'OAK',       // “ATH” = Oakland Athletics
+  WAS : 'WSH',       // “WAS” = Washington Nationals
+  SD  : 'SDP',       // “SD”  = San Diego Padres
+  ARI : 'ARI',       // Covers uses ARI too, but add just in case
+  AZ  : 'ARI',       // “AZ”  = Arizona (rare older page)
+  CH  : 'CHC',       // “CH”  = Cubs (old mobile table)
+});
 
 /* ensure every 3-letter code maps to itself */
 'ARI ATL BAL BOS CHC CIN CLE COL CWS DET HOU KCR LAA LAD MIA MIL MIN NYM NYY OAK PHI PIT SDP SFG SEA STL TBR TEX TOR WSH'
@@ -127,19 +137,22 @@ async function scrapeBox(matchupId, browser) {
     }
 
     /* ── LAYOUT C: old table (leagueAvgBg) ── */
-    const abbrsOld = await page.$$eval(
-      'a.covers-CoversMatchups-uppercaseHelper',
-      els => els.map(e => e.textContent.trim().toUpperCase()).slice(0, 2)
-    );
-    const nums = await page.$$eval(
-      'td.covers-CoversMatchups-leagueAvgBg',
-      els => els.map(e => parseInt(e.textContent.trim(), 10)).slice(-2)
-    );
+/* older fallback layout --------------------------------------- */
+const abbrsOld = await page.$$eval(
+  'a.covers-CoversMatchups-uppercaseHelper',
+  els => els.map(e => e.textContent.trim().toUpperCase()).slice(0, 2)
+);
 
-    if (abbrsOld.length === 2 && nums.length === 2 && !nums.some(Number.isNaN)) {
-      return { away_abbr: abbrsOld[0], home_abbr: abbrsOld[1],
-               away: nums[0], home: nums[1] };
-    }
+const numsOld = await page.$$eval(
+  'td.covers-CoversMatchups-leagueAvgBg,             \
+   td.covers-CoversMatchups-linescoreTable--total',  // <-- add this
+  els => els.map(e => parseInt(e.textContent.trim(), 10)).slice(-2)
+);
+
+if (abbrsOld.length === 2 && numsOld.length === 2 && !numsOld.some(Number.isNaN)) {
+  return { away_abbr: abbrsOld[0], home_abbr: abbrsOld[1], away: numsOld[0], home: numsOld[1] };
+}
+
     /* ── LAYOUT D: deep table selectors (last-column totals) ── */
     try {
       const deepAwaySel  =
