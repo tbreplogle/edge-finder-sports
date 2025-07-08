@@ -73,54 +73,119 @@ const todayISO = () =>
 const launchChrome = () =>
   puppeteer.launch({ channel: 'chrome', headless: 'new', args: ['--no-sandbox'] });
 
-/* ───── 3)  scrape one box-score page ───── */
+/* ───── 3) scrape one box-score page ───── */
 async function scrapeBox(matchupId, browser) {
   const url = `https://www.covers.com/sport/baseball/mlb/boxscore/${matchupId}`;
   const page = await browser.newPage();
+
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-    /* newest Covers layout (left / right blocks) */
-    await page.waitForSelector('.covers-CoversMatchups-LiveScore--left', {timeout: 15000});
-    const left  = await page.$('.covers-CoversMatchups-LiveScore--left');
-    const right = await page.$('.covers-CoversMatchups-LiveScore--right');
+    /* ── LAYOUT A: “LiveScore--left / --right” columns ── */
+    const leftSel  = '.covers-CoversMatchups-LiveScore--left';
+    const rightSel = '.covers-CoversMatchups-LiveScore--right';
 
-    /* wait until both elements contain at least one digit (≤ 3 s) */
-    await page.waitForFunction(
-      (l, r) => /\d/.test(l.textContent) && /\d/.test(r.textContent),
-      { timeout: 3000 },
-      left, right
+    const leftEl  = await page.$(leftSel);
+    const rightEl = await page.$(rightSel);
+
+    if (leftEl && rightEl) {
+      /* wait until both contain at least one digit (max 5 s) */
+      await page.waitForFunction(
+        (l, r) => /\d/.test(l.textContent) && /\d/.test(r.textContent),
+        { timeout: 5000 },
+        leftEl, rightEl
+      ).catch(() => {});              // ignore timeout – we’ll still try
+
+      const sHome = parseInt(await page.evaluate(el => el.textContent, rightEl), 10);
+      const sAway = parseInt(await page.evaluate(el => el.textContent, leftEl ), 10);
+
+      const abbrs = await page.$$eval(
+        '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
+        els => els.map(e => e.textContent.trim().toUpperCase())
+      ); // [away, home]
+
+      if (abbrs.length === 2 && !Number.isNaN(sHome) && !Number.isNaN(sAway)) {
+        return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: sAway, home: sHome };
+      }
+    }
+
+    /* ── LAYOUT B: headline score “covers-CoversMatchups-LiveScore” list ── */
+    const scores2 = await page.$$eval(
+      '.covers-CoversMatchups-LiveScore',
+      els => els.slice(0, 2).map(el => parseInt(el.textContent.trim(), 10))
     );
 
-    const sHome = parseInt(await page.evaluate(el => el.textContent, right), 10);
-    const sAway = parseInt(await page.evaluate(el => el.textContent, left ), 10);
+    if (scores2.length === 2 && !scores2.some(Number.isNaN)) {
+      const abbrs = await page.$$eval(
+        '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
+        els => els.map(e => e.textContent.trim().toUpperCase())
+      ); // [away, home]
+      if (abbrs.length === 2) {
+        return { away_abbr: abbrs[0], home_abbr: abbrs[1],
+                 away: scores2[0], home: scores2[1] };
+      }
+    }
 
-    const abbrs = await page.$$eval(
-      '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
-      els => els.map(e => e.textContent.trim().toUpperCase())
-    ); // [away, home]
+    /* ── LAYOUT C: old table (leagueAvgBg) ── */
+    const abbrsOld = await page.$$eval(
+      'a.covers-CoversMatchups-uppercaseHelper',
+      els => els.map(e => e.textContent.trim().toUpperCase()).slice(0, 2)
+    );
+    const nums = await page.$$eval(
+      'td.covers-CoversMatchups-leagueAvgBg',
+      els => els.map(e => parseInt(e.textContent.trim(), 10)).slice(-2)
+    );
 
-    if (abbrs.length === 2 && !Number.isNaN(sHome) && !Number.isNaN(sAway))
-      return { away_abbr: abbrs[0], home_abbr: abbrs[1], away: sAway, home: sHome };
+    if (abbrsOld.length === 2 && nums.length === 2 && !nums.some(Number.isNaN)) {
+      return { away_abbr: abbrsOld[0], home_abbr: abbrsOld[1],
+               away: nums[0], home: nums[1] };
+    }
+    /* ── LAYOUT D: deep table selectors (last-column totals) ── */
+    try {
+      const deepAwaySel  =
+        'div.covers-CoversMatchups-responsiveTableContainer > table > tbody > tr:nth-child(1) > td:nth-child(11)';
+      const deepHomeSel  =
+        'div.covers-CoversMatchups-responsiveTableContainer > table > tbody > tr:nth-child(2) > td:nth-child(11)';
 
-    /* older fallback layout */
-const abbrsOld = await page.$$eval(
-  'a.covers-CoversMatchups-uppercaseHelper',
-  els => els.map(e => e.textContent.trim().toUpperCase()).slice(0, 2)
-);
-const nums = await page.$$eval(
-  'td.covers-CoversMatchups-leagueAvgBg',
-  els => els.map(e => parseInt(e.textContent.trim(), 10)).slice(-2)
-);
-return abbrsOld.length === 2 && nums.length === 2
-  ? { away_abbr: abbrsOld[0], home_abbr: abbrsOld[1], away: nums[0], home: nums[1] }
-  : null;
-  } catch {
+      await page.waitForSelector(deepAwaySel, { timeout: 3000 });
+      await page.waitForSelector(deepHomeSel, { timeout: 3000 });
+
+      const sAwayDeep = parseInt(await page.$eval(deepAwaySel, el => el.textContent.trim()), 10);
+      const sHomeDeep = parseInt(await page.$eval(deepHomeSel, el => el.textContent.trim()), 10);
+
+      const abbrsDeep = await page.$$eval(
+        '.covers-CoversMatchupDetails-awayName, .covers-CoversMatchupDetails-homeName',
+        els => els.map(e => e.textContent.trim().toUpperCase())
+      ); // [away, home]
+
+      if (
+        abbrsDeep.length === 2 &&
+        !Number.isNaN(sAwayDeep) &&
+        !Number.isNaN(sHomeDeep)
+      ) {
+        return {
+          away_abbr: abbrsDeep[0],
+          home_abbr: abbrsDeep[1],
+          away: sAwayDeep,
+          home: sHomeDeep
+        };
+      }
+    } catch (_) {
+      /* ignore – fall through to next fallback */
+    }
+
+    /* still nothing – print one-line debug */
+    console.log(`⚠️  No score scraped for matchup ${matchupId}`);
+
+    return null;
+  } catch (err) {
+    console.error(`❌ scrapeBox(${matchupId})`, err.message);
     return null;
   } finally {
     await page.close();
   }
 }
+
 
 /* ───── 4)  main grading routine ───── */
 async function gradeAll() {
