@@ -1,6 +1,29 @@
-- name: Call snapshot_and_truncate()
-  env:
-    DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  run: |
-    set -euo pipefail
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "call public.snapshot_and_truncate();"
+name: Snapshot & Truncate MLB Tables
+
+on:
+  # every day, 11:00 UTC  (= 05:00 US-Central)
+  schedule:
+    - cron: '0 11 * * *'
+  # let you trigger it from the Actions UI
+  workflow_dispatch:
+
+jobs:
+  run_proc:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1 – Install the PostgreSQL client
+      - name: Install psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      # 2 – Call the stored procedure
+      - name: Call snapshot_and_truncate()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+               -c "call public.snapshot_and_truncate();"
+          echo "✅ Snapshot & truncate finished at $(date -u)"
