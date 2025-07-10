@@ -1,6 +1,6 @@
 name: Snapshot & Truncate MLB Tables
 
-# 05:00 AM Central  (= 11:00 UTC)
+# Runs daily at 05:00 AM Central (11:00 UTC) and on manual trigger
 on:
   schedule:
     - cron: '0 11 * * *'
@@ -11,78 +11,82 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1️⃣  Check out repo (keeps version parity)
-    - uses: actions/checkout@v4
+      # 1️⃣  Check out repo
+      - uses: actions/checkout@v4
 
-    # 2️⃣  Restore APT cache
-    - name: Restore APT cache
-      id: apt-cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          /var/cache/apt/archives
-          /var/lib/apt/lists
-        key: ${{ runner.os }}-apt-psql-v1
+      # 2️⃣  Restore APT cache (optional speed-up)
+      - name: Restore APT cache
+        id: apt-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-psql-v1
 
-    # 3️⃣  Install psql client (fast on cache hit)
-    - name: Install PostgreSQL client
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends postgresql-client
+      # 3️⃣  Install psql client
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
 
-    # 4️⃣  Save updated APT cache (only if cache missed)
-    - name: Save APT cache
-      if: steps.apt-cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          /var/cache/apt/archives
-          /var/lib/apt/lists
-        key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+      # 4️⃣  Save APT cache only on a miss
+      - name: Save APT cache
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
 
-    # 5️⃣  Snapshot view ➜ history, then truncate staging tables
-    - name: Snapshot & Truncate MLB tables
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      run: |
-        set -euo pipefail
+      # 5️⃣  Snapshot today’s predictions ➜ history, then truncate staging
+      - name: Snapshot & Truncate MLB tables
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
 
-        PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\).*/\1/p')
-        PGPORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-        PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
-        PGUSER=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-        PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\).*/\1/p')
-        export PGSSLMODE=require
+          # ── Parse DATABASE_URL into psql parts ───────────────────────────────
+          PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\(.*\):[0-9]\+.*/\1/p')
+          PGPORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]\+\)\/.*/\1/p')
+          PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
+          PGUSER=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:]*\):.*#\1#p')
+          PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
+          export PGSSLMODE=require
 
-        cat <<'SQL' | psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" --set ON_ERROR_STOP=1
-    BEGIN;
+          # ── One psql call: BEGIN · INSERT · TRUNCATE · COMMIT ───────────────
+          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" \
+               --set ON_ERROR_STOP=1 \
+               --command "
+          BEGIN;
 
-INSERT INTO public.mlb_predictions_with_market_history (
-    snapshot_dts,
-    matchup_id, game_id, game_time_ct,
-    home_team, away_team,
-    home_market_ml, away_market_ml,
-    home_market_pct, away_market_pct,
-    home_pred_ml, away_pred_ml,
-    home_pred_pct, away_pred_pct,
-    home_edge_pct, away_edge_pct,
-    pred_total,
-    home_pitcher, away_pitcher,
-    away_ticket_pct, home_ticket_pct,
-    home_confidence, away_confidence
-)
-SELECT now(), pm.*
-FROM   public.mlb_predictions_with_market AS pm
-ON CONFLICT (snapshot_dts, matchup_id) DO NOTHING;
+          INSERT INTO public.mlb_predictions_with_market_history (
+              snapshot_dts,
+              matchup_id, game_id, game_time_ct,
+              home_team, away_team,
+              home_market_ml, away_market_ml,
+              home_market_pct, away_market_pct,
+              home_pred_ml, away_pred_ml,
+              home_pred_pct, away_pred_pct,
+              home_edge_pct, away_edge_pct,
+              pred_total,
+              home_pitcher, away_pitcher,
+              away_ticket_pct, home_ticket_pct,
+              home_confidence, away_confidence
+          )
+          SELECT NOW(), pm.*
+          FROM   public.mlb_predictions_with_market AS pm
+          ON CONFLICT (snapshot_dts, matchup_id) DO NOTHING;
 
-TRUNCATE TABLE
-    public.mlb_team_hitting_stats,
-    public.mlb_predictions,
-    public.mlb_matchups,
-    public.mlb_market_odds,
-    public.pitching_matchups;
+          TRUNCATE TABLE
+              public.mlb_team_hitting_stats,
+              public.mlb_predictions,
+              public.mlb_matchups,
+              public.mlb_market_odds,
+              public.pitching_matchups;
 
-COMMIT;
-SQL
+          COMMIT;
+          "
 
-        echo "✅ Snapshot & truncate completed at $(date -u)"
+          echo \"✅ Snapshot & truncate completed at $(date -u)\"
