@@ -55,7 +55,7 @@ jobs:
         export PGSSLMODE=require
 
         cat <<'SQL' | psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" --set ON_ERROR_STOP=1
-BEGIN;
+    BEGIN;
 
 INSERT INTO public.mlb_predictions_with_market_history (
     snapshot_dts,
