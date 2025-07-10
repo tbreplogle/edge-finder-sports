@@ -65,6 +65,6 @@ jobs:
               public.pitching_matchups;
 
           COMMIT;
-EOSQL
+    EOSQL
 
           echo "✅ Snapshot & truncate completed at $(date -u)"
