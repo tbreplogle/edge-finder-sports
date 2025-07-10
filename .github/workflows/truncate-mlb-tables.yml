@@ -1,20 +1,20 @@
-name: Truncate MLB Tables
+name: Snapshot & Truncate MLB Tables
 
-# 05:00 AM Central Standard  (= 11:00 UTC)
+# 05:00 AM Central  (= 11:00 UTC)
 on:
   schedule:
     - cron: '0 11 * * *'
   workflow_dispatch:
 
 jobs:
-  truncate:
+  snapshot_and_truncate:
     runs-on: ubuntu-latest
 
     steps:
-    # 1️⃣  Check out repo (not strictly needed but nice for consistency)
+    # 1️⃣  Check out repo (keeps version parity)
     - uses: actions/checkout@v4
 
-    # 2️⃣  Restore APT cache to skip most of apt-get download time
+    # 2️⃣  Restore APT cache
     - name: Restore APT cache
       id: apt-cache
       uses: actions/cache@v4
@@ -24,13 +24,13 @@ jobs:
           /var/lib/apt/lists
         key: ${{ runner.os }}-apt-psql-v1
 
-    # 3️⃣  Install psql client (will be fast if cache hit)
+    # 3️⃣  Install psql client (fast on cache hit)
     - name: Install PostgreSQL client
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends postgresql-client
 
-    # 4️⃣  Save updated APT cache (only runs when key missed)
+    # 4️⃣  Save updated APT cache (only if cache missed)
     - name: Save APT cache
       if: steps.apt-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
@@ -40,11 +40,13 @@ jobs:
           /var/lib/apt/lists
         key: ${{ steps.apt-cache.outputs.cache-primary-key }}
 
-    # 5️⃣  Truncate the five tables
-    - name: Truncate MLB tables
+    # 5️⃣  Snapshot view ➜ history, then truncate staging tables
+    - name: Snapshot & Truncate MLB tables
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
+        set -euo pipefail
+
         PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\).*/\1/p')
         PGPORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
         PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
@@ -53,12 +55,34 @@ jobs:
         export PGSSLMODE=require
 
         cat <<'SQL' | psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" --set ON_ERROR_STOP=1
-        TRUNCATE TABLE
-            public.mlb_team_hitting_stats,
-            public.mlb_predictions,
-            public.mlb_matchups,
-            public.mlb_market_odds,
-            public.pitching_matchups;
-        SQL
+BEGIN;
 
-        echo "✅ Tables truncated at $(date -u)"
+INSERT INTO public.mlb_predictions_with_market_history (
+    snapshot_dts,
+    matchup_id, game_id, game_time_ct,
+    home_team, away_team,
+    home_market_ml, away_market_ml,
+    home_market_pct, away_market_pct,
+    home_pred_ml, away_pred_ml,
+    home_pred_pct, away_pred_pct,
+    home_edge_pct, away_edge_pct,
+    pred_total,
+    home_pitcher, away_pitcher,
+    away_ticket_pct, home_ticket_pct,
+    home_confidence, away_confidence
+)
+SELECT now(), pm.*
+FROM   public.mlb_predictions_with_market AS pm
+ON CONFLICT (snapshot_dts, matchup_id) DO NOTHING;
+
+TRUNCATE TABLE
+    public.mlb_team_hitting_stats,
+    public.mlb_predictions,
+    public.mlb_matchups,
+    public.mlb_market_odds,
+    public.pitching_matchups;
+
+COMMIT;
+SQL
+
+        echo "✅ Snapshot & truncate completed at $(date -u)"
