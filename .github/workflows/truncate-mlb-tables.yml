@@ -1,6 +1,6 @@
 name: Snapshot & Truncate MLB Tables
 
-# 05 :00 AM Central  (= 11 :00 UTC)  + manual trigger
+# 05:00 AM Central (= 11:00 UTC) + manual trigger
 on:
   schedule:
     - cron: '0 11 * * *'
@@ -11,23 +11,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣  Optional checkout (keeps repo context)
+      # 1️⃣  (Optional) check out repository
       - uses: actions/checkout@v4
 
-      # 2️⃣  Install the PostgreSQL client
+      # 2️⃣  Install PostgreSQL client
       - name: Install psql
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql-client
 
-      # 3️⃣  Snapshot → history, then truncate staging tables
+      # 3️⃣  Snapshot ➜ history, then truncate staging tables
       - name: Snapshot & Truncate MLB tables
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
 
-          # ── Parse DATABASE_URL into pieces ──────────────────────────────
+          # ── Parse DATABASE_URL pieces ────────────────────────────────
           PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\(.*\):[0-9]\+.*/\1/p')
           PGPORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]\+\)\/.*/\1/p')
           PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
@@ -35,37 +35,36 @@ jobs:
           PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
           export PGSSLMODE=require
 
-          # ── Execute SQL block atomically ────────────────────────────────
-          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" \
-               -v ON_ERROR_STOP=1 <<'EOSQL'
-BEGIN;
+          # ── One atomic SQL block ─────────────────────────────────────
+          psql "host=$PGHOST port=$PGPORT dbname=$PGDATABASE user=$PGUSER password=$PGPASSWORD" -v ON_ERROR_STOP=1 <<'EOSQL'
+          BEGIN;
 
-INSERT INTO public.mlb_predictions_with_market_history (
-    snapshot_dts,
-    matchup_id, game_id, game_time_ct,
-    home_team, away_team,
-    home_market_ml, away_market_ml,
-    home_market_pct, away_market_pct,
-    home_pred_ml, away_pred_ml,
-    home_pred_pct, away_pred_pct,
-    home_edge_pct, away_edge_pct,
-    pred_total,
-    home_pitcher, away_pitcher,
-    away_ticket_pct, home_ticket_pct,
-    home_confidence, away_confidence
-)
-SELECT NOW(), pm.*
-FROM   public.mlb_predictions_with_market AS pm
-ON CONFLICT (snapshot_dts, matchup_id) DO NOTHING;
+          INSERT INTO public.mlb_predictions_with_market_history (
+              snapshot_dts,
+              matchup_id, game_id, game_time_ct,
+              home_team, away_team,
+              home_market_ml, away_market_ml,
+              home_market_pct, away_market_pct,
+              home_pred_ml, away_pred_ml,
+              home_pred_pct, away_pred_pct,
+              home_edge_pct, away_edge_pct,
+              pred_total,
+              home_pitcher, away_pitcher,
+              away_ticket_pct, home_ticket_pct,
+              home_confidence, away_confidence
+          )
+          SELECT NOW(), pm.*
+          FROM   public.mlb_predictions_with_market AS pm
+          ON CONFLICT (snapshot_dts, matchup_id) DO NOTHING;
 
-TRUNCATE TABLE
-    public.mlb_team_hitting_stats,
-    public.mlb_predictions,
-    public.mlb_matchups,
-    public.mlb_market_odds,
-    public.pitching_matchups;
+          TRUNCATE TABLE
+              public.mlb_team_hitting_stats,
+              public.mlb_predictions,
+              public.mlb_matchups,
+              public.mlb_market_odds,
+              public.pitching_matchups;
 
-COMMIT;
+          COMMIT;
 EOSQL
 
           echo "✅ Snapshot & truncate completed at $(date -u)"
