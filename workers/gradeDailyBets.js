@@ -61,6 +61,9 @@ Object.assign(NAME_TO_ABBR, {
   NYY: 'NYY',   // (self-map)
   BO : 'BOS',   // rare two-letter Bos
   SF : 'SF',    // Giants
+  CU  : 'CHC',   // “CU” in some tables
+  CH  : 'CHC',   // older mobile header
+  WHT : 'CWS',   // “WHT” = White Sox
 });
 
 /* make sure every canonical 3-letter code maps to itself */
