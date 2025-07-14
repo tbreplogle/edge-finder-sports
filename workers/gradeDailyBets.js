@@ -19,7 +19,7 @@ const NAME_TO_ABBR = {
   'ATLANTA BRAVES'      : 'ATL', 'ATLANTA'              : 'ATL', 'BRAVES'       : 'ATL',
   'BALTIMORE ORIOLES'   : 'BAL', 'BALTIMORE'            : 'BAL', 'ORIOLES'      : 'BAL',
   'BOSTON RED SOX'      : 'BOS', 'BOSTON'               : 'BOS', 'RED SOX'      : 'BOS',
-  'CHICAGO WHITE SOX'   : 'CWS', 'CHI WHITE SOX'        : 'CWS',
+  'CHICAGO WHITE SOX' : 'CWS', 'CHI WHITE SOX' : 'CWS', 'CHI. WHITE SOX': 'CWS',
   'CHICAGO CUBS'        : 'CHC', 'CHI CUBS'             : 'CHC',
   'CINCINNATI REDS'     : 'CIN', 'CINCINNATI'           : 'CIN',
   'CLEVELAND GUARDIANS' : 'CLE', 'CLEVELAND'            : 'CLE',
