@@ -55,7 +55,8 @@ Object.assign(NAME_TO_ABBR, {
   CH  : 'CHC',   // two-letter “CH”
   CU  : 'CHC',   // “CU”
   CUBS: 'CHC',
-  WHT : 'CWS',   // “WHT” = White Sox
+  WHT : 'CWS',          // “WHT” = White Sox
+  CHW : 'CWS',          // Covers often uses CHW
 
   /* 2-letter or legacy codes */
   AZ  : 'ARI', ARZ : 'ARI',
