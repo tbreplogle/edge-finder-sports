@@ -43,6 +43,12 @@ const NAME_TO_ABBR = {
   'TEXAS RANGERS'      : 'TEX', 'TEXAS'       : 'TEX',
   'TORONTO BLUE JAYS'  : 'TOR', 'TORONTO'     : 'TOR',
   'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON': 'WSH'
+    /* ===== odd two-letter codes occasionally seen ===== */
+    AZ :'AZ',  // Arizona
+    BOS:'BOS',
+    CH :'CHC', // older mobile table for Cubs
+    ATH:'ATH', // Oakland in table footer
+  };
 };
 
 /* extra 2-/3-letter aliases that Covers pages sometimes use */
