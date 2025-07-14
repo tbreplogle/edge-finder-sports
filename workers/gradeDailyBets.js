@@ -50,16 +50,17 @@ const NAME_TO_ABBR = {
     ATH:'ATH', // Oakland in table footer
 };
 
-/* extra 2-/3-letter aliases that Covers pages sometimes use */
 Object.assign(NAME_TO_ABBR, {
-  ATH : 'OAK',   // short for Athletics
-  KC  : 'KCR',   // Royals “KC”
-  TB  : 'TBR',   // Rays “TB”
-  WAS : 'WSH',   // Nationals “WAS”
-  SD  : 'SDP',   // Padres “SD”
-  AZ  : 'ARI',   // Diamondbacks “AZ”
-  ARZ : 'ARI',   // older “ARZ”
-  CH  : 'CHC'    // Cubs old mobile “CH”
+  /* — extra two-letter / odd codes seen in totals column — */
+  CH : 'CHC',   // Cubs
+  CU : 'CHC',   // sometimes “CU” on mobile
+  WHT: 'CWS',   // “WHT” = White Sox
+  KC : 'KC',    // already present but duplicate ok
+  TB : 'TB',
+  NYK: 'NYY',   // Yanks sometimes “NYK”
+  NYY: 'NYY',   // (self-map)
+  BO : 'BOS',   // rare two-letter Bos
+  SF : 'SF',    // Giants
 });
 
 /* make sure every canonical 3-letter code maps to itself */
