@@ -11,65 +11,73 @@ import { supabase, testConnection } from './lib/supabaseClient.js';
 
 /* ───── 1)  team-name → 3-letter abbreviation map  ───── */
 
+/* ───── 1)  team-name ⇒ 3-letter abbreviation map  ───── */
+
 const NAME_TO_ABBR = {
-  /* full team names (and common variants) */
-  'ARIZONA DIAMONDBACKS': 'ARI', 'ARIZONA': 'ARI',
-  'ATLANTA BRAVES'     : 'ATL', 'ATLANTA'     : 'ATL',
-  'BALTIMORE ORIOLES'  : 'BAL', 'BALTIMORE'   : 'BAL',
-  'BOSTON RED SOX'     : 'BOS', 'BOSTON'      : 'BOS',
-  'CHICAGO WHITE SOX'  : 'CHW', 'CHI. WHITE SOX': 'CHW', 'WHITE SOX': 'CHW',
-  'CHICAGO CUBS'       : 'CHC', 'CHI. CUBS'   : 'CHC', 'CUBS' : 'CHC',
-  'CINCINNATI REDS'    : 'CIN', 'CINCINNATI'  : 'CIN',
-  'CLEVELAND GUARDIANS': 'CLE', 'CLEVELAND'   : 'CLE',
-  'COLORADO ROCKIES'   : 'COL', 'COLORADO'    : 'COL',
-  'DETROIT TIGERS'     : 'DET', 'DETROIT'     : 'DET',
-  'HOUSTON ASTROS'     : 'HOU', 'HOUSTON'     : 'HOU',
-  'KANSAS CITY ROYALS' : 'KCR', 'KANSAS CITY' : 'KC',  'ROYALS': 'KC',
-  'LOS ANGELES ANGELS' : 'LAA', 'LA ANGELS'   : 'LAA',
-  'LOS ANGELES DODGERS': 'LAD', 'LA DODGERS'  : 'LAD',
-  'MIAMI MARLINS'      : 'MIA', 'MIAMI'       : 'MIA',
-  'MILWAUKEE BREWERS'  : 'MIL', 'MILWAUKEE'   : 'MIL',
-  'MINNESOTA TWINS'    : 'MIN', 'MINNESOTA'   : 'MIN',
-  'NEW YORK METS'      : 'NYM', 'NY METS'     : 'NYM',
-  'NEW YORK YANKEES'   : 'NYY', 'NY YANKEES'  : 'NYY',
-  'OAKLAND ATHLETICS'  : 'OAK', 'OAKLAND'     : 'OAK', 'ATHLETICS': 'OAK',
-  'PHILADELPHIA PHILLIES': 'PHI', 'PHILADELPHIA': 'PHI',
-  'PITTSBURGH PIRATES' : 'PIT', 'PITTSBURGH'  : 'PIT',
-  'SAN DIEGO PADRES'   : 'SDP', 'SAN DIEGO'   : 'SDP', 'PADRES': 'SDP',
-  'SAN FRANCISCO GIANTS': 'SFG', 'SAN FRANCISCO': 'SFG', 'SF': 'SFG',
-  'SEATTLE MARINERS'   : 'SEA', 'SEATTLE'     : 'SEA',
-  'ST. LOUIS CARDINALS': 'STL', 'ST LOUIS CARDINALS': 'STL', 'ST. LOUIS': 'STL',
-  'TAMPA BAY RAYS'     : 'TBR', 'TAMPA BAY'   : 'TB',  'TB RAYS': 'TB',
-  'TEXAS RANGERS'      : 'TEX', 'TEXAS'       : 'TEX',
-  'TORONTO BLUE JAYS'  : 'TOR', 'TORONTO'     : 'TOR',
-  'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON': 'WSH',
-    /* ===== odd two-letter codes occasionally seen ===== */
-    AZ :'AZ',  // Arizona
-    BOS:'BOS',
-    CH :'CHC', // older mobile table for Cubs
-    ATH:'ATH', // Oakland in table footer
+  /* full team names (and the most common variants) */
+  'ARIZONA DIAMONDBACKS': 'ARI', 'ARIZONA'              : 'ARI', 'DIAMONDBACKS' : 'ARI',
+  'ATLANTA BRAVES'      : 'ATL', 'ATLANTA'              : 'ATL', 'BRAVES'       : 'ATL',
+  'BALTIMORE ORIOLES'   : 'BAL', 'BALTIMORE'            : 'BAL', 'ORIOLES'      : 'BAL',
+  'BOSTON RED SOX'      : 'BOS', 'BOSTON'               : 'BOS', 'RED SOX'      : 'BOS',
+  'CHICAGO WHITE SOX'   : 'CWS', 'CHI WHITE SOX'        : 'CWS',
+  'CHICAGO CUBS'        : 'CHC', 'CHI CUBS'             : 'CHC',
+  'CINCINNATI REDS'     : 'CIN', 'CINCINNATI'           : 'CIN',
+  'CLEVELAND GUARDIANS' : 'CLE', 'CLEVELAND'            : 'CLE',
+  'COLORADO ROCKIES'    : 'COL', 'COLORADO'             : 'COL',
+  'DETROIT TIGERS'      : 'DET', 'DETROIT'              : 'DET',
+  'HOUSTON ASTROS'      : 'HOU', 'HOUSTON'              : 'HOU',
+  'KANSAS CITY ROYALS'  : 'KCR', 'KANSAS CITY'          : 'KCR', 'ROYALS' : 'KCR',
+  'LOS ANGELES ANGELS'  : 'LAA', 'LA ANGELS'            : 'LAA', 'ANGELS' : 'LAA',
+  'LOS ANGELES DODGERS' : 'LAD', 'LA DODGERS'           : 'LAD', 'DODGERS': 'LAD',
+  'MIAMI MARLINS'       : 'MIA', 'MIAMI'                : 'MIA', 'MARLINS': 'MIA',
+  'MILWAUKEE BREWERS'   : 'MIL', 'MILWAUKEE'            : 'MIL', 'BREWERS': 'MIL',
+  'MINNESOTA TWINS'     : 'MIN', 'MINNESOTA'            : 'MIN', 'TWINS'  : 'MIN',
+  'NEW YORK METS'       : 'NYM', 'NY METS'              : 'NYM', 'METS'   : 'NYM',
+  'NEW YORK YANKEES'    : 'NYY', 'NY YANKEES'           : 'NYY', 'YANKEES': 'NYY',
+  'OAKLAND ATHLETICS'   : 'OAK', 'OAKLAND'              : 'OAK', 'ATHLETICS' : 'OAK',
+  'PHILADELPHIA PHILLIES': 'PHI','PHILADELPHIA'         : 'PHI', 'PHILLIES': 'PHI',
+  'PITTSBURGH PIRATES'  : 'PIT', 'PITTSBURGH'           : 'PIT', 'PIRATES' : 'PIT',
+  'SAN DIEGO PADRES'    : 'SDP', 'SAN DIEGO'            : 'SDP', 'PADRES'  : 'SDP',
+  'SAN FRANCISCO GIANTS': 'SFG', 'SAN FRANCISCO'        : 'SFG', 'GIANTS'  : 'SFG',
+  'SEATTLE MARINERS'    : 'SEA', 'SEATTLE'              : 'SEA', 'MARINERS': 'SEA',
+  'ST. LOUIS CARDINALS' : 'STL', 'ST LOUIS CARDINALS'   : 'STL', 'ST. LOUIS': 'STL', 'CARDINALS':'STL',
+  'TAMPA BAY RAYS'      : 'TBR', 'TAMPA BAY'            : 'TBR', 'TB RAYS': 'TBR', 'RAYS':'TBR',
+  'TEXAS RANGERS'       : 'TEX', 'TEXAS'                : 'TEX', 'RANGERS': 'TEX',
+  'TORONTO BLUE JAYS'   : 'TOR', 'TORONTO'              : 'TOR', 'BLUE JAYS':'TOR',
+  'WASHINGTON NATIONALS': 'WSH', 'WASHINGTON'           : 'WSH', 'NATIONALS':'WSH'
 };
 
+/* -------------------------------------------------------------
+ * Extra short / odd codes we’ve seen in Covers linescore tables
+ * ----------------------------------------------------------- */
 Object.assign(NAME_TO_ABBR, {
-  /* — extra two-letter / odd codes seen in totals column — */
-  CH : 'CHC',   // Cubs
-  CU : 'CHC',   // sometimes “CU” on mobile
-  WHT: 'CWS',   // “WHT” = White Sox
-  KC : 'KC',    // already present but duplicate ok
-  TB : 'TB',
-  NYK: 'NYY',   // Yanks sometimes “NYK”
-  NYY: 'NYY',   // (self-map)
-  BO : 'BOS',   // rare two-letter Bos
-  SF : 'SF',    // Giants
-  CU  : 'CHC',   // “CU” in some tables
-  CH  : 'CHC',   // older mobile header
+  /* Cubs / White-Sox oddities */
+  CH  : 'CHC',   // two-letter “CH”
+  CU  : 'CHC',   // “CU”
+  CUBS: 'CHC',
   WHT : 'CWS',   // “WHT” = White Sox
+
+  /* 2-letter or legacy codes */
+  AZ  : 'ARI', ARZ : 'ARI',
+  BO  : 'BOS',
+  KC  : 'KCR',
+  TB  : 'TBR',
+  SD  : 'SDP',
+  SF  : 'SFG',
+  NYK : 'NYY',   // sometimes on tables for Yankees
+  WAS : 'WSH',
+  ATH : 'OAK',
+
+  /* self-maps to be explicit */
+  OAK : 'OAK', BOS : 'BOS', NYY:'NYY'
 });
 
-/* make sure every canonical 3-letter code maps to itself */
-'ARI ATL BAL BOS CHC CIN CLE COL CHW DET HOU KCR LAA LAD MIA MIL MIN NYM NYY OAK PHI PIT SDP SFG SEA STL TBR TEX TOR WSH'
-  .split(' ')
+/* finally, ensure every standard 3-letter code maps to itself */
+'ARI ATL BAL BOS CHC CIN CLE COL CWS DET HOU KCR LAA LAD MIA MIL MIN \
+ NYM NYY OAK PHI PIT SDP SFG SEA STL TBR TEX TOR WSH'
+  .split(/\s+/)
   .forEach(code => { NAME_TO_ABBR[code] = code; });
+
 
 /* ───── 2)  utilities ───── */
 const todayISO = () =>
