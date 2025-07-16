@@ -56,6 +56,28 @@ try {
     if (!res.ok) throw new Error(`CFBD ${res.status}: ${await res.text()}`);
     const stats = await res.json();
   
+
+      /* ── NEW: fetch per‑team PPA (EPA/play) metrics ─────────────────────── */
+      const ppaUrl = `https://api.collegefootballdata.com/metrics/ppa/teams`
+                    `?year=${season}&excludeGarbageTime=true`;
+      const ppaRes = await fetch(ppaUrl, {
+        headers: { Authorization: `Bearer ${CFBD_API_KEY}` }
+      });
+      if (!ppaRes.ok) {
+        throw new Error(`CFBD PPA ${ppaRes.status}: ${await ppaRes.text()}`);
+      }
+      const ppa = await ppaRes.json();
+      /* Map: team name → { offPassPPA, defPassPPA } */
+      const ppaMap = Object.fromEntries(
+        ppa.map(p => [
+          p.team,
+          {
+            off: p.offPassing  ?? p.off_passing,   // API may camel‑ or snake‑case
+            def: p.defPassing  ?? p.def_passing
+          }
+        ])
+      );
+
     const teamMap = await getTeamMap();
   
     const rows = stats.flatMap(s => {
@@ -64,6 +86,7 @@ try {
         console.warn(`⚠️  Unknown team "${s.team}" – skipping`);
         return [];
       }
+      const pass = ppaMap[s.team] || {};
       return {
         season,
         team_id:              id,
@@ -79,6 +102,8 @@ try {
         def_line_yards_total: s.defense.lineYardsTotal,
         off_fp_avg_start:     s.offense.fieldPosition.averageStart,
         def_fp_avg_start:     s.defense.fieldPosition.averageStart,
+        off_pass_ppa:         pass.off ?? null,
+        def_pass_ppa:         pass.def ?? null,
         updated_at:           new Date().toISOString()
       };
     });
