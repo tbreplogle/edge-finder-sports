@@ -58,10 +58,12 @@ try {
   
 
       /* ── NEW: fetch per‑team PPA (EPA/play) metrics ─────────────────────── */
-      const ppaUrl = `https://api.collegefootballdata.com/metrics/ppa/teams` +
-                    `?year=${season}&excludeGarbageTime=true&classification=passing`;
+      const ppaUrl = `https://api.collegefootballdata.com/ppa/teams?`
+                    + `year=${season}&excludeGarbageTime=true`;    // no extra params needed
+
       const ppaRes = await fetch(ppaUrl, {
-        headers: { Authorization: `Bearer ${CFBD_API_KEY}` }
+        headers: { Authorization: `Bearer ${CFBD_API_KEY}` },
+        Accept: 'application/json'
       });
       if (!ppaRes.ok) {
         throw new Error(`CFBD PPA ${ppaRes.status}: ${await ppaRes.text()}`);
