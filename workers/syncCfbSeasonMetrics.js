@@ -79,8 +79,8 @@ try {
         def_line_yards_total: s.defense.lineYardsTotal,
         off_fp_avg_start:     s.offense.fieldPosition.averageStart,
         def_fp_avg_start:     s.defense.fieldPosition.averageStart,
-        off_pass_ppa:         s.offense.passingPlays.ppa,
-        def_pass_ppa:         s.defense.passingPlays.ppa,
+        off_pass_ppa:         s.offense?.passingPlays?.ppa ?? null,
+        def_pass_ppa:         s.defense?.passingPlays?.ppa ?? null,
         updated_at:           new Date().toISOString()
       };
     });
@@ -89,7 +89,9 @@ try {
       console.log('Nothing to upsert.');
       return;
     }
-  
+    if (rows.length) {
+      console.log('Sample row:', rows[0].team_id, rows[0].off_pass_ppa, rows[0].def_pass_ppa);
+    }
     const { error, count } = await supabase
       .from('team_season_metrics')      // table name only
       .upsert(rows, { ignoreDuplicates: false, count: 'exact' });
