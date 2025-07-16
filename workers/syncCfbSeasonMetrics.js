@@ -79,8 +79,9 @@ try {
         def_line_yards_total: s.defense.lineYardsTotal,
         off_fp_avg_start:     s.offense.fieldPosition.averageStart,
         def_fp_avg_start:     s.defense.fieldPosition.averageStart,
-        off_pass_ppa:         s.offense?.passingPlays?.ppa ?? null,
-        def_pass_ppa:         s.defense?.passingPlays?.ppa ?? null,
+        off_pass_ppa:         s.offense?.passingPlays?.ppa,
+        def_pass_ppa:         s.defense?.passingPlays?.ppa,
+        off_pass_rate:        s.offense?.passingPlays?.rate,
         updated_at:           new Date().toISOString()
       };
     });
