@@ -68,6 +68,9 @@ Object.assign(NAME_TO_ABBR, {
   NYK : 'NYY',   // sometimes on tables for Yankees
   WAS : 'WSH',
   ATH : 'OAK',
+  'ST LOUIS'       : 'STL',
+  'SAINT LOUIS'    : 'STL',   // (optional) seen on some sites
+
 
   /* self-maps to be explicit */
   OAK : 'OAK', BOS : 'BOS', NYY:'NYY'
