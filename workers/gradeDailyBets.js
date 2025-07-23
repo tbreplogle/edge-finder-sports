@@ -40,7 +40,7 @@ const NAME_TO_ABBR = {
   'SAN DIEGO PADRES'    : 'SDP', 'SAN DIEGO'            : 'SDP', 'PADRES'  : 'SDP',
   'SAN FRANCISCO GIANTS': 'SFG', 'SAN FRANCISCO'        : 'SFG', 'GIANTS'  : 'SFG',
   'SEATTLE MARINERS'    : 'SEA', 'SEATTLE'              : 'SEA', 'MARINERS': 'SEA',
-  'ST. LOUIS CARDINALS' : 'STL', 'ST LOUIS CARDINALS'   : 'STL', 'ST. LOUIS': 'STL', 'CARDINALS':'STL',  'ST. LOUIS CARDINALS' :'ST. LOUIS',
+  'ST. LOUIS CARDINALS' : 'STL', 'ST LOUIS CARDINALS'   : 'STL', 'ST. LOUIS': 'STL', 'CARDINALS':'STL',
   'TAMPA BAY RAYS'      : 'TBR', 'TAMPA BAY'            : 'TBR', 'TB RAYS': 'TBR', 'RAYS':'TBR',
   'TEXAS RANGERS'       : 'TEX', 'TEXAS'                : 'TEX', 'RANGERS': 'TEX',
   'TORONTO BLUE JAYS'   : 'TOR', 'TORONTO'              : 'TOR', 'BLUE JAYS':'TOR',
@@ -57,7 +57,7 @@ Object.assign(NAME_TO_ABBR, {
   CUBS: 'CHC',
   WHT : 'CWS',          // “WHT” = White Sox
   CHW : 'CWS',          // Covers often uses CHW
-
+  STL : 'STL',
   /* 2-letter or legacy codes */
   AZ  : 'ARI', ARZ : 'ARI',
   BO  : 'BOS',
@@ -208,16 +208,39 @@ if (abbrsOld.length === 2 && numsOld.length === 2 && !numsOld.some(Number.isNaN)
 async function gradeAll() {
   if (!(await testConnection())) throw new Error('DB connection failed');
 
-  const { data: bets } = await supabase
+// 1. Fetch all bets (past games only)
+const { data: allBets, error: betsErr } = await supabase
   .from('mlb_daily_bets')
   .select('*')
-  .lt('game_date', todayISO())
-  .not('matchup_id', 'in', `(${Object.keys(await supabase
-      .from('mlb_daily_results')
-      .select('matchup_id')
-      .lt('game_date', todayISO()))
-     .map(row => `'${row.matchup_id}'`)
-     .join(',') || "''"})`);
+  .lt('game_date', todayISO());
+
+if (betsErr) throw new Error('Error fetching bets: ' + betsErr.message);
+if (!allBets?.length) {
+  console.log('Nothing to grade.');
+  return;
+}
+
+// 2. Fetch already graded rows to avoid duplicates
+const { data: gradedRows, error: gradedErr } = await supabase
+  .from('mlb_daily_results')
+  .select('matchup_id, team_id')
+  .lt('game_date', todayISO());
+
+if (gradedErr) throw new Error('Error fetching existing results: ' + gradedErr.message);
+
+// Build a set of “already graded” keys: matchup_id + team_id
+const gradedSet = new Set(
+  (gradedRows || []).map(r => `${r.matchup_id}::${r.team_id}`)
+);
+
+// 3. Filter just the bets we still need to grade
+const bets = allBets.filter(b => !gradedSet.has(`${b.matchup_id}::${b.team_id}`));
+
+if (!bets.length) {
+  console.log('All past bets already graded – nothing to do.');
+  return;
+}
+
 
 
   if (!bets?.length) return console.log('Nothing to grade.');
