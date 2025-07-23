@@ -40,7 +40,7 @@ const NAME_TO_ABBR = {
   'SAN DIEGO PADRES'    : 'SDP', 'SAN DIEGO'            : 'SDP', 'PADRES'  : 'SDP',
   'SAN FRANCISCO GIANTS': 'SFG', 'SAN FRANCISCO'        : 'SFG', 'GIANTS'  : 'SFG',
   'SEATTLE MARINERS'    : 'SEA', 'SEATTLE'              : 'SEA', 'MARINERS': 'SEA',
-  'ST. LOUIS CARDINALS' : 'STL', 'ST LOUIS CARDINALS'   : 'STL', 'ST. LOUIS': 'STL', 'CARDINALS':'STL',
+  'ST. LOUIS CARDINALS' : 'STL', 'ST LOUIS CARDINALS'   : 'STL', 'ST. LOUIS': 'STL', 'CARDINALS':'STL',  'ST. LOUIS CARDINALS' :'ST. LOUIS',
   'TAMPA BAY RAYS'      : 'TBR', 'TAMPA BAY'            : 'TBR', 'TB RAYS': 'TBR', 'RAYS':'TBR',
   'TEXAS RANGERS'       : 'TEX', 'TEXAS'                : 'TEX', 'RANGERS': 'TEX',
   'TORONTO BLUE JAYS'   : 'TOR', 'TORONTO'              : 'TOR', 'BLUE JAYS':'TOR',
