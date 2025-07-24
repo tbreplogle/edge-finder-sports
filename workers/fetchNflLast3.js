@@ -7,9 +7,11 @@ import { createClient } from '@supabase/supabase-js';
 /* -------------------------------------------------------------------------- */
 /*  Config                                                                    */
 /* -------------------------------------------------------------------------- */
-const sb  = createClient(process.env.SUPABASE_URL,
-                         process.env.SUPABASE_SERVICE_ROLE,
-                         { auth: { persistSession: false } });
+const sb  = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE,
+  { auth: { persistSession: false } }
+);
 
 const nfl    = sb.schema('nfl');
 const limit  = pLimit(16);
@@ -19,18 +21,21 @@ const WEEK   = 17;
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
+const safeDivide = (n, d) => Number.isFinite(n / d) ? n / d : d === 0 ? 4 : null;
+const clean      = s => s?.replace(/\u00A0/g, ' ').trim();   // strip NBSP
+
 const logPg = e => console.error(
-  'STATUS:', e.status, '\nMESSAGE:', e.message,
-  '\nDETAIL :', e.details, '\nCODE   :', e.code
+  'STATUS:', e.status,
+  '\nMESSAGE:', e.message,
+  '\nDETAIL :', e.details,
+  '\nCODE   :', e.code
 );
 
-const safeDivide = (n, d) => Number.isFinite(n / d) ? n / d : d === 0 ? 4 : null;
-const clean      = s => s?.replace(/\u00A0/g, ' ').trim();
-
 /* -------------------------------------------------------------------------- */
-/*  Pre‑load team metadata                                                    */
+/*  Load team metadata (name/abbr ➜ id)                                       */
 /* -------------------------------------------------------------------------- */
-const { data: teams, error } = await nfl.from('teams')
+const { data: teams, error } = await nfl
+  .from('teams')
   .select('team_id,team_name,abbreviation,alt_name');
 
 if (error) throw error;
@@ -38,7 +43,7 @@ if (error) throw error;
 const NAME_MAP = Object.fromEntries(teams.map(t => [clean(t.team_name), t.team_id]));
 const ABBR_MAP = Object.fromEntries(teams.map(t => [t.abbreviation.toUpperCase(), t.team_id]));
 
-/* resolve id from long / abbr, with city‑only fallback */
+/* Resolve by long name or abbr, with city‑only + nickname hint fallback */
 function idFromNameOrAbbr(longName, abbr, hubText) {
   const name = clean(longName);
   if (NAME_MAP[name]) return NAME_MAP[name];
@@ -46,8 +51,6 @@ function idFromNameOrAbbr(longName, abbr, hubText) {
   const up = (abbr || '').toUpperCase();
   if (ABBR_MAP[up]) return ABBR_MAP[up];
 
-  /* city‑only fallback: match teams whose name starts with the city
-     and whose nickname appears somewhere in the hub page text      */
   const candidates = teams.filter(t =>
     t.team_name.startsWith(name) && hubText.includes(t.alt_name)
   );
@@ -57,7 +60,7 @@ function idFromNameOrAbbr(longName, abbr, hubText) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  0) Discover matchup IDs                                                   */
+/*  Discover Covers matchup IDs                                               */
 /* -------------------------------------------------------------------------- */
 async function discoverMatchups () {
   const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
@@ -72,31 +75,51 @@ async function discoverMatchups () {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  1) Scrape one matchup                                                     */
+/*  Scrape one matchup                                                        */
 /* -------------------------------------------------------------------------- */
 async function scrapeMatchup (id) {
-  /* hub page for names/date */
+  /* 1a — hub page: team names, abbrs, date -------------------------------- */
   const hubHtml = await axios.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
   const $hub    = load(hubHtml.data);
+  const hubText = $hub.text();
 
-  const hubText = $hub.text();   // for nickname hint
+  /* first try data‑attributes (present on JS‑rendered pages) */
+  let awayFN = clean($hub('div.matchup-team.away-team').attr('data-team-fullname'));
+  let homeFN = clean($hub('div.matchup-team.home-team').attr('data-team-fullname'));
+  let awayAb = clean($hub('div.matchup-team.away-team').attr('data-team-abbrev'));
+  let homeAb = clean($hub('div.matchup-team.home-team').attr('data-team-abbrev'));
 
-  const node    = role => $hub(`div.matchup-team.${role}-team`);
-  const homeFN  = clean(node('home').attr('data-team-fullname'));
-  const awayFN  = clean(node('away').attr('data-team-fullname'));
-  const homeAb  = clean(node('home').attr('data-team-abbrev'));
-  const awayAb  = clean(node('away').attr('data-team-abbrev'));
+  /* fallback — parse from og:title */
+  if (!homeFN || !awayFN) {
+    const og  = $hub('meta[property="og:title"]').attr('content') || '';
+    const m   = og.match(/^\s*([^v]+?)\s+vs\.?\s+([^O]+?)\s+Odds/i);
+    if (m) {
+      awayFN = awayFN || clean(m[1]);
+      homeFN = homeFN || clean(m[2]);
+    }
+  }
 
-  const iso     = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
-  const gDate   = iso ? iso.split('T')[0] : null;
+  /* derive abbr if Covers omitted it */
+  const deriveAbbr = n => {
+    const caps = n.match(/[A-Z]/g);
+    return caps ? caps.slice(-3).join('').toUpperCase() : '';
+  };
+  awayAb = awayAb || deriveAbbr(awayFN);
+  homeAb = homeAb || deriveAbbr(homeFN);
 
-  /* stats pages */
+  const iso   = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
+  const gDate = iso ? iso.split('T')[0] : null;
+
+  /* 1b — stats pages for last‑3 numbers ---------------------------------- */
   const stats = flag =>
     `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/${flag}/last3`;
 
-  const [awayHtml, homeHtml] = await Promise.all([axios.get(stats('FALSE')), axios.get(stats('TRUE'))]);
+  const [awayStats, homeStats] = await Promise.all([
+    axios.get(stats('FALSE')),
+    axios.get(stats('TRUE'))
+  ]);
 
-  const parse = (html, role) => {
+  const parseSide = (html, role) => {
     const $ = load(html.data);
     const pick = (r,c) => +$('table.stats-table tbody tr').eq(r).find('td').eq(c).text().trim() || 0;
     const avg  = r     => +$('table.average-table tbody tr').eq(r).find('td').text().trim() || 0;
@@ -116,14 +139,14 @@ async function scrapeMatchup (id) {
   };
 
   return {
-    rows : [parse(awayHtml,'away'), parse(homeHtml,'home')],
+    rows     : [parseSide(awayStats,'away'), parseSide(homeStats,'home')],
     gameDate : gDate,
     hubText
   };
 }
 
 /* -------------------------------------------------------------------------- */
-/*  2) Main loop                                                              */
+/*  Main                                                                      */
 /* -------------------------------------------------------------------------- */
 (async () => {
   const ids = await discoverMatchups();
@@ -159,7 +182,7 @@ async function scrapeMatchup (id) {
     }
   })));
 
-  /* last‑3 bulk */
+  /* bulk write last‑3 ratios -------------------------------------------- */
   if (bulk.length) {
     const { error: upErr } = await nfl
       .from('team_last3')
