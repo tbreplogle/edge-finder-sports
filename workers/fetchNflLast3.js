@@ -16,7 +16,18 @@ const sb     = createClient(SB_URL, SB_KEY, {
 const limit  = pLimit(8);          // don’t hammer Covers
 const SEASON = 2024;               // flip in August
 const WEEK   = 17;                 // will soon be dynamic
+/*const { data: weeks } = await sb
+    .from('nfl.week_calendar')
+    .select('week,start,finish')
+    .eq('season', 2025);
 
+const today = new Date();
+const todayWeek = weeks.find(w =>
+    today >= new Date(w.start) && today <= new Date(w.finish)
+)?.week;
+
+console.log(`Today is NFL Week ${todayWeek}`);
+*/
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -132,14 +143,23 @@ async function scrapeMatchup(coversId) {
     )
   );
 
+  /* ── bulk write to team_last3 ─────────────────────────────────────────── */
   if (allRows.length) {
-    await sb.from("nfl.team_last3")
-      .upsert(allRows, { onConflict: "covers_id,team_role" })
-      .throwOnError();
+    try {
+      const { data, error } = await sb
+        .from('nfl.team_last3')
+        .upsert(allRows, { onConflict: 'covers_id,team_role' })
+        .select();                            // returns rows that actually wrote
 
-    console.log(`🚀 Inserted ${allRows.length} team rows`);
+      if (error) throw error;                // bubble real PG message
+      console.log(`🚀 Upserted ${data.length} rows`);
+    } catch (err) {
+      console.error('🔥 Postgres threw:', JSON.stringify(err, null, 2));
+      process.exit(1);                       // fail the workflow
+    }
   }
 
-  console.log("🎉 Done");
+  console.log('🎉 Done');
   process.exit(0);
 })();
+
