@@ -1,0 +1,35 @@
+name: Fetch NFL “last‑3” stats
+
+on:
+  # 09:15 AM America/Chicago == 15:15 UTC when CDT is in effect.
+  # DST shifts will make this 16:15 UTC in the winter; good enough for a weekly scrape.
+  schedule:
+    - cron: '15 15 * * TUE'     # every Tuesday 15:15 UTC
+  workflow_dispatch:            # manual “Run workflow” button
+
+env:
+  NODE_ENV: production
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛎️  Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🛠️  Setup Node 18 & pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'         # swap for npm/yarn as you wish
+
+      - name: 📦  Install deps
+        run: |
+          pnpm install          # or `npm ci` / `yarn install`
+
+      - name: 🚀  Run scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: |
+          node workers/fetchNflLast3.js
