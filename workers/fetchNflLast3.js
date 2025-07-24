@@ -96,35 +96,50 @@ async function scrapeMatchup (coversId) {
     const iso = $('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
     return iso ? iso.split('T')[0] : null;          // 'YYYY-MM-DD'
   };
-
   const parseSide = (html, role) => {
     const $ = load(html.data);
-
+  
+    /* -------- numbers -------- */
     const pick = (row, col) =>
       +$('table.stats-table.football-stats-table tbody tr')
         .eq(row).find('td').eq(col).text().trim() || 0;
-
+  
     const avg = row =>
       +$('table.average-table tbody tr').eq(row).find('td').text().trim() || 0;
-
-    /* long name & 3‑letter abbreviation */
-    const teamName = clean(
+  
+    /* -------- team names / abbreviations -------- */
+    let teamName = clean(
       $('div.matchup-team.' +
         (role === 'home' ? 'home-team' : 'away-team') +
         ' span.matchup-team-name a').text()
     );
-
-    const abbr = clean(
+  
+    let teamAbbr = clean(
       $('div.matchup-team.' +
         (role === 'home' ? 'home-team' : 'away-team') +
         ' span.matchup-team-short-name').text()
     );
-
+  
+    /* if Covers served a bare page (no JS) these will be '', so fall back */
+    if (!teamName) {
+      const ogTitle = $('meta[property="og:title"]').attr('content') || '';
+      const match   = ogTitle.match(/^\s*([A-Za-z .]+?)\s+vs\s+([A-Za-z .]+?)\s+/i);
+      if (match) {
+        teamName = clean(match[role === 'home' ? 2 : 1]);  // home is 2nd name
+      }
+    }
+  
+    if (!teamAbbr) {
+      /* simple 3‑letter guess (last cap letters) → fallback map handles mismatch */
+      const letters = teamName.match(/[A-Z]+/g);
+      teamAbbr = letters ? letters[letters.length - 1].slice(0, 3).toUpperCase() : '';
+    }
+  
     return {
       covers_id: coversId,
       team_role: role,
-      team_name: teamName || abbr,  // prefer long name
-      team_abbr: abbr,
+      team_name: teamName,
+      team_abbr: teamAbbr,
       yp_pa_off: safeDivide(pick(10, 0), avg(10)),
       yp_ra_off: safeDivide(pick(4, 0),  avg(4)),
       tov_off:   safeDivide(avg(2) + avg(3), pick(2, 0) + pick(3, 0)),
