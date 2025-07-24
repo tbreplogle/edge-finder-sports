@@ -1,9 +1,37 @@
+//workers fetchnfllast3.js
 /* eslint-disable no-console -------------------------------------------------*/
 import axios from "axios";
 import { load } from "cheerio";
 import pLimit from "p-limit";
 import { createClient } from "@supabase/supabase-js";
 import util from 'util';
+
+const logPgError = err => {
+    console.error('STATUS :', err.status);
+    console.error('MESSAGE:', err.message);
+    console.error('DETAIL :', err.details);
+    console.error('HINT   :', err.hint);
+    console.error('CODE   :', err.code);
+  };
+  /* -------------------------------------------------------------------------- */
+/*  Translate team_name ➜ team_id (memoised)                                  */
+/* -------------------------------------------------------------------------- */
+const teamCache = new Map();
+async function nameToId(name) {
+  if (teamCache.has(name)) return teamCache.get(name);
+
+  const { data, error } = await sb
+    .from('nfl.teams')
+    .select('team_id')
+    .eq('team_name', name)
+    .single();
+
+  if (error) throw error;
+
+  teamCache.set(name, data.team_id);
+  return data.team_id;
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Config                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -134,24 +162,34 @@ async function scrapeMatchup(coversId) {
     matchupIds.map(id =>
       limit(async () => {
         try {
-             const { rows, gameDate } = await scrapeMatchup(id);
-             allRows.push(...rows);
+            const { rows, gameDate } = await scrapeMatchup(id);
 
-          // basic matchup meta
-          await sb.from("nfl.matchups")
-            .upsert({
+            // look up team IDs once
+            const homeRow = rows.find(r => r.team_role === 'home');
+            const awayRow = rows.find(r => r.team_role === 'away');
+            const homeId  = await nameToId(homeRow.team_name);
+            const awayId  = await nameToId(awayRow.team_name);
+            
+            // attach IDs so they can write to nfl.team_last3
+            homeRow.team_id = homeId;
+            awayRow.team_id = awayId;
+            
+            // write matchup meta
+            await sb.from('nfl.matchups').upsert({
               covers_id: id,
               season:    SEASON,
               week:      WEEK,
-              game_date: gameDate,   // parse later if needed
-              home_team: rows.find(r => r.team_role === "home").team_name,
-              away_team: rows.find(r => r.team_role === "away").team_name
-            }, { onConflict: "covers_id" })
-            .throwOnError();
-
-          console.log(`✅ ${id}`);
+              game_date: gameDate,
+              home_id:   homeId,
+              away_id:   awayId
+            }, { onConflict: 'covers_id' }).throwOnError();
+            
+            console.log(`✅ wrote matchup ${id}`);
+            
         } catch (err) {
-            console.error(`❌ ${id}:`, util.inspect(err, { depth: 5, colors: false }));
+            logPgError(err);
+            console.error(`❌ matchup ${id} failed`);
+
           }
       })
     )
@@ -162,14 +200,15 @@ async function scrapeMatchup(coversId) {
     try {
       const { data, error } = await sb
         .from('nfl.team_last3')
-        .upsert(allRows, { onConflict: 'covers_id,team_role' })
+        .upsert(allRows, { onConflict: 'covers_id,team_id' })
         .select();                            // returns rows that actually wrote
 
       if (error) throw error;                // bubble real PG message
       console.log(`🚀 Upserted ${data.length} rows`);
     } catch (err) {
         console.error('🔥 Postgres threw:\n',
-                      util.inspect(err, { depth: 5, colors: false }));
+            logPgError(err)
+        );
         process.exit(1);
       }
   }

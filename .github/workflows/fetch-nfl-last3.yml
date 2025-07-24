@@ -1,3 +1,4 @@
+#workflow fetch-nfl-last3.yml
 name: 1‑Weekly NFL Last‑3 Scraper
 
 on:
