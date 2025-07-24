@@ -62,10 +62,16 @@ async function scrapeMatchup(coversId) {
   const url = flag =>
     `https://www.covers.com/sport/football/nfl/matchup/${coversId}/stats-analysis/${flag}/last3`;
 
+    // helper lives OUTSIDE parseSide now
+    const getGameDate = html => {
+      const iso = html('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
+      return iso ? iso.split('T')[0] : null;          // '2025‑01‑04'
+    };
   const [awayHtml, homeHtml] = await Promise.all([
     axios.get(url("FALSE")),    // away stats on the left
     axios.get(url("TRUE"))      // home stats on the left
   ]);
+  
 
   const parseSide = (html, role) => {
     const $ = load(html.data);
@@ -76,7 +82,11 @@ async function scrapeMatchup(coversId) {
 
     const avg = row =>
       +$("table.average-table tbody tr").eq(row).find("td").text().trim() || 0;
-
+    const getGameDate = $ => {
+        // Covers wraps it in <time datetime="2025-01-04T18:15:00Z">
+        const iso = $('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
+        return iso ? iso.split('T')[0] : null;   // '2025-01-04'
+      };
     // Ratios (last‑3 vs league average)
     const ypPaOff = safeDivide(pick(10, 0), avg(10));
     const ypRaOff = safeDivide(pick(4, 0),  avg(4));
@@ -103,8 +113,12 @@ async function scrapeMatchup(coversId) {
       tov_def:   tovDef
     };
   };
+  const gameDate = getGameDate(load(homeHtml.data));   // same for awayHtml
 
-  return [parseSide(awayHtml, "away"), parseSide(homeHtml, "home")];
+    return {
+        rows: [parseSide(awayHtml, 'away'), parseSide(homeHtml, 'home')],
+        gameDate
+      };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -120,8 +134,8 @@ async function scrapeMatchup(coversId) {
     matchupIds.map(id =>
       limit(async () => {
         try {
-          const rows = await scrapeMatchup(id);
-          allRows.push(...rows);
+             const { rows, gameDate } = await scrapeMatchup(id);
+             allRows.push(...rows);
 
           // basic matchup meta
           await sb.from("nfl.matchups")
@@ -129,7 +143,7 @@ async function scrapeMatchup(coversId) {
               covers_id: id,
               season:    SEASON,
               week:      WEEK,
-              game_date: null,   // parse later if needed
+              game_date: gameDate,   // parse later if needed
               home_team: rows.find(r => r.team_role === "home").team_name,
               away_team: rows.find(r => r.team_role === "away").team_name
             }, { onConflict: "covers_id" })
