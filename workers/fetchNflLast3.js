@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import axios from "axios";
-import cheerio from "cheerio";
+import { load } from "cheerio";
 import pLimit from "p-limit";
 import { createClient } from "@supabase/supabase-js";
 
@@ -28,7 +28,7 @@ console.log(`Today is NFL Week ${todayWeek}`);
 /* -------------------------------------------------------------------------- */
 async function discoverMatchups () {
   const sbPage = await axios.get("https://www.covers.com/sports/nfl/matchups"); //:contentReference[oaicite:0]{index=0}
-  const $      = cheerio.load(sbPage.data);
+  const $      = load(sbPage.data);
 
   // Each matchup card carries a link …/matchup/<id>
   const ids = new Set();
@@ -53,7 +53,7 @@ async function scrapeMatchup (coversId) {
   ]);
 
   const parseSide = (html, role) => {
-    const $ = cheerio.load(html.data);
+    const $ = load(html.data);
 
     const pick = (row, col) =>
       +$("table.stats-table.football-stats-table tbody tr").eq(row).find("td").eq(col).text().trim() || null;
