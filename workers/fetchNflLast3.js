@@ -137,7 +137,12 @@ async function scrapeMatchup(coversId) {
 
           console.log(`✅ ${id}`);
         } catch (err) {
-          console.error(`❌ ${id}: ${err.message}`);
+              console.error(`❌ ${id}:`, {
+                    message: err.message,
+                    code:    err.code,
+                    details: err.details,
+                    hint:    err.hint
+                  });
         }
       })
     )
@@ -154,7 +159,12 @@ async function scrapeMatchup(coversId) {
       if (error) throw error;                // bubble real PG message
       console.log(`🚀 Upserted ${data.length} rows`);
     } catch (err) {
-      console.error('🔥 Postgres threw:', JSON.stringify(err, null, 2));
+          console.error('🔥 Postgres threw:', {
+                message: err.message,
+                code:    err.code,
+                details: err.details,
+                hint:    err.hint
+              });
       process.exit(1);                       // fail the workflow
     }
   }
