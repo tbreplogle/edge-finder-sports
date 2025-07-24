@@ -76,7 +76,7 @@ const deriveAbbr = n => {
 /*  Discover matchup IDs                                                      */
 /* -------------------------------------------------------------------------- */
 async function discoverMatchups() {
-  const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups?selectedDate=2024-12-31')).data);
+  const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
   const ids = new Set();
   $("a[href*='/sport/football/nfl/matchup/']").each((_, el) => {
     const m = $(el).attr('href').match(/matchup\/(\d+)/);
