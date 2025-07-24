@@ -3,7 +3,6 @@ import axios           from 'axios';
 import { load }        from 'cheerio';
 import pLimit          from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
-import util            from 'util';
 
 /* -------------------------------------------------------------------------- */
 /*  Config                                                                    */
@@ -17,23 +16,6 @@ const nfl = sb.schema('nfl');
 const limit  = pLimit(16);   // don’t hammer Covers
 const SEASON = 2024;         // flip in August
 const WEEK   = 17;           // will soon be dynamic
-
-/* -------------------------------------------------------------------------- */
-/*  Optional dynamic week (commented out)                                     */
-/* -------------------------------------------------------------------------- */
-/*
-const { data: weeks } = await nfl
-  .from('week_calendar')
-  .select('week,start,finish')
-  .eq('season', SEASON);
-
-const today = new Date();
-const todayWeek = weeks.find(w =>
-  today >= new Date(w.start) && today <= new Date(w.finish)
-)?.week;
-
-console.log(`Today is NFL Week ${todayWeek}`);
-*/
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                    */
@@ -51,24 +33,34 @@ const safeDivide = (num, den) => {
   return Number.isFinite(r) ? r : den === 0 ? 4 : null;
 };
 
+const clean = s => s?.replace(/\u00A0/g, ' ').trim();   // kill NBSP
+
 /* -------------------------------------------------------------------------- */
-/*  Team cache (name ➜ id)                                                    */
+/*  Pre‑load team maps (name ➜ id, abbr ➜ id)                                 */
 /* -------------------------------------------------------------------------- */
-const teamCache = new Map();
+const { data: teamRows, error: mapErr } = await nfl
+  .from('teams')
+  .select('team_name,abbreviation,team_id');
 
-async function nameToId (name) {
-  if (teamCache.has(name)) return teamCache.get(name);
+if (mapErr) throw mapErr;
 
-  const { data, error } = await nfl
-    .from('teams')
-    .select('team_id')
-    .eq('team_name', name);
+const TEAM_MAP = Object.fromEntries(
+  teamRows.map(t => [clean(t.team_name), t.team_id])
+);
+const ABBR_MAP = Object.fromEntries(
+  teamRows.map(t => [t.abbreviation.toUpperCase(), t.team_id])
+);
 
-  if (error) throw error;
-  if (!data.length) throw new Error(`Team not found: ${name}`);
+/* memoised lookup */
+function nameOrAbbrToId(str) {
+  if (!str) throw new Error('Empty team identifier');
+  const name = clean(str);
+  if (TEAM_MAP[name]) return TEAM_MAP[name];
 
-  teamCache.set(name, data[0].team_id);
-  return data[0].team_id;
+  const abbr = name.toUpperCase();
+  if (ABBR_MAP[abbr]) return ABBR_MAP[abbr];
+
+  throw new Error(`Team not found: "${str}"`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -89,7 +81,7 @@ async function discoverMatchups () {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  1) Scrape one matchup (returns rows + gameDate)                           */
+/*  1) Scrape one matchup (rows + gameDate)                                   */
 /* -------------------------------------------------------------------------- */
 async function scrapeMatchup (coversId) {
   const url = flag =>
@@ -115,12 +107,24 @@ async function scrapeMatchup (coversId) {
     const avg = row =>
       +$('table.average-table tbody tr').eq(row).find('td').text().trim() || 0;
 
+    /* long name & 3‑letter abbreviation */
+    const teamName = clean(
+      $('div.matchup-team.' +
+        (role === 'home' ? 'home-team' : 'away-team') +
+        ' span.matchup-team-name a').text()
+    );
+
+    const abbr = clean(
+      $('div.matchup-team.' +
+        (role === 'home' ? 'home-team' : 'away-team') +
+        ' span.matchup-team-short-name').text()
+    );
+
     return {
       covers_id: coversId,
       team_role: role,
-      team_name: $('div.matchup-team.' +
-                   (role === 'home' ? 'home-team' : 'away-team') +
-                   ' span.matchup-team-name a').text().trim(),
+      team_name: teamName || abbr,  // prefer long name
+      team_abbr: abbr,
       yp_pa_off: safeDivide(pick(10, 0), avg(10)),
       yp_ra_off: safeDivide(pick(4, 0),  avg(4)),
       tov_off:   safeDivide(avg(2) + avg(3), pick(2, 0) + pick(3, 0)),
@@ -154,8 +158,8 @@ async function scrapeMatchup (coversId) {
           const homeRow = rows.find(r => r.team_role === 'home');
           const awayRow = rows.find(r => r.team_role === 'away');
 
-          homeRow.team_id = await nameToId(homeRow.team_name);
-          awayRow.team_id = await nameToId(awayRow.team_name);
+          homeRow.team_id = nameOrAbbrToId(homeRow.team_name);
+          awayRow.team_id = nameOrAbbrToId(awayRow.team_name);
 
           allRows.push(homeRow, awayRow);
 
@@ -183,7 +187,7 @@ async function scrapeMatchup (coversId) {
       const { data, error } = await nfl
         .from('team_last3')
         .upsert(allRows, { onConflict: 'covers_id,team_role' })
-        .select();   // rows actually written
+        .select();
 
       if (error) throw error;
       console.log(`🚀 Upserted ${data.length} rows`);
