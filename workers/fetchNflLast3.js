@@ -40,6 +40,13 @@ const SB_KEY = process.env.SUPABASE_SERVICE_ROLE;          // service‑role key
 const sb     = createClient(SB_URL, SB_KEY, {
   auth: { persistSession: false }
 });
+// right after you create the Supabase client
+const TEAM_MAP = Object.fromEntries(
+    (await sb.schema('nfl')
+             .from('teams')
+             .select('team_name, team_id'))   // ← array result!
+      .data.map(t => [t.team_name, t.team_id])
+  );
 const nfl = sb.schema('nfl');   // <-- add this
 const limit  = pLimit(16);          // don’t hammer Covers
 const SEASON = 2024;               // flip in August
@@ -180,8 +187,8 @@ async function scrapeMatchup(coversId) {
               season:    SEASON,
               week:      WEEK,
               game_date: gameDate,
-              home_id:   homeId,
-              away_id:   awayId
+                home_team_id: TEAM_MAP[ rows.find(r => r.team_role === 'home').team_name ],
+                away_team_id: TEAM_MAP[ rows.find(r => r.team_role === 'away').team_name ],
             }, { onConflict: 'covers_id' }).throwOnError();
             
             console.log(`✅ wrote matchup ${id}`);
