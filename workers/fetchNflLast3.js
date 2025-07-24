@@ -193,6 +193,8 @@ async function scrapeMatchup(id) {
           season       : SEASON,
           week         : WEEK,
           game_date    : gameDate,
+          home_team    : home.team_name,        
+          away_team    : away.team_name, 
           home_team_id : home.team_id,
           away_team_id : away.team_id
         }, { onConflict: 'covers_id' }).throwOnError();
@@ -206,13 +208,20 @@ async function scrapeMatchup(id) {
   );
 
   /* bulk write last‑3 ratios --------------------------------------------- */
-  if (bulk.length) {
-    const { error: upErr } = await nfl
-      .from('team_last3')
-      .upsert(bulk, { onConflict: 'covers_id,team_role' });
-    if (upErr) logPg(upErr);
-    else console.log(`🚀 Upserted ${bulk.length} rows`);
-  }
+ // ── bulk write ratios ───────────────────────────────
+ if (bulk.length) {
+      // team_last3 doesn’t have team_abbr – remove it
+      const payload = bulk.map(r => {
+        const { team_abbr, ...rest } = r;   // drop property
+        return rest;
+      });
+    
+       const { error: upErr } = await nfl
+         .from('team_last3')
+        .upsert(payload, { onConflict: 'covers_id,team_role' });
+       if (upErr) logPg(upErr);
+       else console.log(`🚀 Upserted ${payload.length} rows`);
+     }
 
   console.log('🎉 Done');
   process.exit(0);
