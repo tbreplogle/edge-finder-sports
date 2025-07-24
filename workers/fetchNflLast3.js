@@ -40,8 +40,8 @@ const SB_KEY = process.env.SUPABASE_SERVICE_ROLE;          // service‑role key
 const sb     = createClient(SB_URL, SB_KEY, {
   auth: { persistSession: false }
 });
-
-const limit  = pLimit(8);          // don’t hammer Covers
+const nfl = sb.schema('nfl');   // <-- add this
+const limit  = pLimit(16);          // don’t hammer Covers
 const SEASON = 2024;               // flip in August
 const WEEK   = 17;                 // will soon be dynamic
 /*const { data: weeks } = await sb
@@ -175,7 +175,7 @@ async function scrapeMatchup(coversId) {
             awayRow.team_id = awayId;
             
             // write matchup meta
-            await sb.from('nfl.matchups').upsert({
+            await nfl.from('matchups').upsert({
               covers_id: id,
               season:    SEASON,
               week:      WEEK,
@@ -198,8 +198,8 @@ async function scrapeMatchup(coversId) {
   /* ── bulk write to team_last3 ─────────────────────────────────────────── */
   if (allRows.length) {
     try {
-      const { data, error } = await sb
-        .from('nfl.team_last3')
+         const { data, error } = await nfl
+           .from('team_last3')
         .upsert(allRows, { onConflict: 'covers_id,team_id' })
         .select();                            // returns rows that actually wrote
 
