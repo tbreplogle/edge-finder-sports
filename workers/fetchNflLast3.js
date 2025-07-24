@@ -32,7 +32,7 @@ const logPg = e => console.error(
 );
 
 /* -------------------------------------------------------------------------- */
-/*  Load team metadata (name/abbr ➜ id)                                       */
+/*  Team dictionary                                                            */
 /* -------------------------------------------------------------------------- */
 const { data: teams, error } = await nfl
   .from('teams')
@@ -43,7 +43,7 @@ if (error) throw error;
 const NAME_MAP = Object.fromEntries(teams.map(t => [clean(t.team_name), t.team_id]));
 const ABBR_MAP = Object.fromEntries(teams.map(t => [t.abbreviation.toUpperCase(), t.team_id]));
 
-/* Resolve by long name or abbr, with city‑only + nickname hint fallback */
+/* long / abbr ➜ id (with city‑only fallback) */
 function idFromNameOrAbbr(longName, abbr, hubText) {
   const name = clean(longName);
   if (NAME_MAP[name]) return NAME_MAP[name];
@@ -51,21 +51,26 @@ function idFromNameOrAbbr(longName, abbr, hubText) {
   const up = (abbr || '').toUpperCase();
   if (ABBR_MAP[up]) return ABBR_MAP[up];
 
-  const candidates = teams.filter(t =>
+  const cand = teams.filter(t =>
     t.team_name.startsWith(name) && hubText.includes(t.alt_name)
   );
-  if (candidates.length === 1) return candidates[0].team_id;
-
+  if (cand.length === 1) return cand[0].team_id;
   throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
 }
 
+/* derive 3‑letter abbreviation */
+const deriveAbbr = n => {
+  if (!n) return '';
+  const caps = n.match(/[A-Z]/g);
+  return caps ? caps.slice(-3).join('').toUpperCase() : '';
+};
+
 /* -------------------------------------------------------------------------- */
-/*  Discover Covers matchup IDs                                               */
+/*  Discover matchup IDs                                                      */
 /* -------------------------------------------------------------------------- */
 async function discoverMatchups () {
   const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
   const ids = new Set();
-
   $("a[href*='/sport/football/nfl/matchup/']").each((_, el) => {
     const m = $(el).attr('href').match(/matchup\/(\d+)/);
     if (m) ids.add(+m[1]);
@@ -75,56 +80,52 @@ async function discoverMatchups () {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Parse two club names from og:title                                         */
+/* -------------------------------------------------------------------------- */
+function namesFromOg(title) {
+  const parts = title.split(/\s+vs\.?\s+/i);
+  if (parts.length < 2) return [null, null];
+  const away = clean(parts[0]);
+  /* cut at first token after nickname (“Odds”, “Picks”, “Preview”, “|”, “–”) */
+  const home = clean(
+    parts[1]
+      .split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]
+  );
+  return [away, home];
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Scrape one matchup                                                        */
 /* -------------------------------------------------------------------------- */
 async function scrapeMatchup (id) {
-  /* 1a — hub page: team names, abbrs, date -------------------------------- */
+  /* hub page: names & date */
   const hubHtml = await axios.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
   const $hub    = load(hubHtml.data);
   const hubText = $hub.text();
 
-  /* first try data‑attributes (present on JS‑rendered pages) */
   let awayFN = clean($hub('div.matchup-team.away-team').attr('data-team-fullname'));
   let homeFN = clean($hub('div.matchup-team.home-team').attr('data-team-fullname'));
   let awayAb = clean($hub('div.matchup-team.away-team').attr('data-team-abbrev'));
   let homeAb = clean($hub('div.matchup-team.home-team').attr('data-team-abbrev'));
 
-  /* fallback — parse from og:title */
-  if (!homeFN || !awayFN) {
-    const og  = $hub('meta[property="og:title"]').attr('content') || '';
-    const m   = og.match(/^\s*([^v]+?)\s+vs\.?\s+([^O]+?)\s+Odds/i);
-    if (m) {
-      awayFN = awayFN || clean(m[1]);
-      homeFN = homeFN || clean(m[2]);
-    }
+  if (!awayFN || !homeFN) {
+    const og = $hub('meta[property="og:title"]').attr('content') || '';
+    [awayFN, homeFN] = namesFromOg(og);
   }
-
-  /* derive abbr if Covers omitted it */
-  const deriveAbbr = n => {
-      if (!n) return '';                     // ← guard against undefined
-      const caps = n.match(/[A-Z]/g);
-      return caps ? caps.slice(-3).join('').toUpperCase() : '';
-    };
   awayAb = awayAb || deriveAbbr(awayFN);
   homeAb = homeAb || deriveAbbr(homeFN);
 
   const iso   = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
   const gDate = iso ? iso.split('T')[0] : null;
 
-  /* 1b — stats pages for last‑3 numbers ---------------------------------- */
-  const stats = flag =>
-    `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/${flag}/last3`;
-
-  const [awayStats, homeStats] = await Promise.all([
-    axios.get(stats('FALSE')),
-    axios.get(stats('TRUE'))
-  ]);
+  /* stats pages */
+  const stats = f => `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/${f}/last3`;
+  const [awayStats, homeStats] = await Promise.all([axios.get(stats('FALSE')), axios.get(stats('TRUE'))]);
 
   const parseSide = (html, role) => {
     const $ = load(html.data);
     const pick = (r,c) => +$('table.stats-table tbody tr').eq(r).find('td').eq(c).text().trim() || 0;
     const avg  = r     => +$('table.average-table tbody tr').eq(r).find('td').text().trim() || 0;
-
     return {
       covers_id : id,
       team_role : role,
@@ -183,7 +184,7 @@ async function scrapeMatchup (id) {
     }
   })));
 
-  /* bulk write last‑3 ratios -------------------------------------------- */
+  /* bulk write ratios ---------------------------------------------------- */
   if (bulk.length) {
     const { error: upErr } = await nfl
       .from('team_last3')
