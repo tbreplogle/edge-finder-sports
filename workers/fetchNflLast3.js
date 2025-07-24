@@ -115,7 +115,8 @@ async function scrapeMatchup (coversId) {
           game_date: null,  // you can parse it later if you need the exact date
           home_team: rows.find(r => r.team_role === "home").team_name,
           away_team: rows.find(r => r.team_role === "away").team_name
-        }, { onConflict: "covers_id" });
+        }, { onConflict: "covers_id" })
+        .throwOnError();
 
         console.log(`✅ ${id}`);
       } catch (err) {
@@ -126,7 +127,8 @@ async function scrapeMatchup (coversId) {
 
   // Bulk insert the per‑team stats
   if (allTeamRows.length) {
-    await sb.from("nfl.team_last3").upsert(allTeamRows, { onConflict: "covers_id,team_role" });
+    await sb.from("nfl.team_last3").upsert(allTeamRows, { onConflict: "covers_id,team_role" })
+    .throwOnError();
     console.log(`🚀 Upserted ${allTeamRows.length} team rows`);
   }
 
