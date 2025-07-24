@@ -1,35 +1,66 @@
-name: Fetch NFL “last‑3” stats
+name: 1‑Weekly NFL Last‑3 Scraper
 
 on:
-  # 09:15 AM America/Chicago == 15:15 UTC when CDT is in effect.
-  # DST shifts will make this 16:15 UTC in the winter; good enough for a weekly scrape.
+  # ──   09:15 AM America/Chicago  ───────────────────────────────
+  # CDT  = 15:15 UTC | CST = 16:15 UTC (DST shift is fine weekly)
   schedule:
-    - cron: '15 15 * * TUE'     # every Tuesday 15:15 UTC
-  workflow_dispatch:            # manual “Run workflow” button
-
-env:
-  NODE_ENV: production
+    - cron: '15 15 * * TUE'
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Set DEBUG=true for verbose logging'
+        default: 'false'
+        required: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    steps:
-      - name: 🛎️  Checkout repo
-        uses: actions/checkout@v4
 
-      - name: 🛠️  Setup Node 18 & pnpm cache
-        uses: actions/setup-node@v4
+    # ─── shared env vars ────────────────────────────────────────
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}   # ← key name in secrets
+      PUPPETEER_SKIP_DOWNLOAD:   'true'           # keeps setup‑node lean
+      NODE_ENV:                  production
+
+    steps:
+      # ─── checkout & Node ──────────────────────────────────────
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'pnpm'         # swap for npm/yarn as you wish
 
-      - name: 📦  Install deps
-        run: |
-          pnpm install          # or `npm ci` / `yarn install`
+      # ─── npm cache (same strategy you use for MLB) ────────────
+      - name: Restore npm cache
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
 
-      - name: 🚀  Run scraper
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+      # ─── install deps (only workers/) ─────────────────────────
+      - name: Install JS deps
+        working-directory: workers
+        run: npm install --no-audit --no-fund
+
+      - name: Save npm cache
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
+
+      # ─── run the NFL scraper ─────────────────────────────────
+      - name: Run NFL last‑3 scraper
+        working-directory: workers
         run: |
-          node workers/fetchNflLast3.js
+          DEBUG=${{ github.event.inputs.debug || 'false' }} node fetchNflLast3.js
+
+      # ─── optional: tail the IDs that were just saved ─────────
+      - name: Log today’s matchup IDs (if script dropped file)
+        if: always()
+        run: |
+          test -f scrape-result.json && cat scrape-result.json \
+            || echo "No scrape-result.json produced"
