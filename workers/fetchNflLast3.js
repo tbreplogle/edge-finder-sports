@@ -101,9 +101,10 @@ async function scrapeMatchup (id) {
 
   /* derive abbr if Covers omitted it */
   const deriveAbbr = n => {
-    const caps = n.match(/[A-Z]/g);
-    return caps ? caps.slice(-3).join('').toUpperCase() : '';
-  };
+      if (!n) return '';                     // ← guard against undefined
+      const caps = n.match(/[A-Z]/g);
+      return caps ? caps.slice(-3).join('').toUpperCase() : '';
+    };
   awayAb = awayAb || deriveAbbr(awayFN);
   homeAb = homeAb || deriveAbbr(homeFN);
 
