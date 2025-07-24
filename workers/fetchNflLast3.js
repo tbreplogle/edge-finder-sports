@@ -20,8 +20,8 @@ const teamCache = new Map();
 async function nameToId(name) {
   if (teamCache.has(name)) return teamCache.get(name);
 
-  const { data, error } = await sb
-    .from('nfl.teams')
+   const { data, error } = await nfl      // ← use the schema‑scoped client
+    .from('teams')
     .select('team_id')
     .eq('team_name', name)
     .single();
@@ -173,7 +173,7 @@ async function scrapeMatchup(coversId) {
             // attach IDs so they can write to nfl.team_last3
             homeRow.team_id = homeId;
             awayRow.team_id = awayId;
-            
+            allRows.push(homeRow, awayRow);
             // write matchup meta
             await nfl.from('matchups').upsert({
               covers_id: id,
