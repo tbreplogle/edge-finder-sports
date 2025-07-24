@@ -3,7 +3,7 @@ import axios from "axios";
 import { load } from "cheerio";
 import pLimit from "p-limit";
 import { createClient } from "@supabase/supabase-js";
-
+import util from 'util';
 /* -------------------------------------------------------------------------- */
 /*  Config                                                                    */
 /* -------------------------------------------------------------------------- */
