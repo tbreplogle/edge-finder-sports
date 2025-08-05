@@ -8,8 +8,9 @@ import { MobileNavLogo } from "./MobileNavLogo";
 interface MobileNavProps {
   isOpen: boolean;
   onClose: () => void;
-  isAuthenticated?: boolean;
-  isAdmin?: boolean;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  showMembersTab: boolean;   // ← add this line
 }
 
 export function MobileNav({ isOpen, onClose, isAuthenticated = false, isAdmin = false }: MobileNavProps) {
