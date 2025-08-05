@@ -1,4 +1,3 @@
-
 import { useNavigate } from "react-router-dom";
 import { User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ interface UserMenuProps {
   showAdminTab?: boolean;
 }
 
-export function UserMenu({ showAdminTab = true }: UserMenuProps) {
+export function UserMenu({ showAdminTab = false }: UserMenuProps) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -26,47 +25,37 @@ export function UserMenu({ showAdminTab = true }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="rounded-full">
+        <Button variant="ghost" size="icon">
           <User className="h-5 w-5" />
         </Button>
       </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>My Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
-
-        <DropdownMenuItem onClick={() => navigate("/account")}>
-          <Settings className="mr-2 h-4 w-4" />
-          Account Settings
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={() => navigate("/account")}>
+            <Settings className="mr-2 h-4 w-4" />
+            Account Settings
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         {showAdminTab && (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="text-edge-secondary font-bold">
-              Admin
-            </DropdownMenuLabel>
-
-            <DropdownMenuItem
-              onClick={() => navigate("/admin/logic")}
-              className="bg-edge-secondary/10 text-edge-secondary hover:bg-edge-secondary/20"
-            >
-              Logic Lab
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              onClick={() => navigate("/admin/access-control")}
-              className="bg-edge-secondary/10 text-edge-secondary hover:bg-edge-secondary/20"
-            >
-              Access Control
-            </DropdownMenuItem>
-
+          <>
             <DropdownMenuSeparator />
-          </DropdownMenuGroup>
+            <DropdownMenuLabel>Admin</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => navigate("/admin/dashboard")}>
+                Admin Dashboard
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/admin/access-control")}>
+                Access Control
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </>
         )}
-
-        <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout}>
+          Log out
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

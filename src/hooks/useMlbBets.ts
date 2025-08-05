@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import type { MlbBet } from "@/types/mlb";
 
 export function useMlbBets() {
-  return useQuery<MlbBet[]>({
+  return useQuery({
     queryKey: ["mlb-bets"],
     queryFn: async () => {
       const res = await fetch("/api/mlb/bets");

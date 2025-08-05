@@ -21,6 +21,7 @@ export function Header({ isAuthenticated = false }: HeaderProps) {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [hasNewAlerts, setHasNewAlerts] = useState(false);
 
+  // Resolve user role from Supabase on mount
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -29,22 +30,28 @@ export function Header({ isAuthenticated = false }: HeaderProps) {
         setRole("guest");
         return;
       }
-      if (meta.is_admin) setRole("admin");
-      else setRole(meta.role || "free");
+      if (meta.is_admin) {
+        setRole("admin");
+      } else {
+        setRole(meta.role || "free");
+      }
     })();
   }, []);
 
+  // Dummy alerts example
   useEffect(() => {
     if (!isAuthenticated) return;
     const dummy = [{ id: 1, message: "New predictions available", isRead: false }];
     setAlerts(dummy);
-    setHasNewAlerts(dummy.some(a => !a.isRead));
+    setHasNewAlerts(dummy.some((a) => !a.isRead));
   }, [isAuthenticated]);
 
+  // Wait for role resolution
   if (role === null) return null;
 
   const showAdminTab = role === "admin";
-  const showMembersTab = showAdminTab || role === "premium" || role === "enterprise";
+  const showMembersTab =
+    showAdminTab || role === "premium" || role === "enterprise";
 
   return (
     <header className="w-full border-b py-3 sm:py-4">
@@ -62,7 +69,10 @@ export function Header({ isAuthenticated = false }: HeaderProps) {
             <Logo size="md" />
           </Link>
           <div className="hidden md:flex items-center space-x-1">
-            <HeaderNavLinks showAdminTab={showAdminTab} showMembersTab={showMembersTab} />
+            <HeaderNavLinks
+              showAdminTab={showAdminTab}
+              showMembersTab={showMembersTab}
+            />
           </div>
         </div>
 
@@ -70,20 +80,28 @@ export function Header({ isAuthenticated = false }: HeaderProps) {
           <ThemeToggle />
           {isAuthenticated ? (
             <>
-              <NotificationsMenu alerts={alerts} hasNewAlerts={hasNewAlerts} />
+              <NotificationsMenu
+                alerts={alerts}
+                hasNewAlerts={hasNewAlerts}
+              />
               <UserMenu showAdminTab={showAdminTab} />
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => navigate("/auth/login")} className="hidden md:inline-flex">
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/auth/login")}
+                className="hidden md:inline-flex"
+              >
                 Sign in
               </Button>
-              <Button onClick={() => navigate("/auth/register")}>Get Started</Button>
+              <Button onClick={() => navigate("/auth/register")}>
+                Get Started
+              </Button>
             </>
           )}
         </div>
       </div>
-
       <MobileNav
         isOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
