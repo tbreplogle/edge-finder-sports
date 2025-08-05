@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import {
   Table,
@@ -9,64 +7,39 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { fetchMlbPredictions } from "@/utils/fetchMlbPredictions";
+import { useMlbBets } from "@/hooks/useMlbBets";
+import { useNavigate } from "react-router-dom";
 
 const Members = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [predictions, setPredictions] = useState<any[]>([]);
-  const [isAllowed, setIsAllowed] = useState(false);
+  const { data: predictions = [], isLoading } = useMlbBets();
 
-  useEffect(() => {
-    // Check user role from localStorage
-    const userStr = localStorage.getItem("user");
-    if (!userStr) {
-      navigate("/auth/login");
-      return;
-    }
-    const userData = JSON.parse(userStr);
-    const paid =
-      userData.role === "premium" ||
-      userData.role === "enterprise" ||
-      userData.is_admin === true;
-    setIsAllowed(paid);
-    if (!paid) {
-      navigate("/pricing");
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    if (!isAllowed) return;
-    const getData = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchMlbPredictions();
-        setPredictions(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getData();
-  }, [isAllowed]);
-
-  if (!isAllowed) return null;
+  const userStr = localStorage.getItem("user");
+  if (!userStr) {
+    navigate("/auth/login");
+    return null;
+  }
+  const user = JSON.parse(userStr);
+  const paid = user.is_admin || user.role === "premium" || user.role === "enterprise";
+  if (!paid) {
+    navigate("/pricing");
+    return null;
+  }
 
   return (
     <AppLayout isAuthenticated={true}>
       <div className="container py-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-4">Member Dashboard</h1>
-        {loading ? (
-          <p>Loading predictions...</p>
+        <h1 className="text-2xl md:text-3xl font-bold mb-4">Daily MLB Picks</h1>
+        {isLoading ? (
+          <p>Loading predictions…</p>
         ) : predictions.length === 0 ? (
-          <p>No predictions available.</p>
+          <p>No predictions for today.</p>
         ) : (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
+                  <TableHead>Time CT</TableHead>
                   <TableHead>Matchup</TableHead>
                   <TableHead>Market ML (Away)</TableHead>
                   <TableHead>Market ML (Home)</TableHead>
