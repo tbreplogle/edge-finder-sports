@@ -23,7 +23,8 @@ import InjuryDashboard from "./pages/InjuryDashboard";
 import AdminPreview from "./pages/AdminPreview";
 import MlbDashboard from "./pages/MlbDashboard";
 import AccessControl from "./pages/admin/AccessControl";
-
+import Members from "./pages/Members";
+import Admin from "./pages/Admin";
 const queryClient = new QueryClient();
 
 function App() {
@@ -55,7 +56,8 @@ function App() {
               <Route path="/admin/preview" element={<AdminPreview />} />
               <Route path="/admin/sports/:sport" element={<SportLogicTemplate />} />
               <Route path="/admin/access-control" element={<AccessControl />} />
-
+              <Route path="/members" element={<Members />} />
+              <Route path="/admin/dashboard" element={<Admin />} />
               {/* misc */}
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
