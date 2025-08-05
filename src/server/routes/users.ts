@@ -1,33 +1,46 @@
-import { Router } from 'express';
+import { Router, RequestHandler } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import authMiddleware from '../middleware/authMiddleware';
 
 const router = Router();
+
 const admin = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// GET /api/users
-router.get('/', authMiddleware, async (req, res) => {
-  if (!req.user?.is_admin) return res.status(403).json({ error: 'Forbidden' });
+const listUsers: RequestHandler = async (req, res) => {
+  const user = res.locals.user; // from authMiddleware
+  if (!user?.is_admin) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
 
   const { data, error } = await admin
     .from('users')
     .select('id, email, role, is_admin')
     .order('created_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
   res.json(data);
-});
+};
 
-// PUT /api/users/:id
-router.put('/:id', authMiddleware, async (req, res) => {
-  if (!req.user?.is_admin) return res.status(403).json({ error: 'Forbidden' });
+const updateUserRole: RequestHandler = async (req, res) => {
+  const user = res.locals.user;
+  if (!user?.is_admin) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
 
   const { id } = req.params;
   const { role } = req.body || {};
-  if (!role) return res.status(400).json({ error: 'Missing role' });
+  if (!role) {
+    res.status(400).json({ error: 'Missing role' });
+    return;
+  }
 
   const { data, error } = await admin
     .from('users')
@@ -36,8 +49,14 @@ router.put('/:id', authMiddleware, async (req, res) => {
     .select('id, email, role, is_admin')
     .maybeSingle();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
   res.json(data);
-});
+};
+
+router.get('/', authMiddleware, listUsers);
+router.put('/:id', authMiddleware, updateUserRole);
 
 export default router;
