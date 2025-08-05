@@ -81,7 +81,8 @@ export function Header({
   }, [isAuthenticated]);
 
   // Always display the Admin tab, access is controlled at the page level
-  const showAdminTab = true;
+  const showAdminTab = userRole === "admin";
+
 
   // Check if the user should see alerts (if they are authenticated)
   const shouldShowAlerts = isAuthenticated;

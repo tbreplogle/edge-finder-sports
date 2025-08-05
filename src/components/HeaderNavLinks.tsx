@@ -20,15 +20,14 @@ export function HeaderNavLinks({ showAdminTab = true }: HeaderNavLinksProps) {
       <Link to="/pricing" className="px-3 py-2 text-sm font-medium hover:text-foreground/80">
         Pricing
       </Link>
-      
       {showAdminTab && (
-        <Link 
-          to="/admin/logic" 
-          className="px-3 py-2 text-sm font-medium bg-edge-secondary/10 text-edge-secondary rounded-md hover:bg-edge-secondary/20"
-        >
-          Admin: Logic Lab
-        </Link>
-      )}
+  <Link
+    to="/admin/dashboard"
+    className="md:px-3 md:py-2 hover:text-primary transition-colors"
+  >
+    Admin
+  </Link>
+)}
     </nav>
   );
 }

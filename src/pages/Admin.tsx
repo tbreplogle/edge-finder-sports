@@ -12,10 +12,9 @@ interface UserRecord {
 interface Preview {
   id: string;
   sport: string;
-  matchup: string;
-  start_time: string;
   away_team: string;
   home_team: string;
+  start_time: string;
   away_ml: number | null;
   home_ml: number | null;
   away_edge: number | null;
@@ -122,7 +121,6 @@ const Admin = () => {
             </tbody>
           </table>
         </section>
-
         <section>
           <h2 className="text-xl font-semibold mb-2">Game Previews</h2>
           {previews.length === 0 ? (
