@@ -6,18 +6,7 @@ const API_BASE = "https://api.the-odds-api.com/v4";
 const SPORT_KEY = "baseball_mlb";
 const REGIONS = "us";
 const MARKET = "h2h";
-const BOOKMAKERS = [
-  "draftkings",
-  "fanduel",
-  "williamhill_us",
-  "betmgm",
-  "betrivers",
-  "bovada",
-  "betonlineag",
-  "lowvig",
-  "mybookieag",
-  "fanatics"
-];
+const BOOKMAKERS = ["draftkings", "fanduel"];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,10 +55,10 @@ function makeNameVariants(rec) {
   const abbr = rec.team_abbr;
   const alt = rec.alt_name;
   if (full) {
-    const n = normKey(full);
-    out.add(n);
-    out.add(n.replace("LOS ANGELES", "LA"));
-    out.add(n.replace("NEW YORK", "NY"));
+    out.add(normKey(full));
+    out.add(normKey(full).replace("LOS ANGELES", "LA"));
+    out.add(normKey(full).replace("NEW YORK", "NY"));
+    out.add(normKey(full).replace("ST LOUIS", "ST LOUIS"));
   }
   if (abbr) out.add(normKey(abbr));
   if (alt) {
@@ -102,7 +91,12 @@ async function loadTeamMap() {
     }
   }
   console.log(`🔎 loaded teams_mlb: rows=${(data||[]).length}, keys=${nameToId.size}`);
-  console.log(`  e.g. GUARDIANS->${nameToId.get("GUARDIANS") || "—"} / CLEVELAND GUARDIANS->${nameToId.get("CLEVELAND GUARDIANS") || "—"} / NY METS->${nameToId.get("NY METS") || "—"}`);
+  if ((data || []).length < 30 || nameToId.size < 40) {
+    console.warn("  ⚠️ team map looks too small — check table/columns");
+  }
+  console.log(
+    `  e.g. GUARDIANS->${nameToId.get("GUARDIANS") || "—"} / CLEVELAND GUARDIANS->${nameToId.get("CLEVELAND GUARDIANS") || "—"} / NY METS->${nameToId.get("NY METS") || "—"}`
+  );
   return { nameToId, idToRecord };
 }
 
@@ -121,16 +115,28 @@ function teamIdFromMap(nameToId, raw) {
   return null;
 }
 
-async function getTargetDates() {
-  const todayCT = getCTYmd(new Date());
+async function getEarliestBetDate() {
   const { data, error } = await supabase
     .from("mlb_daily_bets")
-    .select("game_date", { head: false })
-    .lt("game_date", todayCT);
+    .select("game_date")
+    .order("game_date", { ascending: true })
+    .limit(1);
   if (error) throw error;
-  const set = new Set((data || []).map((r) => r.game_date));
-  const arr = [...set].sort();
-  return arr;
+  const first = data?.[0]?.game_date;
+  if (first) return first;
+  return getCTYmd(new Date());
+}
+
+async function getTargetDates() {
+  const start = await getEarliestBetDate();
+  const todayCT = getCTYmd(new Date());
+  const s = new Date(start + "T00:00:00Z");
+  const e = new Date(todayCT + "T00:00:00Z");
+  const out = [];
+  for (let t = s; t <= e; t = new Date(t.getTime() + 86400000)) {
+    out.push(getCTYmd(t));
+  }
+  return out;
 }
 
 function probeTimestampsForCTDay(ctYmd) {
@@ -149,8 +155,9 @@ function probeTimestampsForCTDay(ctYmd) {
 }
 
 const snapshotCache = new Map();
-async function fetchSnapshot(dateIso) {
-  if (snapshotCache.has(dateIso)) return snapshotCache.get(dateIso);
+async function fetchSnapshot(dateLike) {
+  const key = isoNoMs(dateLike);
+  if (snapshotCache.has(key)) return snapshotCache.get(key);
   const url = `${API_BASE}/historical/sports/${SPORT_KEY}/odds`;
   const resp = await axios.get(url, {
     params: {
@@ -159,27 +166,26 @@ async function fetchSnapshot(dateIso) {
       markets: MARKET,
       bookmakers: BOOKMAKERS.join(","),
       oddsFormat: "american",
-      date: isoNoMs(dateIso)
+      date: key
     },
     validateStatus: () => true
   });
   if (resp.status !== 200) {
-    console.warn(`  ⚠️ snapshot ${isoNoMs(dateIso)} resp=${resp.status} msg=${resp.data?.message || resp.statusText}`);
+    console.warn(`  ⚠️ snapshot ${key} resp=${resp.status} msg=${resp.data?.message || resp.statusText}`);
     const res = { items: [], ts: null, status: resp.status };
-    snapshotCache.set(dateIso, res);
+    snapshotCache.set(key, res);
     return res;
   }
   const items = Array.isArray(resp.data?.data) ? resp.data.data : [];
   const res = { items, ts: resp.data?.timestamp || null, status: 200 };
-  snapshotCache.set(dateIso, res);
+  snapshotCache.set(key, res);
   return res;
 }
 
-async function loadMatchupsIndex(dates) {
+async function loadMatchupsIndex() {
   const { data, error } = await supabase
     .from("mlb_matchups")
-    .select("matchup_id, game_date, game_time_ct, home_team_id, away_team_id")
-    .in("game_date", dates);
+    .select("matchup_id, game_date, game_time_ct, home_team_id, away_team_id");
   if (error) throw error;
   const byDate = new Map();
   for (const r of data || []) {
@@ -187,7 +193,9 @@ async function loadMatchupsIndex(dates) {
     if (!byDate.has(d)) byDate.set(d, []);
     byDate.get(d).push(r);
   }
-  for (const arr of byDate.values()) arr.sort((a, b) => (a.game_time_ct || "").localeCompare(b.game_time_ct || ""));
+  for (const arr of byDate.values()) {
+    arr.sort((a, b) => (a.game_time_ct || "").localeCompare(b.game_time_ct || ""));
+  }
   return byDate;
 }
 
@@ -237,7 +245,7 @@ function selectOpenClose(tl, commenceUtc) {
   return { book: chosenBook, open, close, estimated };
 }
 
-async function upsertMovement(mid, gameDate, teamIdVal, source, openPt, closePt, single) {
+async function upsertMovement(mid, gameDate, teamIdVal, source, openPt, closePt) {
   const payload = {
     matchup_id: mid,
     team_id: teamIdVal,
@@ -252,24 +260,82 @@ async function upsertMovement(mid, gameDate, teamIdVal, source, openPt, closePt,
     .from("mlb_line_movements")
     .upsert(payload, { onConflict: "matchup_id,team_id,source" });
   if (error) throw error;
-  return single ? "(single) " : "";
 }
 
-function pickMatchupId(matchupsByDate, ctDate, homeId, awayId, commenceUtc) {
-  const list = matchupsByDate.get(ctDate) || [];
-  const candidates = list.filter((r) => r.home_team_id === homeId && r.away_team_id === awayId);
-  if (candidates.length === 1) return candidates[0].matchup_id;
-  if (candidates.length > 1) {
-    const target = new Date(commenceUtc).getTime();
-    let best = null, bestDiff = Infinity;
-    for (const r of candidates) {
-      const t = new Date(r.game_time_ct).getTime();
-      const diff = Math.abs(t - target);
-      if (diff < bestDiff) { bestDiff = diff; best = r.matchup_id; }
-    }
-    return best || null;
+async function loadBetsIndex(startDate, endDate) {
+  const { data, error } = await supabase
+    .from("mlb_daily_bets")
+    .select("matchup_id, game_date, team_id, inserted_at")
+    .gte("game_date", startDate)
+    .lte("game_date", endDate);
+  if (error) throw error;
+  const rows = data || [];
+  const byDateTeam = new Map();
+  for (const r of rows) {
+    const key = `${r.game_date}|${r.team_id}`;
+    if (!byDateTeam.has(key)) byDateTeam.set(key, new Set());
+    byDateTeam.get(key).add(r.matchup_id);
   }
+  console.log(`🧾 bets index loaded: rows=${rows.length}, keys=${byDateTeam.size}`);
+  return { byDateTeam };
+}
+
+function findMidFromBets(betsIdx, ctDate, homeId, awayId) {
+  const kHome = `${ctDate}|${homeId}`;
+  const kAway = `${ctDate}|${awayId}`;
+  const setH = betsIdx.byDateTeam.get(kHome) || new Set();
+  const setA = betsIdx.byDateTeam.get(kAway) || new Set();
+  if (setH.size === 1 && setA.size === 0) return [...setH][0];
+  if (setA.size === 1 && setH.size === 0) return [...setA][0];
+  if (setH.size && setA.size) {
+    const inter = [...setH].filter((m) => setA.has(m));
+    if (inter.length === 1) return inter[0];
+    return null;
+  }
+  if (setH.size === 1) return [...setH][0];
+  if (setA.size === 1) return [...setA][0];
   return null;
+}
+
+function pickFromMatchups(list, commenceUtc) {
+  if (!list || !list.length) return null;
+  if (list.length === 1) return list[0].matchup_id;
+  const target = new Date(commenceUtc).getTime();
+  let best = null, bestDiff = Infinity;
+  for (const r of list) {
+    const t = new Date(r.game_time_ct).getTime();
+    const diff = Math.abs(t - target);
+    if (diff < bestDiff) { bestDiff = diff; best = r.matchup_id; }
+  }
+  return best || null;
+}
+
+function pickMatchupId(matchupsByDate, betsIdx, ctDate, homeId, awayId, commenceUtc) {
+  const list0 = (matchupsByDate.get(ctDate) || []).filter(r => r.home_team_id === homeId && r.away_team_id === awayId);
+  const mid0 = pickFromMatchups(list0, commenceUtc);
+  if (mid0) return mid0;
+
+  const fromBetsSame = findMidFromBets(betsIdx, ctDate, homeId, awayId);
+  if (fromBetsSame) return fromBetsSame;
+
+  const d0 = new Date(ctDate);
+  const ctMinus = getCTYmd(new Date(d0.getTime() - 86400000));
+  const ctPlus = getCTYmd(new Date(d0.getTime() + 86400000));
+
+  const listMinus = (matchupsByDate.get(ctMinus) || []).filter(r => r.home_team_id === homeId && r.away_team_id === awayId);
+  const midMinus = pickFromMatchups(listMinus, commenceUtc);
+  if (midMinus) return midMinus;
+
+  const listPlus = (matchupsByDate.get(ctPlus) || []).filter(r => r.home_team_id === homeId && r.away_team_id === awayId);
+  const midPlus = pickFromMatchups(listPlus, commenceUtc);
+  if (midPlus) return midPlus;
+
+  const fromBetsNear =
+    findMidFromBets(betsIdx, ctMinus, homeId, awayId) ||
+    findMidFromBets(betsIdx, ctPlus, homeId, awayId) ||
+    null;
+
+  return fromBetsNear;
 }
 
 async function backfill() {
@@ -279,9 +345,10 @@ async function backfill() {
   if (!(await testConnection())) throw new Error("DB connection failed");
   const { nameToId } = await loadTeamMap();
   const dates = await getTargetDates();
-  const matchIdx = await loadMatchupsIndex(dates);
+  const matchIdx = await loadMatchupsIndex();
+  const betsIdx = await loadBetsIndex(dates[0], dates[dates.length - 1]);
   console.log(`✅ Successfully connected to Supabase`);
-  console.log(`⏱️  Backfill dates (from bets): ${dates[0]} → ${dates[dates.length - 1]}`);
+  console.log(`⏱️  Backfill window (CT): ${dates[0]} → ${dates[dates.length - 1]}`);
 
   let totalEvents = 0;
   let totalWithLines = 0;
@@ -305,7 +372,10 @@ async function backfill() {
       for (const ev of snap.items) {
         const hid = teamIdFromMap(nameToId, ev.home_team);
         const aid = teamIdFromMap(nameToId, ev.away_team);
-        if (!hid || !aid) continue;
+        if (!hid || !aid) {
+          console.warn(`  ⚠️  unmapped team name(s): home="${ev.home_team}" (${hid}), away="${ev.away_team}" (${aid})`);
+          continue;
+        }
         totalEvents++;
 
         if (!timelines.has(ev.id)) timelines.set(ev.id, buildBookTimeline());
@@ -315,7 +385,7 @@ async function backfill() {
           home_name: ev.home_team, away_name: ev.away_team
         });
 
-        for (const bm of ev.bookmakers || []) {
+        for (const bm of (ev.bookmakers || [])) {
           if (!BOOKMAKERS.includes(bm.key)) continue;
           const m = (bm.markets || []).find((x) => x.key === MARKET);
           if (!m || !m.outcomes || m.outcomes.length < 2) continue;
@@ -328,6 +398,52 @@ async function backfill() {
       await sleep(120);
     }
 
+    const extraTimes = new Set();
+    for (const [eid, tl] of timelines.entries()) {
+      let needs = false;
+      for (const bk of BOOKMAKERS) {
+        const arr = tl.byBook.get(bk);
+        if (!arr || arr.length <= 1) { needs = true; break; }
+      }
+      if (needs) {
+        const m = meta.get(eid);
+        if (!m?.commence_time) continue;
+        const t = new Date(m.commence_time).getTime();
+        extraTimes.add(isoNoMs(new Date(t - 60 * 60 * 1000)));
+        extraTimes.add(isoNoMs(new Date(t - 5 * 60 * 1000)));
+      }
+    }
+
+    if (extraTimes.size) {
+      console.log(`  ↻ extra commence-adjacent probes: n=${extraTimes.size}`);
+      for (const et of extraTimes) {
+        const snap = await fetchSnapshot(et);
+        console.log(`    • extra @ ${et} → status=${snap.status} events=${snap.items.length}`);
+        if (snap.status !== 200 || !snap.items.length) { await sleep(120); continue; }
+        for (const ev of snap.items) {
+          const hid = teamIdFromMap(nameToId, ev.home_team);
+          const aid = teamIdFromMap(nameToId, ev.away_team);
+          if (!hid || !aid) continue;
+          if (!timelines.has(ev.id)) timelines.set(ev.id, buildBookTimeline());
+          if (!meta.has(ev.id)) meta.set(ev.id, {
+            home_id: hid, away_id: aid,
+            commence_time: ev.commence_time,
+            home_name: ev.home_team, away_name: ev.away_team
+          });
+          for (const bm of ev.bookmakers || []) {
+            if (!BOOKMAKERS.includes(bm.key)) continue;
+            const mkt = (bm.markets || []).find((x) => x.key === MARKET);
+            if (!mkt || !mkt.outcomes || mkt.outcomes.length < 2) continue;
+            const oH = mkt.outcomes.find((o) => normKey(o.name) === normKey(ev.home_team));
+            const oA = mkt.outcomes.find((o) => normKey(o.name) === normKey(ev.away_team));
+            if (!oH || !oA) continue;
+            pushPoint(timelines.get(ev.id), bm.key, mkt.last_update || bm.last_update || snap.ts, hid, oH.price, aid, oA.price);
+          }
+        }
+        await sleep(120);
+      }
+    }
+
     let dayUpserts = 0;
     let dayEvents = 0;
 
@@ -336,9 +452,8 @@ async function backfill() {
       if (!m) continue;
 
       const ctYmd = getCTYmd(m.commence_time);
-      if (ctYmd !== ctDate) continue;
+      const mid = pickMatchupId(matchIdx, betsIdx, ctYmd, m.home_id, m.away_id, m.commence_time);
 
-      const mid = pickMatchupId(matchIdx, ctYmd, m.home_id, m.away_id, m.commence_time);
       if (!mid) {
         const candidates = (matchIdx.get(ctYmd) || []).length;
         console.warn(`  ⚠️  no matchup_id for event ${eid} (${m.away_name} @ ${m.home_name}) on ${ctYmd} • candidates_on_date=${candidates} • home_id=${m.home_id} • away_id=${m.away_id}`);
@@ -353,16 +468,18 @@ async function backfill() {
 
       dayEvents++;
       totalWithLines++;
-      const single = sel.open.ts.getTime() === sel.close.ts.getTime() && (sel.open.home.ml === sel.close.home.ml) && (sel.open.away.ml === sel.close.away.ml);
-      const src = `OddsAPI:${sel.book}${sel.estimated ? ":est" : ""}`;
+
+      const sameTs = sel.open.ts.getTime() === sel.close.ts.getTime();
+      const samePrices = sel.open.home.ml === sel.close.home.ml && sel.open.away.ml === sel.close.away.ml;
+      const src = `OddsAPI:${sel.book}${sel.estimated ? ":est" : ""}${(sameTs || samePrices) ? ":single" : ""}`;
 
       try {
-        const tag = await upsertMovement(mid, ctYmd, m.home_id, src, sel.open, sel.close, single);
-        await upsertMovement(mid, ctYmd, m.away_id, src, sel.open, sel.close, single);
+        await upsertMovement(mid, ctYmd, m.home_id, src, sel.open, sel.close);
+        await upsertMovement(mid, ctYmd, m.away_id, src, sel.open, sel.close);
         dayUpserts += 2;
         totalUpserts += 2;
         if (sel.estimated) estimatedCloses += 2;
-        console.log(`  ✅ mid=${mid} book=${sel.book} ${single ? "(single) " : ""}${sel.estimated ? "(est close)" : ""} upserted 2 rows`);
+        console.log(`  ✅ mid=${mid} book=${sel.book}${sel.estimated ? " (est close)" : ""}${(sameTs || samePrices) ? " (single)" : ""} upserted 2 rows`);
       } catch (e) {
         console.error(`  ❌ upsert mid=${mid} book=${sel.book} err=${e.message}`);
       }
