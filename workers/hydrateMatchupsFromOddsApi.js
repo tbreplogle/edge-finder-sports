@@ -7,9 +7,9 @@ const SPORT_KEY  = "baseball_mlb";
 const API_BASE   = "https://api.the-odds-api.com/v4";
 const API_KEY    = process.env.ODDS_API_KEY || "REPLACE_ME";
 const MARKET_KEY = "h2h";
-const BOOKS_PRIO = ["pinnacle","draftkings","fanduel","betmgm","caesars"]; // low → credits
+const BOOKS_PRIO = ["pinnacle","draftkings","fanduel","betmgm","caesars"];
 
-/* Odds API team names → your team_id (same mapping you used before) */
+/* Odds API team names → your team_id */
 const TEAM_NAME_TO_ID = {
   "SEATTLE MARINERS": 1, "CLEVELAND GUARDIANS": 2, "PITTSBURGH PIRATES": 3,
   "LOS ANGELES ANGELS": 4, "TORONTO BLUE JAYS": 5, "MIAMI MARLINS": 6,
@@ -22,157 +22,153 @@ const TEAM_NAME_TO_ID = {
   "DETROIT TIGERS": 25, "PHILADELPHIA PHILLIES": 26, "ST. LOUIS CARDINALS": 27,
   "TEXAS RANGERS": 28, "BOSTON RED SOX": 29, "BALTIMORE ORIOLES": 30,
 };
-const NAME_TO_ID = (s) => TEAM_NAME_TO_ID[(s || "").trim().toUpperCase()] ?? null;
+const NAME_TO_ID = s => TEAM_NAME_TO_ID[(s||"").trim().toUpperCase()] ?? null;
 
 /* time helpers */
 const todayCT = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" }); // YYYY-MM-DD
-
 function endOfDayCtToUtcIso(yyyy_mm_dd) {
-  // 23:59:59 CT → UTC ISO (CDT≈UTC-5; CST≈UTC-6). Approx +5h is fine for daily bound in MLB season.
+  // approx: CT + 5h during MLB (CDT). Good enough for daily snapshot bound.
   const dt = new Date(`${yyyy_mm_dd}T23:59:59`);
   return new Date(dt.getTime() + 5 * 3600e3).toISOString();
 }
 function toCtIso(utcIso) {
   const d = new Date(utcIso);
-  // format to ISO in CT with local wall clock (store as string)
-  const parts = new Date(d.toLocaleString("en-US", { timeZone: "America/Chicago" }))
-    .toISOString()
-    .split(".")[0] + "Z";
-  return parts;
-}
-function ctDateFromUtcIso(utcIso) {
-  return new Date(utcIso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const ct = new Date(d.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+  return new Date(ct.getTime() - ct.getTimezoneOffset()*60000).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-/* call historical snapshot at end-of-day; returns list of events */
+/* pull one daily historical snapshot (≤ end-of-day) */
 async function fetchHistoricalDay(yyyy_mm_dd) {
   const url = `${API_BASE}/historical/sports/${SPORT_KEY}/odds`;
   const params = {
-    apiKey: API_KEY,
-    date: endOfDayCtToUtcIso(yyyy_mm_dd),  // snapshot <= end-of-day
-    markets: MARKET_KEY,
-    bookmakers: BOOKS_PRIO.slice(0, 3).join(","), // keep it cheap
-    oddsFormat: "american",
-    dateFormat: "iso",
+    apiKey: API_KEY, date: endOfDayCtToUtcIso(yyyy_mm_dd),
+    markets: MARKET_KEY, bookmakers: BOOKS_PRIO.slice(0,3).join(","),
+    oddsFormat: "american", dateFormat: "iso",
   };
   const resp = await axios.get(url, { params, validateStatus: () => true });
   if (resp.status !== 200 || !Array.isArray(resp.data)) return [];
-  return resp.data; // [{ id, home_team, away_team, commence_time, bookmakers: [...] }, ...]
+  return resp.data; // [{ id, home_team, away_team, commence_time, ... }]
 }
 
-/* hydrate missing game_id or game_time_ct for past matchups */
 async function hydrate() {
   if (!(await testConnection())) throw new Error("DB connection failed");
 
-  // a) earliest date in bets (lower bound)
+  // bounds
   const { data: minRow, error: minErr } = await supabase
-    .from("mlb_daily_bets")
-    .select("game_date")
-    .order("game_date", { ascending: true })
-    .limit(1)
-    .single();
+    .from("mlb_daily_bets").select("game_date").order("game_date", { ascending: true }).limit(1).single();
   if (minErr) throw minErr;
-  if (!minRow?.game_date) {
-    console.log("No mlb_daily_bets rows; nothing to do.");
-    return;
-  }
+  if (!minRow?.game_date) { console.log("No bets; nothing to do."); return; }
   const earliest = minRow.game_date;
   const today = todayCT();
+  console.log(`⏱️  Hydrate window: ${earliest} → ${today}`);
 
-  // b) pull missing rows from mlb_matchups within window
-  const { data: missing, error: missErr } = await supabase
-    .from("mlb_matchups")
-    .select("matchup_id, home_team_id, away_team_id, game_date, game_time_ct, game_id")
+  // 1) gather per-matchup info from bets (past only)
+  const { data: bets, error: betErr } = await supabase
+    .from("mlb_daily_bets")
+    .select("matchup_id, team_id, game_date")
     .gte("game_date", earliest)
-    .lt("game_date", today)
-    .or("game_id.is.null,game_time_ct.is.null");
-  if (missErr) throw missErr;
-  if (!missing?.length) {
-    console.log("No missing game_id/game_time_ct; hydrate not needed.");
+    .lt("game_date", today);
+  if (betErr) throw betErr;
+
+  const byMatch = new Map();
+  for (const b of (bets||[])) {
+    const entry = byMatch.get(b.matchup_id) || { date: b.game_date, teams: new Set() };
+    entry.date = entry.date || b.game_date;
+    entry.teams.add(b.team_id);
+    byMatch.set(b.matchup_id, entry);
+  }
+
+  // 2) fetch existing matchups for those ids (don’t rely on game_date filter)
+  const mids = Array.from(byMatch.keys());
+  const { data: existing, error: exErr } = await supabase
+    .from("mlb_matchups")
+    .select("matchup_id, home_team_id, away_team_id, game_id, game_time_ct, game_date")
+    .in("matchup_id", mids);
+  if (exErr) throw exErr;
+  const byMid = new Map((existing||[]).map(r => [r.matchup_id, r]));
+
+  // 3) build date → list of matchup_ids needing hydration (missing row or missing fields)
+  const needByDate = new Map();
+  for (const [mid, info] of byMatch) {
+    const row = byMid.get(mid);
+    const missing = !row || !row.game_id || !row.game_time_ct;
+    if (!missing) continue;
+    const list = needByDate.get(info.date) || [];
+    list.push(mid);
+    needByDate.set(info.date, list);
+  }
+  if (!needByDate.size) {
+    console.log("No missing rows/fields for these matchup_ids.");
     return;
   }
 
-  // c) group by date
-  const byDate = missing.reduce((m, r) => {
-    (m[r.game_date] ||= []).push(r);
-    return m;
-  }, {});
+  let updated = 0, inserted = 0, unmatched = 0;
 
-  let updated = 0;
-  for (const day of Object.keys(byDate).sort()) {
-    // 1) fetch snapshot for this date
-    const events = await fetchHistoricalDay(day);
+  // 4) per date: fetch snapshot once, index by (home_id, away_id)
+  for (const [date, midsForDay] of needByDate) {
+    const events = await fetchHistoricalDay(date);
     if (!events.length) {
-      console.warn(`⚠️ No historical snapshot for ${day}`);
+      console.warn(`⚠️ No historical snapshot for ${date}`);
+      unmatched += midsForDay.length;
       continue;
     }
 
-    // 2) index events by (home_id, away_id, ct_date)
-    const index = new Map(); // key → array of events sorted by commence_time
+    const idx = new Map(); // "home_away" → [events sorted by time]
     for (const ev of events) {
-      const hId = NAME_TO_ID(ev.home_team);
-      const aId = NAME_TO_ID(ev.away_team);
-      if (!hId || !aId) continue;
-      const ctDate = ctDateFromUtcIso(ev.commence_time);
-      const key = `${hId}_${aId}_${ctDate}`;
-      (index.get(key) ?? index.set(key, []).get(key)).push(ev);
+      const h = NAME_TO_ID(ev.home_team), a = NAME_TO_ID(ev.away_team);
+      if (!h || !a) continue;
+      const key = `${h}_${a}`;
+      (idx.get(key) ?? idx.set(key, []).get(key)).push(ev);
     }
-    for (const list of index.values()) {
-      list.sort((x, y) => (x.commence_time || "").localeCompare(y.commence_time || ""));
+    for (const list of idx.values()) {
+      list.sort((x,y) => (x.commence_time||"").localeCompare(y.commence_time||""));
     }
 
-    // 3) within this date, group our missing rows by the same key and assign events
-    const rows = byDate[day];
-    const groups = new Map();
-    for (const r of rows) {
-      const key = `${r.home_team_id}_${r.away_team_id}_${r.game_date}`;
-      (groups.get(key) ?? groups.set(key, []).get(key)).push(r);
-    }
-    for (const [key, groupRows] of groups) {
-      const evs = index.get(key) || [];
-      if (!evs.length) {
-        // try reversed home/away in case your matchups are flipped
-        const [h, a, d] = key.split("_");
-        const flip = `${a}_${h}_${d}`;
-        if (index.has(flip)) {
-          // swap meaning: if your row is home/away but snapshot is away/home we still map
-          const evsFlip = index.get(flip);
-          await assignAndUpdate(groupRows, evsFlip, true);
-        } else {
-          console.warn(`⚠️ No event match for key ${key} on ${day}`);
-        }
-        continue;
-      }
-      await assignAndUpdate(groupRows, evs, false);
-    }
-  }
+    for (const mid of midsForDay) {
+      const info = byMatch.get(mid);
+      const [t1, t2] = Array.from(info.teams);
+      if (!t1 || !t2) { unmatched++; continue; }
 
-  console.log(`✅ Hydration complete. Rows updated: ${updated}`);
+      // Try both home/away orders
+      let ev = (idx.get(`${t1}_${t2}`) || [])[0] || (idx.get(`${t2}_${t1}`) || [])[0];
+      if (!ev) { unmatched++; continue; }
 
-  async function assignAndUpdate(groupRows, eventList, flipped) {
-    // deterministic pairing: earliest event → lowest matchup_id, next → next, etc.
-    const sortedRows = groupRows.slice().sort((a, b) => (a.matchup_id - b.matchup_id));
-    const toAssign = Math.min(sortedRows.length, eventList.length);
-    for (let i = 0; i < toAssign; i++) {
-      const row = sortedRows[i];
-      const ev  = eventList[i];
       const ctIso = toCtIso(ev.commence_time);
+      const exists = byMid.get(mid);
 
-      const patch = {};
-      if (!row.game_id)      patch.game_id = ev.id;
-      if (!row.game_time_ct) patch.game_time_ct = ctIso;
+      if (!exists) {
+        // insert new row
+        const patch = {
+          matchup_id: mid,
+          home_team_id: NAME_TO_ID(ev.home_team),
+          away_team_id: NAME_TO_ID(ev.away_team),
+          game_date: date,
+          game_time_ct: ctIso,
+          game_id: ev.id
+        };
+        const { error: insErr } = await supabase.from("mlb_matchups").insert(patch);
+        if (insErr) { console.error("❌ insert failed", insErr); continue; }
+        inserted++; byMid.set(mid, patch);
+      } else {
+        const patch = {};
+        if (!exists.game_id)      patch.game_id = ev.id;
+        if (!exists.game_time_ct) patch.game_time_ct = ctIso;
+        if (!exists.home_team_id) patch.home_team_id = NAME_TO_ID(ev.home_team);
+        if (!exists.away_team_id) patch.away_team_id = NAME_TO_ID(ev.away_team);
+        if (!exists.game_date)    patch.game_date = date;
 
-      if (Object.keys(patch).length) {
-        const { error: upErr } = await supabase
-          .from("mlb_matchups")
-          .update(patch)
-          .eq("matchup_id", row.matchup_id);
-        if (upErr) console.error("❌ update failed", upErr);
-        else updated++;
+        if (Object.keys(patch).length) {
+          const { error: upErr } = await supabase
+            .from("mlb_matchups").update(patch).eq("matchup_id", mid);
+          if (upErr) { console.error("❌ update failed", upErr); continue; }
+          updated++;
+        }
       }
     }
   }
+
+  console.log(`✅ Hydration done. inserted=${inserted}, updated=${updated}, unmatched=${unmatched}`);
 }
 
 /* CLI */
