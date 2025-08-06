@@ -84,7 +84,7 @@ function makeNameVariants(rec) {
 }
 
 async function loadTeamMap() {
-  const { data, error } = await supabase.from("mlb_teams").select("*");
+  const { data, error } = await supabase.from("teams_mlb").select("*");
   if (error) throw error;
 
   const nameToId = new Map();
