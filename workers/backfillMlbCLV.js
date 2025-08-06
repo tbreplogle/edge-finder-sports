@@ -52,14 +52,9 @@ const TEAM_NAME_TO_ID = {
   "BALTIMORE ORIOLES": 30, "BALTIMORE": 30, "ORIOLES": 30, "BAL": 30
 };
 
-const toCT = (d) => {
-  const t = new Date(d);
-  return new Date(t.getTime() - 5 * 60 * 60 * 1000);
-};
-const toUTC = (d) => {
-  const t = new Date(d);
-  return new Date(t.getTime() + 5 * 60 * 60 * 1000);
-};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const toCT = (d) => new Date(new Date(d).getTime() - 5 * 60 * 60 * 1000);
 const ymd = (d) => d.toISOString().slice(0, 10);
 
 async function getEarliestBetDate() {
@@ -78,9 +73,7 @@ async function getTargetDates() {
   const s = new Date(start + "T00:00:00Z");
   const e = new Date(todayCT + "T00:00:00Z");
   const out = [];
-  for (let t = s; t < e; t = new Date(t.getTime() + 24 * 60 * 60 * 1000)) {
-    out.push(ymd(t));
-  }
+  for (let t = s; t < e; t = new Date(t.getTime() + 86400000)) out.push(ymd(t));
   return out;
 }
 
@@ -90,7 +83,7 @@ function probeTimestampsForCTDay(ctYmd) {
   const days = [-1, 0, 1];
   const out = [];
   for (const d of days) {
-    const day = new Date(base.getTime() + d * 24 * 60 * 60 * 1000);
+    const day = new Date(base.getTime() + d * 86400000);
     const y = day.getUTCFullYear();
     const m = String(day.getUTCMonth() + 1).padStart(2, "0");
     const dd = String(day.getUTCDate()).padStart(2, "0");
@@ -99,9 +92,11 @@ function probeTimestampsForCTDay(ctYmd) {
   return out;
 }
 
+const snapshotCache = new Map();
 async function fetchSnapshot(dateIso) {
+  if (snapshotCache.has(dateIso)) return snapshotCache.get(dateIso);
   const url = `${API_BASE}/historical/sports/${SPORT_KEY}/odds`;
-  const { data } = await axios.get(url, {
+  const resp = await axios.get(url, {
     params: {
       apiKey: API_KEY,
       regions: REGIONS,
@@ -112,8 +107,16 @@ async function fetchSnapshot(dateIso) {
     },
     validateStatus: () => true
   });
-  if (!data || !Array.isArray(data.data)) return { items: [], ts: null };
-  return { items: data.data, ts: data.timestamp || null };
+  if (resp.status !== 200) {
+    console.warn(`⚠️  Snapshot ${dateIso} resp=${resp.status} msg=${resp.data?.message || resp.statusText}`);
+    const res = { items: [], ts: null, status: resp.status };
+    snapshotCache.set(dateIso, res);
+    return res;
+  }
+  const items = Array.isArray(resp.data?.data) ? resp.data.data : [];
+  const res = { items, ts: resp.data?.timestamp || null, status: 200 };
+  snapshotCache.set(dateIso, res);
+  return res;
 }
 
 function teamId(name) {
@@ -163,19 +166,25 @@ function pickMatchupId(byDate, ctDate, homeId, awayId, commenceUtc) {
 }
 
 function buildBookTimeline() {
-  return { byBook: new Map() };
+  return { byBook: new Map(), meta: null };
 }
 
-function pushPoint(tl, book, ts, home, away) {
+function pushPoint(tl, book, ts, homeId, homeMl, awayId, awayMl) {
   if (!book || ts == null) return;
   if (!tl.byBook.has(book)) tl.byBook.set(book, []);
-  tl.byBook.get(book).push({ ts: new Date(ts), home, away });
+  tl.byBook.get(book).push({
+    ts: new Date(ts),
+    home: { id: homeId, ml: typeof homeMl === "number" ? Math.round(homeMl) : parseInt(homeMl, 10) },
+    away: { id: awayId, ml: typeof awayMl === "number" ? Math.round(awayMl) : parseInt(awayMl, 10) }
+  });
 }
 
 function selectOpenClose(tl, commenceUtc) {
   let chosenBook = null;
   let open = null;
   let close = null;
+  let estimated = false;
+  const startTs = new Date(commenceUtc).getTime();
   for (const bk of BOOKMAKERS) {
     const arr = tl.byBook.get(bk);
     if (!arr || !arr.length) continue;
@@ -183,7 +192,7 @@ function selectOpenClose(tl, commenceUtc) {
     const o = arr[0];
     let c = null;
     for (let i = arr.length - 1; i >= 0; i--) {
-      if (arr[i].ts.getTime() <= new Date(commenceUtc).getTime()) {
+      if (arr[i].ts.getTime() <= startTs) {
         c = arr[i];
         break;
       }
@@ -192,10 +201,23 @@ function selectOpenClose(tl, commenceUtc) {
       chosenBook = bk;
       open = o;
       close = c;
+      estimated = false;
       break;
     }
   }
-  return { book: chosenBook, open, close };
+  if (!open || !close) {
+    for (const bk of BOOKMAKERS) {
+      const arr = tl.byBook.get(bk);
+      if (!arr || !arr.length) continue;
+      arr.sort((a, b) => a.ts - b.ts);
+      chosenBook = bk;
+      open = arr[0];
+      close = arr[arr.length - 1];
+      estimated = true;
+      break;
+    }
+  }
+  return { book: chosenBook, open, close, estimated };
 }
 
 async function upsertMovement(mid, gameDate, teamIdVal, source, openPt, closePt) {
@@ -216,69 +238,83 @@ async function upsertMovement(mid, gameDate, teamIdVal, source, openPt, closePt)
 }
 
 async function backfill() {
+  const started = new Date().toISOString();
   if (!API_KEY) throw new Error("ODDS_API_KEY missing");
+  console.log(`🏁 Backfill start ${started}`);
   if (!(await testConnection())) throw new Error("DB connection failed");
   const dates = await getTargetDates();
   const matchIdx = await loadMatchupsIndex();
-  for (const ctDate of dates) {
+  console.log(`⏱️  Backfill window (CT): ${dates[0]} → ${dates[dates.length - 1]}`);
+  let totalEvents = 0;
+  let totalWithLines = 0;
+  let totalUpserts = 0;
+  let estimatedCloses = 0;
+
+  for (let di = 0; di < dates.length; di++) {
+    const ctDate = dates[di];
     const probes = probeTimestampsForCTDay(ctDate);
+    console.log(`\n📅 ${ctDate} • probes=${probes.length}`);
     const timelines = new Map();
-    for (const p of probes) {
+    const meta = new Map();
+
+    for (let pi = 0; pi < probes.length; pi++) {
+      const p = probes[pi];
       const snap = await fetchSnapshot(p);
+      console.log(`  • probe ${pi + 1}/${probes.length} @ ${p} → status=${snap.status} events=${snap.items.length}`);
+      if (snap.status !== 200 || !snap.items.length) { await sleep(150); continue; }
       for (const ev of snap.items) {
-        const homeId = teamId(ev.home_team);
-        const awayId = teamId(ev.away_team);
-        if (!homeId || !awayId) continue;
-        const eid = ev.id;
-        if (!timelines.has(eid)) timelines.set(eid, buildBookTimeline());
+        const hid = teamId(ev.home_team);
+        const aid = teamId(ev.away_team);
+        if (!hid || !aid) continue;
+        totalEvents++;
+        if (!timelines.has(ev.id)) timelines.set(ev.id, buildBookTimeline());
+        if (!meta.has(ev.id)) meta.set(ev.id, { home_id: hid, away_id: aid, commence_time: ev.commence_time, home_name: ev.home_team, away_name: ev.away_team });
         for (const bm of ev.bookmakers || []) {
           if (!BOOKMAKERS.includes(bm.key)) continue;
           const m = (bm.markets || []).find((x) => x.key === MARKET);
           if (!m || !m.outcomes || m.outcomes.length < 2) continue;
-          const oHome = m.outcomes.find((o) => o.name === ev.home_team);
-          const oAway = m.outcomes.find((o) => o.name === ev.away_team);
-          if (!oHome || !oAway) continue;
-          const recHome = { id: homeId, ml: typeof oHome.price === "number" ? Math.round(oHome.price) : parseInt(oHome.price, 10) };
-          const recAway = { id: awayId, ml: typeof oAway.price === "number" ? Math.round(oAway.price) : parseInt(oAway.price, 10) };
-          pushPoint(timelines.get(eid), bm.key, m.last_update || bm.last_update || snap.ts, recHome, recAway);
+          const oH = m.outcomes.find((o) => o.name === ev.home_team);
+          const oA = m.outcomes.find((o) => o.name === ev.away_team);
+          if (!oH || !oA) continue;
+          pushPoint(timelines.get(ev.id), bm.key, m.last_update || bm.last_update || snap.ts, hid, oH.price, aid, oA.price);
         }
       }
+      await sleep(150);
     }
+
+    let dayUpserts = 0;
     for (const [eid, tl] of timelines.entries()) {
-      let sampleEv = null;
-      for (const bk of BOOKMAKERS) {
-        const arr = tl.byBook.get(bk);
-        if (arr && arr.length) {
-          sampleEv = arr[0];
-          break;
-        }
+      const m = meta.get(eid);
+      if (!m) continue;
+      const ctYmd = ymd(toCT(new Date(m.commence_time)));
+      const mid = pickMatchupId(matchIdx, ctYmd, m.home_id, m.away_id, m.commence_time);
+      if (!mid) {
+        console.warn(`  ⚠️  no matchup_id for event ${eid} (${m.away_name} @ ${m.home_name}) on ${ctYmd}`);
+        continue;
       }
-      if (!sampleEv) continue;
-      const commence = [...tl.byBook.values()][0]?.[0]?.ts || null;
-      let evMeta = null;
-      for (const p of probes) {
-        const snap = await fetchSnapshot(p);
-        const found = (snap.items || []).find((x) => x.id === eid);
-        if (found) {
-          evMeta = found;
-          break;
-        }
+      const sel = selectOpenClose(tl, m.commence_time);
+      if (!sel.book || !sel.open || !sel.close) {
+        console.warn(`  ⚠️  no open/close for event ${eid} mid=${mid}`);
+        continue;
       }
-      if (!evMeta) continue;
-      const homeId = teamId(evMeta.home_team);
-      const awayId = teamId(evMeta.away_team);
-      if (!homeId || !awayId) continue;
-      const commenceUtc = evMeta.commence_time;
-      const ctYmd = ymd(toCT(new Date(commenceUtc)));
-      const mid = pickMatchupId(matchIdx, ctYmd, homeId, awayId, commenceUtc);
-      if (!mid) continue;
-      const sel = selectOpenClose(tl, commenceUtc);
-      if (!sel.book || !sel.open || !sel.close) continue;
-      const source = `OddsAPI:${sel.book}`;
-      await upsertMovement(mid, ctYmd, homeId, source, sel.open, sel.close);
-      await upsertMovement(mid, ctYmd, awayId, source, sel.open, sel.close);
+      totalWithLines++;
+      const src = `OddsAPI:${sel.book}${sel.estimated ? ":est" : ""}`;
+      try {
+        await upsertMovement(mid, ctYmd, m.home_id, src, sel.open, sel.close);
+        await upsertMovement(mid, ctYmd, m.away_id, src, sel.open, sel.close);
+        dayUpserts += 2;
+        totalUpserts += 2;
+        if (sel.estimated) estimatedCloses += 2;
+        console.log(`  ✅ mid=${mid} book=${sel.book} ${sel.estimated ? "(est close)" : ""} upserted 2 rows`);
+      } catch (e) {
+        console.error(`  ❌ upsert mid=${mid} book=${sel.book} err=${e.message}`);
+      }
     }
+
+    console.log(`📊 ${ctDate} summary: events=${timelines.size} upserts=${dayUpserts}`);
   }
+
+  console.log(`\n🎯 Done. totals: events_seen=${totalEvents}, with_lines=${totalWithLines}, upserts=${totalUpserts}, estimated_closes=${estimatedCloses}`);
 }
 
 if (process.argv[1]?.endsWith("backfillMlbCLV.js")) {
