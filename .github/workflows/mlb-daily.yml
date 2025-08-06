@@ -46,3 +46,8 @@ jobs:
           node workers/lockDailyBets.js
           echo "▶︎ Grading yesterday"
           node workers/gradeDailyBets.js
+      # ───────── fetch CLV ─────────
+      - name: Fetch line movement (CLV)
+        run: |
+          echo "▶︎ Fetching closing lines"
+          node workers/fetchLineMovement.js
