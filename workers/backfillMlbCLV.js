@@ -39,50 +39,39 @@ function getCTYmd(dateInput) {
 function normKey(s) {
   if (!s) return "";
   let t = String(s).toUpperCase().trim();
-
-  // normalize punctuation/spacing
-  t = t.replace(/\./g, "");     // "ST. LOUIS" -> "ST LOUIS", "CHI. CUBS" -> "CHI CUBS"
+  t = t.replace(/\./g, "");
   t = t.replace(/\s+/g, " ");
-
-  // common city shorthand expansions
   t = t.replace(/\bN Y\b/g, "NEW YORK");
   t = t.replace(/\bNY\b/g, "NEW YORK");
   t = t.replace(/\bL A\b/g, "LOS ANGELES");
   t = t.replace(/\bLA\b/g, "LOS ANGELES");
-  t = t.replace(/\bST LOUIS\b/g, "ST LOUIS"); // ensure no period form
+  t = t.replace(/\bST LOUIS\b/g, "ST LOUIS");
   return t;
 }
 
 function makeNameVariants(rec) {
   const out = new Set();
-
-  const full = rec.actual_team_name; // e.g., "Cleveland Guardians"
-  const abbr = rec.team_abbr;        // e.g., "CLE"
-  const alt  = rec.alt_name;         // e.g., "CLEVELAND" or "ST. LOUIS"
-
+  const full = rec.actual_team_name;
+  const abbr = rec.team_abbr;
+  const alt = rec.alt_name;
   if (full) {
-    out.add(normKey(full));                                // "CLEVELAND GUARDIANS"
-    // generate LA/NY/ST. variants if present
+    out.add(normKey(full));
     out.add(normKey(full).replace("LOS ANGELES", "LA"));
     out.add(normKey(full).replace("NEW YORK", "NY"));
-    out.add(normKey(full).replace("ST LOUIS", "ST LOUIS")); // no-op safeguard
+    out.add(normKey(full).replace("ST LOUIS", "ST LOUIS"));
   }
-
-  if (abbr) out.add(normKey(abbr));                        // "CLE"
+  if (abbr) out.add(normKey(abbr));
   if (alt) {
-    const altN = normKey(alt);                             // "CLEVELAND" / "ST LOUIS" / "CHI WHITE SOX"
+    const altN = normKey(alt);
     out.add(altN);
-    // city + nickname from full if we have both
     if (full) {
       const parts = normKey(full).split(" ");
-      const nick  = parts.slice(-1).join(" ");             // "GUARDIANS", "METS", "SOX"
-      out.add(`${altN} ${nick}`);                          // "CLEVELAND GUARDIANS", "ST LOUIS CARDINALS"
+      const nick = parts.slice(-1).join(" ");
+      out.add(`${altN} ${nick}`);
     }
-    // LA/NY short forms for alt city
     out.add(altN.replace("LOS ANGELES", "LA"));
     out.add(altN.replace("NEW YORK", "NY"));
   }
-
   return [...out].filter(Boolean);
 }
 
@@ -90,45 +79,33 @@ async function loadTeamMap() {
   const { data, error } = await supabase
     .from("teams_mlb")
     .select("team_id, team_abbr, actual_team_name, alt_name");
-
   if (error) throw error;
-
   const nameToId = new Map();
   const idToRecord = new Map();
-
   for (const rec of data || []) {
     const tid = rec.team_id;
     if (tid == null) continue;
     idToRecord.set(tid, rec);
-
     for (const v of makeNameVariants(rec)) {
       if (!nameToId.has(v)) nameToId.set(v, tid);
     }
   }
-
-  // sanity check + visibility
   console.log(`🔎 loaded teams_mlb: rows=${(data||[]).length}, keys=${nameToId.size}`);
   if ((data || []).length < 30 || nameToId.size < 40) {
     console.warn("  ⚠️ team map looks too small — check table/columns");
   }
-  // quick sample to confirm mapping looks right
   console.log(
     `  e.g. GUARDIANS->${nameToId.get("GUARDIANS") || "—"} / CLEVELAND GUARDIANS->${nameToId.get("CLEVELAND GUARDIANS") || "—"} / NY METS->${nameToId.get("NY METS") || "—"}`
   );
-
   return { nameToId, idToRecord };
 }
 
 function teamIdFromMap(nameToId, raw) {
   const k = normKey(raw);
-
-  // exact / variant key
   if (nameToId.has(k)) return nameToId.get(k);
-
-  // try nickname-only (last word), but avoid obvious collisions like "SOX"
   const parts = k.split(" ");
   if (parts.length >= 2) {
-    const nick = parts[parts.length - 1]; // GUARDIANS, METS, YANKEES, etc.
+    const nick = parts[parts.length - 1];
     if (!["SOX"].includes(nick)) {
       for (const [key, val] of nameToId.entries()) {
         if (key === nick || key.endsWith(` ${nick}`)) return val;
@@ -284,7 +261,42 @@ async function upsertMovement(mid, gameDate, teamIdVal, source, openPt, closePt)
   if (error) throw error;
 }
 
-function pickMatchupId(matchupsByDate, ctDate, homeId, awayId, commenceUtc) {
+async function loadBetsIndex(startDate, endDate) {
+  const { data, error } = await supabase
+    .from("mlb_daily_bets")
+    .select("matchup_id, game_date, team_id, inserted_at")
+    .gte("game_date", startDate)
+    .lte("game_date", endDate);
+  if (error) throw error;
+  const rows = data || [];
+  const byDateTeam = new Map();
+  for (const r of rows) {
+    const key = `${r.game_date}|${r.team_id}`;
+    if (!byDateTeam.has(key)) byDateTeam.set(key, new Set());
+    byDateTeam.get(key).add(r.matchup_id);
+  }
+  console.log(`🧾 bets index loaded: rows=${rows.length}, keys=${byDateTeam.size}`);
+  return { byDateTeam };
+}
+
+function findMidFromBets(betsIdx, ctDate, homeId, awayId) {
+  const kHome = `${ctDate}|${homeId}`;
+  const kAway = `${ctDate}|${awayId}`;
+  const setH = betsIdx.byDateTeam.get(kHome) || new Set();
+  const setA = betsIdx.byDateTeam.get(kAway) || new Set();
+  if (setH.size === 1 && setA.size === 0) return [...setH][0];
+  if (setA.size === 1 && setH.size === 0) return [...setA][0];
+  if (setH.size && setA.size) {
+    const inter = [...setH].filter((m) => setA.has(m));
+    if (inter.length === 1) return inter[0];
+    return null;
+  }
+  if (setH.size === 1) return [...setH][0];
+  if (setA.size === 1) return [...setA][0];
+  return null;
+}
+
+function pickMatchupId(matchupsByDate, betsIdx, ctDate, homeId, awayId, commenceUtc) {
   const list = matchupsByDate.get(ctDate) || [];
   const candidates = list.filter(
     (r) => r.home_team_id === homeId && r.away_team_id === awayId
@@ -298,43 +310,47 @@ function pickMatchupId(matchupsByDate, ctDate, homeId, awayId, commenceUtc) {
       const diff = Math.abs(t - target);
       if (diff < bestDiff) { bestDiff = diff; best = r.matchup_id; }
     }
-    return best || null;
+    if (best) return best;
   }
-  return null;
+  const fromBets = findMidFromBets(betsIdx, ctDate, homeId, awayId);
+  if (fromBets) return fromBets;
+  const d0 = new Date(ctDate);
+  const dMinus = new Date(d0.getTime() - 86400000);
+  const dPlus = new Date(d0.getTime() + 86400000);
+  const ymd = (d) => getCTYmd(d);
+  return (
+    findMidFromBets(betsIdx, ymd(dMinus), homeId, awayId) ||
+    findMidFromBets(betsIdx, ymd(dPlus), homeId, awayId) ||
+    null
+  );
 }
 
 async function backfill() {
   const started = new Date().toISOString();
   if (!API_KEY) throw new Error("ODDS_API_KEY missing");
   console.log(`🏁 Backfill start ${started}`);
-
   if (!(await testConnection())) throw new Error("DB connection failed");
   const { nameToId } = await loadTeamMap();
   const dates = await getTargetDates();
   const matchIdx = await loadMatchupsIndex();
-
+  const betsIdx = await loadBetsIndex(dates[0], dates[dates.length - 1]);
   console.log(`✅ Successfully connected to Supabase`);
   console.log(`⏱️  Backfill window (CT): ${dates[0]} → ${dates[dates.length - 1]}`);
-
   let totalEvents = 0;
   let totalWithLines = 0;
   let totalUpserts = 0;
   let estimatedCloses = 0;
-
   for (let di = 0; di < dates.length; di++) {
     const ctDate = dates[di];
     const probes = probeTimestampsForCTDay(ctDate);
     console.log(`📅 ${ctDate} • probes=${probes.length} • progress ${di + 1}/${dates.length}`);
-
     const timelines = new Map();
     const meta = new Map();
-
     for (let pi = 0; pi < probes.length; pi++) {
       const p = probes[pi];
       const snap = await fetchSnapshot(p);
       console.log(`  • probe ${pi + 1}/${probes.length} @ ${p} → status=${snap.status} events=${snap.items.length}`);
       if (snap.status !== 200 || !snap.items.length) { await sleep(120); continue; }
-
       for (const ev of snap.items) {
         const hid = teamIdFromMap(nameToId, ev.home_team);
         const aid = teamIdFromMap(nameToId, ev.away_team);
@@ -343,14 +359,12 @@ async function backfill() {
           continue;
         }
         totalEvents++;
-
         if (!timelines.has(ev.id)) timelines.set(ev.id, buildBookTimeline());
         if (!meta.has(ev.id)) meta.set(ev.id, {
           home_id: hid, away_id: aid,
           commence_time: ev.commence_time,
           home_name: ev.home_team, away_name: ev.away_team
         });
-
         for (const bm of ev.bookmakers || []) {
           if (!BOOKMAKERS.includes(bm.key)) continue;
           const m = (bm.markets || []).find((x) => x.key === MARKET);
@@ -363,33 +377,26 @@ async function backfill() {
       }
       await sleep(120);
     }
-
     let dayUpserts = 0;
     let dayEvents = 0;
-
     for (const [eid, tl] of timelines.entries()) {
       const m = meta.get(eid);
       if (!m) continue;
-
       const ctYmd = getCTYmd(m.commence_time);
-      const mid = pickMatchupId(matchIdx, ctYmd, m.home_id, m.away_id, m.commence_time);
-
+      const mid = pickMatchupId(matchIdx, betsIdx, ctYmd, m.home_id, m.away_id, m.commence_time);
       if (!mid) {
         const candidates = (matchIdx.get(ctYmd) || []).length;
         console.warn(`  ⚠️  no matchup_id for event ${eid} (${m.away_name} @ ${m.home_name}) on ${ctYmd} • candidates_on_date=${candidates} • home_id=${m.home_id} • away_id=${m.away_id}`);
         continue;
       }
-
       const sel = selectOpenClose(tl, m.commence_time);
       if (!sel.book || !sel.open || !sel.close) {
         console.warn(`  ⚠️  no open/close for event ${eid} mid=${mid}`);
         continue;
       }
-
       dayEvents++;
       totalWithLines++;
       const src = `OddsAPI:${sel.book}${sel.estimated ? ":est" : ""}`;
-
       try {
         await upsertMovement(mid, ctYmd, m.home_id, src, sel.open, sel.close);
         await upsertMovement(mid, ctYmd, m.away_id, src, sel.open, sel.close);
@@ -401,10 +408,8 @@ async function backfill() {
         console.error(`  ❌ upsert mid=${mid} book=${sel.book} err=${e.message}`);
       }
     }
-
     console.log(`📊 ${ctDate} summary: events=${timelines.size} matched=${dayEvents} upserts=${dayUpserts}`);
   }
-
   console.log(`🎯 Done. totals: events_seen=${totalEvents}, with_lines=${totalWithLines}, upserts=${totalUpserts}, estimated_closes=${estimatedCloses}`);
 }
 
