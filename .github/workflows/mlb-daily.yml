@@ -47,7 +47,9 @@ jobs:
           echo "▶︎ Grading yesterday"
           node workers/gradeDailyBets.js
       # ───────── fetch CLV ─────────
-      - name: Fetch line movement (CLV)
-        run: |
-          echo "▶︎ Fetching closing lines"
-          node workers/fetchLineMovement.js
+  - name: Backfill CLV from Odds API (past games only)
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+    run: |
+      echo "▶︎ Backfilling CLV (past games)"
+      node workers/backfillMlbCLV.js
