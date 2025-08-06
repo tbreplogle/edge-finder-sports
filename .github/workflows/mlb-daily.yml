@@ -47,6 +47,13 @@ jobs:
           echo "▶︎ Grading yesterday"
           node workers/gradeDailyBets.js
       # ───────── fetch CLV ─────────
+      - name: Hydrate missing matchups from Odds API (past games)
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          echo "▶︎ Hydrating mlb_matchups (game_id + game_time_ct)"
+          node workers/hydrateMatchupsFromOddsApi.js
+
       - name: Backfill CLV from Odds API (past games only)
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
