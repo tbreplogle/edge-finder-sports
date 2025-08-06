@@ -8,15 +8,7 @@ const REGIONS = "us";
 const MARKET = "h2h";
 const BOOKMAKERS = [
   "draftkings",
-  "fanduel",
-  "williamhill_us",
-  "betmgm",
-  "betrivers",
-  "bovada",
-  "betonlineag",
-  "lowvig",
-  "mybookieag",
-  "fanatics"
+  "fanduel"
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -340,17 +332,21 @@ async function backfill() {
   let totalWithLines = 0;
   let totalUpserts = 0;
   let estimatedCloses = 0;
+
   for (let di = 0; di < dates.length; di++) {
     const ctDate = dates[di];
     const probes = probeTimestampsForCTDay(ctDate);
     console.log(`📅 ${ctDate} • probes=${probes.length} • progress ${di + 1}/${dates.length}`);
+
     const timelines = new Map();
     const meta = new Map();
+
     for (let pi = 0; pi < probes.length; pi++) {
       const p = probes[pi];
       const snap = await fetchSnapshot(p);
       console.log(`  • probe ${pi + 1}/${probes.length} @ ${p} → status=${snap.status} events=${snap.items.length}`);
       if (snap.status !== 200 || !snap.items.length) { await sleep(120); continue; }
+
       for (const ev of snap.items) {
         const hid = teamIdFromMap(nameToId, ev.home_team);
         const aid = teamIdFromMap(nameToId, ev.away_team);
@@ -359,12 +355,14 @@ async function backfill() {
           continue;
         }
         totalEvents++;
+
         if (!timelines.has(ev.id)) timelines.set(ev.id, buildBookTimeline());
         if (!meta.has(ev.id)) meta.set(ev.id, {
           home_id: hid, away_id: aid,
           commence_time: ev.commence_time,
           home_name: ev.home_team, away_name: ev.away_team
         });
+
         for (const bm of ev.bookmakers || []) {
           if (!BOOKMAKERS.includes(bm.key)) continue;
           const m = (bm.markets || []).find((x) => x.key === MARKET);
@@ -377,39 +375,100 @@ async function backfill() {
       }
       await sleep(120);
     }
+
+    const extraTimes = new Set();
+    for (const [eid, tl] of timelines.entries()) {
+      let needs = false;
+      for (const bk of BOOKMAKERS) {
+        const arr = tl.byBook.get(bk);
+        if (!arr || arr.length <= 1) { needs = true; break; }
+      }
+      if (needs) {
+        const m = meta.get(eid);
+        if (!m?.commence_time) continue;
+        const t = new Date(m.commence_time).getTime();
+        extraTimes.add(new Date(t - 60 * 60 * 1000).toISOString());
+        extraTimes.add(new Date(t - 5 * 60 * 1000).toISOString());
+      }
+    }
+
+    if (extraTimes.size) {
+      console.log(`  ↻ extra commence-adjacent probes: n=${extraTimes.size}`);
+      for (const et of extraTimes) {
+        const snap = await fetchSnapshot(et);
+        console.log(`    • extra @ ${et} → status=${snap.status} events=${snap.items.length}`);
+        if (snap.status !== 200 || !snap.items.length) { await sleep(120); continue; }
+        for (const ev of snap.items) {
+          const hid = teamIdFromMap(nameToId, ev.home_team);
+          const aid = teamIdFromMap(nameToId, ev.away_team);
+          if (!hid || !aid) continue;
+          if (!timelines.has(ev.id)) timelines.set(ev.id, buildBookTimeline());
+          if (!meta.has(ev.id)) meta.set(ev.id, {
+            home_id: hid, away_id: aid,
+            commence_time: ev.commence_time,
+            home_name: ev.home_team, away_name: ev.away_team
+          });
+          for (const bm of ev.bookmakers || []) {
+            if (!BOOKMAKERS.includes(bm.key)) continue;
+            const mkt = (bm.markets || []).find((x) => x.key === MARKET);
+            if (!mkt || !mkt.outcomes || mkt.outcomes.length < 2) continue;
+            const oH = mkt.outcomes.find((o) => normKey(o.name) === normKey(ev.home_team));
+            const oA = mkt.outcomes.find((o) => normKey(o.name) === normKey(ev.away_team));
+            if (!oH || !oA) continue;
+            pushPoint(timelines.get(ev.id), bm.key, mkt.last_update || bm.last_update || snap.ts, hid, oH.price, aid, oA.price);
+          }
+        }
+        await sleep(120);
+      }
+    }
+
     let dayUpserts = 0;
     let dayEvents = 0;
+
     for (const [eid, tl] of timelines.entries()) {
       const m = meta.get(eid);
       if (!m) continue;
+
       const ctYmd = getCTYmd(m.commence_time);
       const mid = pickMatchupId(matchIdx, betsIdx, ctYmd, m.home_id, m.away_id, m.commence_time);
+
       if (!mid) {
         const candidates = (matchIdx.get(ctYmd) || []).length;
         console.warn(`  ⚠️  no matchup_id for event ${eid} (${m.away_name} @ ${m.home_name}) on ${ctYmd} • candidates_on_date=${candidates} • home_id=${m.home_id} • away_id=${m.away_id}`);
         continue;
       }
+
       const sel = selectOpenClose(tl, m.commence_time);
       if (!sel.book || !sel.open || !sel.close) {
         console.warn(`  ⚠️  no open/close for event ${eid} mid=${mid}`);
         continue;
       }
+
       dayEvents++;
       totalWithLines++;
-      const src = `OddsAPI:${sel.book}${sel.estimated ? ":est" : ""}`;
+
+      const sameTs = sel.open.ts.getTime() === sel.close.ts.getTime();
+      const samePrices =
+        sel.open.home.ml === sel.close.home.ml &&
+        sel.open.away.ml === sel.close.away.ml;
+
+      let src = `OddsAPI:${sel.book}${sel.estimated ? ":est" : ""}${(sameTs || samePrices) ? ":single" : ""}`;
+
       try {
         await upsertMovement(mid, ctYmd, m.home_id, src, sel.open, sel.close);
         await upsertMovement(mid, ctYmd, m.away_id, src, sel.open, sel.close);
         dayUpserts += 2;
         totalUpserts += 2;
         if (sel.estimated) estimatedCloses += 2;
-        console.log(`  ✅ mid=${mid} book=${sel.book} ${sel.estimated ? "(est close)" : ""} upserted 2 rows`);
+        console.log(`  ✅ mid=${mid} book=${sel.book}${sel.estimated ? " (est close)" : ""}${(sameTs || samePrices) ? " (single)" : ""} upserted 2 rows`);
       } catch (e) {
         console.error(`  ❌ upsert mid=${mid} book=${sel.book} err=${e.message}`);
       }
     }
+
     console.log(`📊 ${ctDate} summary: events=${timelines.size} matched=${dayEvents} upserts=${dayUpserts}`);
   }
+
   console.log(`🎯 Done. totals: events_seen=${totalEvents}, with_lines=${totalWithLines}, upserts=${totalUpserts}, estimated_closes=${estimatedCloses}`);
 }
 
