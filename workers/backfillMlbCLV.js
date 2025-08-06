@@ -38,79 +38,101 @@ function getCTYmd(dateInput) {
 
 function normKey(s) {
   if (!s) return "";
-  let t = s.toUpperCase();
-  t = t.replace(/\./g, "");
-  t = t.replace(/\s+/g, " ").trim();
+  let t = String(s).toUpperCase().trim();
 
+  // normalize punctuation/spacing
+  t = t.replace(/\./g, "");     // "ST. LOUIS" -> "ST LOUIS", "CHI. CUBS" -> "CHI CUBS"
+  t = t.replace(/\s+/g, " ");
+
+  // common city shorthand expansions
   t = t.replace(/\bN Y\b/g, "NEW YORK");
   t = t.replace(/\bNY\b/g, "NEW YORK");
   t = t.replace(/\bL A\b/g, "LOS ANGELES");
   t = t.replace(/\bLA\b/g, "LOS ANGELES");
-  t = t.replace(/\bST\s+LOUIS\b/g, "ST LOUIS");
-  t = t.replace(/\bD-BACKS\b/g, "DIAMONDBACKS");
-  t = t.replace(/\bD BACKS\b/g, "DIAMONDBACKS");
-  t = t.replace(/\bA'S\b/g, "ATHLETICS");
-  t = t.replace(/\bNATS\b/g, "NATIONALS");
-  t = t.replace(/\bCARDS\b/g, "CARDINALS");
-  t = t.replace(/\bPADS\b/g, "PADRES");
-  t = t.replace(/\bGUARDIANS\b/g, "GUARDIANS"); // no-op, explicit
+  t = t.replace(/\bST LOUIS\b/g, "ST LOUIS"); // ensure no period form
   return t;
 }
 
 function makeNameVariants(rec) {
   const out = new Set();
-  const fields = [
-    rec.name,
-    rec.full_name,
-    rec.team_name,
-    rec.team,
-    rec.city,
-    rec.market,
-    rec.nickname,
-    rec.abbrev,
-    rec.code
-  ].filter(Boolean);
-  for (const f of fields) out.add(normKey(String(f)));
 
-  const market = normKey(rec.market || rec.city || "");
-  const nick = normKey(rec.nickname || rec.name || "");
-  if (market && nick) {
-    out.add(`${market} ${nick}`);
-    out.add(`${market} ${nick}`.replace(/\bLOS ANGELES\b/g, "LA"));
-    out.add(`${market} ${nick}`.replace(/\bNEW YORK\b/g, "NY"));
-    out.add(`${market} ${nick}`.replace(/\bST LOUIS\b/g, "ST. LOUIS"));
+  const full = rec.actual_team_name; // e.g., "Cleveland Guardians"
+  const abbr = rec.team_abbr;        // e.g., "CLE"
+  const alt  = rec.alt_name;         // e.g., "CLEVELAND" or "ST. LOUIS"
+
+  if (full) {
+    out.add(normKey(full));                                // "CLEVELAND GUARDIANS"
+    // generate LA/NY/ST. variants if present
+    out.add(normKey(full).replace("LOS ANGELES", "LA"));
+    out.add(normKey(full).replace("NEW YORK", "NY"));
+    out.add(normKey(full).replace("ST LOUIS", "ST LOUIS")); // no-op safeguard
   }
+
+  if (abbr) out.add(normKey(abbr));                        // "CLE"
+  if (alt) {
+    const altN = normKey(alt);                             // "CLEVELAND" / "ST LOUIS" / "CHI WHITE SOX"
+    out.add(altN);
+    // city + nickname from full if we have both
+    if (full) {
+      const parts = normKey(full).split(" ");
+      const nick  = parts.slice(-1).join(" ");             // "GUARDIANS", "METS", "SOX"
+      out.add(`${altN} ${nick}`);                          // "CLEVELAND GUARDIANS", "ST LOUIS CARDINALS"
+    }
+    // LA/NY short forms for alt city
+    out.add(altN.replace("LOS ANGELES", "LA"));
+    out.add(altN.replace("NEW YORK", "NY"));
+  }
+
   return [...out].filter(Boolean);
 }
 
 async function loadTeamMap() {
-  const { data, error } = await supabase.from("teams_mlb").select("*");
+  const { data, error } = await supabase
+    .from("teams_mlb")
+    .select("team_id, team_abbr, actual_team_name, alt_name");
+
   if (error) throw error;
 
   const nameToId = new Map();
   const idToRecord = new Map();
 
   for (const rec of data || []) {
-    const tid = rec.team_id ?? rec.id;
+    const tid = rec.team_id;
     if (tid == null) continue;
     idToRecord.set(tid, rec);
+
     for (const v of makeNameVariants(rec)) {
       if (!nameToId.has(v)) nameToId.set(v, tid);
     }
   }
+
+  // sanity check + visibility
+  console.log(`🔎 loaded teams_mlb: rows=${(data||[]).length}, keys=${nameToId.size}`);
+  if ((data || []).length < 30 || nameToId.size < 40) {
+    console.warn("  ⚠️ team map looks too small — check table/columns");
+  }
+  // quick sample to confirm mapping looks right
+  console.log(
+    `  e.g. GUARDIANS->${nameToId.get("GUARDIANS") || "—"} / CLEVELAND GUARDIANS->${nameToId.get("CLEVELAND GUARDIANS") || "—"} / NY METS->${nameToId.get("NY METS") || "—"}`
+  );
+
   return { nameToId, idToRecord };
 }
 
-function teamIdFromMap(nameToId, s) {
-  const k = normKey(s);
+function teamIdFromMap(nameToId, raw) {
+  const k = normKey(raw);
+
+  // exact / variant key
   if (nameToId.has(k)) return nameToId.get(k);
 
-  // Try nickname-only match (last word)
+  // try nickname-only (last word), but avoid obvious collisions like "SOX"
   const parts = k.split(" ");
   if (parts.length >= 2) {
-    const nick = parts.slice(-1).join(" ");
-    for (const [key, val] of nameToId.entries()) {
-      if (key.endsWith(` ${nick}`) || key === nick) return val;
+    const nick = parts[parts.length - 1]; // GUARDIANS, METS, YANKEES, etc.
+    if (!["SOX"].includes(nick)) {
+      for (const [key, val] of nameToId.entries()) {
+        if (key === nick || key.endsWith(` ${nick}`)) return val;
+      }
     }
   }
   return null;
