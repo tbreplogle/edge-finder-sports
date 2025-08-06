@@ -8,7 +8,7 @@ const API_BASE   = "https://api.the-odds-api.com/v4";
 const API_KEY    = process.env.ODDS_API_KEY || "907b67e00fc14e6f4a501355026dba0e";
 const REGIONS    = "us";
 const MARKET_KEY = "h2h";
-const BOOKS_PRIO = ["pinnacle","draftkings","fanduel","betmgm","caesars"]; // adjust if you prefer DK-only
+const BOOKS_PRIO = ["draftkings"]; // change if you prefer
 const SRC_PREFIX = "OddsAPI";
 
 /* ───────── Odds API team-name → your team_id ───────── */
@@ -26,55 +26,65 @@ const TEAM_NAME_TO_ID = {
 };
 const NAME_TO_ID = s => TEAM_NAME_TO_ID[(s||"").trim().toUpperCase()] ?? null;
 
+/* ───────── odds helper ───────── */
+function toAmerican(price) {
+  // Accept American (int) or Decimal (float ≥1.01); normalize to American int.
+  if (price == null) return null;
+  if (typeof price === "number" && (price > 10 || price < -1)) return Math.round(price); // looks American already
+  const dec = Number(price);
+  if (!isFinite(dec) || dec <= 1.0) return null;
+  // decimal → american
+  return dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
+}
+
 /* ───────── time helpers (CT) ───────── */
 const todayCT = () =>
   new Date().toLocaleDateString("en-CA",{ timeZone:"America/Chicago" }); // YYYY-MM-DD
 
-function endOfDayCtToUtcIso(yyyy_mm_dd){
-  // take 23:59:59 CT and shift to UTC (CDT ≈ UTC+5)
-  const ct = new Date(`${yyyy_mm_dd}T23:59:59`);
-  return new Date(ct.getTime() + 5*3600e3).toISOString();
-}
+function ctStartUtc(yyyy_mm_dd) { return new Date(`${yyyy_mm_dd}T05:00:00Z`).toISOString(); } // ~00:00 CT in season
+function dayProbeUtc(yyyy_mm_dd) { return new Date(`${yyyy_mm_dd}T05:30:00Z`).toISOString(); } // your working example
+
 function toCtIso(utcIso){
   const d  = new Date(utcIso);
   const ct = new Date(d.toLocaleString("en-US",{ timeZone:"America/Chicago" }));
-  // normalize to ISO
   return new Date(ct.getTime() - ct.getTimezoneOffset()*60000)
     .toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-/* ───────── daily snapshot (events + odds) ─────────
-   /v4/historical/sports/{sport}/odds?regions=us&markets=h2h&date=...
-   Returns array of events with id, home_team, away_team, commence_time, bookmakers...
-   (Requires regions param.)  */
+/* ───────── DAILY SNAPSHOT (events list) ─────────
+   MATCHES YOUR WORKING CALL SHAPE:
+   /v4/historical/sports/{sport}/odds?apiKey=...&regions=us&markets=h2h&date=YYYY-MM-DDT05:30:00Z
+   Returns an object with { timestamp, previous_timestamp, next_timestamp, data: [...] } */
 async function fetchHistoricalDay(yyyy_mm_dd){
   const url = `${API_BASE}/historical/sports/${SPORT_KEY}/odds`;
   const params = {
     apiKey: API_KEY,
     regions: REGIONS,
     markets: MARKET_KEY,
-    bookmakers: BOOKS_PRIO.slice(0,3).join(","), // keep it cheap
-    oddsFormat: "american",
+    date: dayProbeUtc(yyyy_mm_dd),
+    // NOTE: deliberately not passing bookmakers here (mirror your working request)
+    oddsFormat: "american",  // server may still return decimal; we'll normalize
     dateFormat: "iso",
-    date: endOfDayCtToUtcIso(yyyy_mm_dd),
   };
   const resp = await axios.get(url, { params, validateStatus:()=>true });
-  if (resp.status !== 200 || !Array.isArray(resp.data)) {
-    console.warn(`⚠️ Historical day ${yyyy_mm_dd} resp=${resp.status}`);
+  if (resp.status !== 200) {
+    console.warn(`⚠️ Historical day ${yyyy_mm_dd} resp=${resp.status} msg=${resp.data?.message ?? resp.statusText}`);
     return [];
   }
-  return resp.data;
+  const payload = resp.data;
+  const list = Array.isArray(payload) ? payload : payload?.data;
+  return Array.isArray(list) ? list : [];
 }
 
-/* ───────── event snapshot at timestamp (open/close) ─────────
-   /v4/historical/sports/{sport}/events/{eventId}/odds?date=...
-   Returns a single event snapshot at or before 'date'. */
+/* ───────── EVENT SNAPSHOT ─────────
+   /v4/historical/sports/{sport}/events/{eventId}/odds?date=... */
 async function getEventSnapshot(eventId, isoTs){
   const url = `${API_BASE}/historical/sports/${SPORT_KEY}/events/${eventId}/odds`;
   const params = {
     apiKey: API_KEY,
+    regions: REGIONS,
     markets: MARKET_KEY,
-    bookmakers: BOOKS_PRIO.join(","),
+    // no bookmakers param — we’ll choose from what’s returned
     oddsFormat: "american",
     dateFormat: "iso",
     date: isoTs
@@ -82,6 +92,7 @@ async function getEventSnapshot(eventId, isoTs){
   const resp = await axios.get(url, { params, validateStatus:()=>true });
   if (resp.status !== 200 || !resp.data?.bookmakers?.length) return null;
 
+  // Pick first bookmaker from our priority list that has both sides
   for (const want of BOOKS_PRIO) {
     const bm = resp.data.bookmakers.find(b => (b.key||"").toLowerCase() === want);
     const m  = bm?.markets?.find(x => x.key === MARKET_KEY);
@@ -89,13 +100,37 @@ async function getEventSnapshot(eventId, isoTs){
     const h  = os.find(o => o.name === resp.data.home_team);
     const a  = os.find(o => o.name === resp.data.away_team);
     if (h?.price != null && a?.price != null) {
-      return { book: want, ts: resp.data?.data_aggregated_at ?? isoTs, home_ml: h.price, away_ml: a.price };
+      return {
+        book: want,
+        ts: resp.data?.data_aggregated_at ?? isoTs,
+        home_ml: toAmerican(h.price),
+        away_ml: toAmerican(a.price),
+        home_team: resp.data.home_team,
+        away_team: resp.data.away_team,
+      };
+    }
+  }
+  // fallback: take any book with both sides
+  for (const bm of resp.data.bookmakers) {
+    const m  = bm?.markets?.find(x => x.key === MARKET_KEY);
+    const os = m?.outcomes || [];
+    const h  = os.find(o => o.name === resp.data.home_team);
+    const a  = os.find(o => o.name === resp.data.away_team);
+    if (h?.price != null && a?.price != null) {
+      return {
+        book: (bm.key||"unknown").toLowerCase(),
+        ts: resp.data?.data_aggregated_at ?? isoTs,
+        home_ml: toAmerican(h.price),
+        away_ml: toAmerican(a.price),
+        home_team: resp.data.home_team,
+        away_team: resp.data.away_team,
+      };
     }
   }
   return null;
 }
 
-/* find "open": scan 72h → refine to ~15m; lower-bound by earliest bet date (UTC) */
+/* open = earliest snapshot we can prove exists (72h window, capped by earliest bet date) */
 async function findOpenForEvent(eventId, firstPitchUtcIso, lowerBoundUtcIso){
   const CLOSE = new Date(firstPitchUtcIso).getTime();
   const LOWER = new Date(lowerBoundUtcIso).getTime();
@@ -127,6 +162,7 @@ async function findCloseForEvent(eventId, firstPitchUtcIso){
 /* ───────── main ───────── */
 async function backfillCLV(){
   if (!(await testConnection())) throw new Error("DB connection failed");
+  if (!API_KEY || API_KEY.length < 12) throw new Error("ODDS_API_KEY missing/too short");
 
   const today = todayCT();
 
@@ -139,7 +175,7 @@ async function backfillCLV(){
   const earliest = minRow.game_date;
   console.log(`⏱️  Backfill window (CT): ${earliest} → ${today}`);
 
-  // Pull all past bets; build (date → list of matchups) using only matchup_id + the two team_ids we need
+  // pull all past bets
   const { data: bets, error: betsErr } = await supabase
     .from("mlb_daily_bets")
     .select("matchup_id, team_id, game_date")
@@ -147,19 +183,18 @@ async function backfillCLV(){
     .lt("game_date", today);
   if (betsErr) throw betsErr;
 
-  // Reduce to: byDate[date] = { [matchup_id]: Set(team_ids) }
+  // byDate[date] = Map(mid -> Set(team_ids))
   const byDate = new Map();
   for (const b of (bets||[])) {
-    const d = b.game_date;
-    const map = byDate.get(d) || new Map();
+    const map = byDate.get(b.game_date) || new Map();
     const set = map.get(b.matchup_id) || new Set();
     set.add(b.team_id);
     map.set(b.matchup_id, set);
-    byDate.set(d, map);
+    byDate.set(b.game_date, map);
   }
   if (!byDate.size) { console.log("▶︎ Nothing to backfill (no past bets)."); return; }
 
-  // Fetch already present CLV rows to skip
+  // already present CLV rows to skip re-upsert
   const { data: have, error: haveErr } = await supabase
     .from("mlb_line_movements")
     .select("matchup_id, team_id")
@@ -168,22 +203,18 @@ async function backfillCLV(){
   if (haveErr) throw haveErr;
   const done = new Set((have||[]).map(r => `${r.matchup_id}::${r.team_id}`));
 
-  // global lower bound UTC for open-search (start of earliest day CT → UTC)
-  const lowerBoundUtc = new Date(`${earliest}T00:00:00Z`).toISOString();
+  // lower bound UTC for open-search (start of earliest CT day)
+  const lowerBoundUtc = ctStartUtc(earliest);
 
   let upserts = 0;
 
   for (const [date, midMap] of byDate) {
-    // 1) fetch one historical snapshot for this date (events list with IDs)
+    // 1) fetch snapshot for this date
     const events = await fetchHistoricalDay(date);
-    if (!events.length) {
-      console.warn(`⚠️ No historical snapshot for ${date}`);
-      continue;
-    }
+    if (!events.length) { console.warn(`⚠️ No historical snapshot for ${date}`); continue; }
 
-    // 2) index events by (home_id, away_id); keep both orders for matching
-    const fwd = new Map(); // "home_away" → [events sorted by commence_time]
-    const rev = new Map(); // "away_home" → [events sorted by commence_time]
+    // 2) index events by (home_id, away_id)
+    const fwd = new Map(); const rev = new Map();
     for (const ev of events) {
       const h = NAME_TO_ID(ev.home_team), a = NAME_TO_ID(ev.away_team);
       if (!h || !a) continue;
@@ -194,21 +225,20 @@ async function backfillCLV(){
       list.sort((x,y) => (x.commence_time||"").localeCompare(y.commence_time||""));
     }
 
-    // 3) deterministically assign each matchup_id → an event
     const usedEventIds = new Set();
-    const pairs = []; // { matchup_id, event, home_id, away_id }
     const midsSorted = Array.from(midMap.keys()).sort((a,b)=>a-b);
 
+    // 3) assign each matchup_id → an event deterministically
     for (const mid of midsSorted) {
       const ids = Array.from(midMap.get(mid) || []);
       if (ids.length !== 2) { console.warn(`⚠️ mid=${mid} on ${date} has ${ids.length} teams`); continue; }
       const [t1, t2] = ids;
 
-      let candidate = (fwd.get(`${t1}_${t2}`) || []).find(e => !usedEventIds.has(e.id));
-      let order = "t1@t2";
-      if (!candidate) { candidate = (fwd.get(`${t2}_${t1}`) || []).find(e => !usedEventIds.has(e.id)); order = "t2@t1"; }
-      if (!candidate) { candidate = (rev.get(`${t1}_${t2}`) || []).find(e => !usedEventIds.has(e.id)); order = "t1@t2"; }
-      if (!candidate) { candidate = (rev.get(`${t2}_${t1}`) || []).find(e => !usedEventIds.has(e.id)); order = "t2@t1"; }
+      let candidate =
+        (fwd.get(`${t1}_${t2}`) || []).find(e => !usedEventIds.has(e.id)) ||
+        (fwd.get(`${t2}_${t1}`) || []).find(e => !usedEventIds.has(e.id)) ||
+        (rev.get(`${t1}_${t2}`) || []).find(e => !usedEventIds.has(e.id)) ||
+        (rev.get(`${t2}_${t1}`) || []).find(e => !usedEventIds.has(e.id));
 
       if (!candidate) {
         console.warn(`⚠️ No event match for mid=${mid} on ${date} (teams ${t1},${t2})`);
@@ -216,37 +246,26 @@ async function backfillCLV(){
       }
       usedEventIds.add(candidate.id);
 
-      const home_id = NAME_TO_ID(candidate.home_team);
-      const away_id = NAME_TO_ID(candidate.away_team);
-      pairs.push({ matchup_id: mid, event: candidate, home_id, away_id, order });
-    }
-
-    if (!pairs.length) continue;
-
-    // 4) for each assigned event → compute open/close and upsert per team in that matchup
-    for (const p of pairs) {
-      const firstPitchUtc = new Date(new Date(p.event.commence_time).getTime()).toISOString();
-
-      const closeSnap = await findCloseForEvent(p.event.id, firstPitchUtc);
+      // 4) open/close snapshots for that event
+      const firstPitchUtc = new Date(candidate.commence_time).toISOString();
+      const closeSnap = await findCloseForEvent(candidate.id, firstPitchUtc);
       if (!closeSnap) {
-        console.warn(`⚠️ No closing snapshot for event ${p.event.id} (mid=${p.matchup_id})`);
+        console.warn(`⚠️ No closing snapshot for event ${candidate.id} (mid=${mid})`);
         continue;
       }
-      const openSnap  = await findOpenForEvent(p.event.id, firstPitchUtc, lowerBoundUtc);
+      const openSnap  = await findOpenForEvent(candidate.id, firstPitchUtc, lowerBoundUtc);
 
-      // Write two rows (home & away) — but only if that team_id exists in your bets for this matchup/date
-      const teamIds = Array.from(midMap.get(p.matchup_id) || []);
-
+      // 5) write rows for teams you actually bet
+      const teamIds = Array.from(midMap.get(mid) || []);
       const writeOne = async (team_id, isHome) => {
-        if (!teamIds.includes(team_id)) return; // only write rows for your bets
+        if (!teamIds.includes(team_id)) return;
         const line_min = isHome ? openSnap?.home_ml : openSnap?.away_ml;
         const time_min = openSnap?.ts;
         const line_max = isHome ? closeSnap.home_ml : closeSnap.away_ml;
         const time_max = closeSnap.ts;
 
-        // NOT NULL guard: if open missing, fall back to close
         const payload = {
-          matchup_id: p.matchup_id,
+          matchup_id: mid,
           team_id,
           game_date: date,
           source: `${SRC_PREFIX}:${closeSnap.book}`,
@@ -256,18 +275,18 @@ async function backfillCLV(){
           line_max:      line_max
         };
 
-        // Skip if we already have a row (avoid duplicate work)
-        if (done.has(`${p.matchup_id}::${team_id}`)) return;
-
+        if (done.has(`${mid}::${team_id}`)) return;
         const { error: upErr } = await supabase
           .from("mlb_line_movements")
           .upsert(payload, { onConflict: "matchup_id,team_id,source" });
         if (upErr) console.error("❌ upsert failed", upErr);
-        else { upserts++; done.add(`${p.matchup_id}::${team_id}`); }
+        else { upserts++; done.add(`${mid}::${team_id}`); }
       };
 
-      await writeOne(p.home_id, true);
-      await writeOne(p.away_id, false);
+      const home_id = NAME_TO_ID(closeSnap.home_team);
+      const away_id = NAME_TO_ID(closeSnap.away_team);
+      await writeOne(home_id, true);
+      await writeOne(away_id, false);
     }
   }
 
