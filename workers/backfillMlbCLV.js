@@ -5,7 +5,7 @@ import { supabase, testConnection } from "./lib/supabaseClient.js";
 /* ───────── config ───────── */
 const SPORT_KEY  = "baseball_mlb";
 const API_BASE   = "https://api.the-odds-api.com/v4";
-const API_KEY    = process.env.ODDS_API_KEY || "REPLACE_ME";
+const API_KEY    = process.env.ODDS_API_KEY || "907b67e00fc14e6f4a501355026dba0e";
 const REGIONS    = "us";
 const MARKET_KEY = "h2h";
 const BOOKS_PRIO = ["pinnacle","draftkings","fanduel","betmgm","caesars"]; // adjust if you prefer DK-only
