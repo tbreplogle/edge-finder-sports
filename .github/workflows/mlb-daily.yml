@@ -2,7 +2,7 @@ name: MLB 🔒 lock & grade (single step)
 
 on:
   schedule:
-    - cron: '0 15 * * *'        # 12 PM CT
+    - cron: '40 14 * * *'        
   workflow_dispatch:
 
 jobs:
