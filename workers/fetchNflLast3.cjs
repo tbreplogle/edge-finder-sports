@@ -24,34 +24,32 @@ const { load } = require('cheerio');
 /*  Everything else runs in one async IIFE                                    */
 /* -------------------------------------------------------------------------- */
 (async () => {
-  /* ----------- dynamic ESM-only deps ------------------------------------ */
-  const { default: pLimit }  = await import('p-limit');
-  const { createClient }     = await import('@supabase/supabase-js');
+  /* -------- dynamic ESM-only deps --------------------------------------- */
+  const { default: pLimit }   = await import('p-limit');
+  const { createClient }      = await import('@supabase/supabase-js');
 
-  /* ----------- Config --------------------------------------------------- */
+  /* -------- Config ------------------------------------------------------ */
   const sb = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE,
     { auth: { persistSession: false } }
   );
 
-  const nfl    = sb.schema('nfl');
-  const limit  = pLimit(16);
-  const SEASON = 2024;          // flip in August
-  const WEEK   = 17;            // soon dynamic
+  const nfl   = sb.schema('nfl');
+  const limit = pLimit(16);
 
-  /* ----------- Helpers -------------------------------------------------- */
+  const SEASON = 2024;
+  const WEEK   = 17;               /* ← soon dynamic */
+
+  /* -------- Helpers ----------------------------------------------------- */
   const clean    = s => s?.replace(/\u00A0/g, ' ').trim();
   const sanitize = n => clean(n)
     ?.replace(/\s+Stats.*$/i,  '')
     .replace(/\s+Team.*$/i,    '')
     .replace(/\s+Football$/i,  '');
 
-  // **fixed** – no more hard-coded 4’s
   const safeDivide = (n, d) =>
-    d === 0        ? null
-    : !isFinite(n) ? null
-    : n / d;
+    !isFinite(n) || !isFinite(d) || d === 0 ? null : n / d;
 
   const logPg = e => console.error(
     'STATUS :',  e.status,
@@ -60,7 +58,7 @@ const { load } = require('cheerio');
     '\nCODE   :', e.code
   );
 
-  /* ----------- Team dictionary ----------------------------------------- */
+  /* -------- Team dictionary -------------------------------------------- */
   const { data: teams, error } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
@@ -89,7 +87,7 @@ const { load } = require('cheerio');
     return caps ? caps.slice(-3).join('').toUpperCase() : '';
   };
 
-  /* ----------- Discover matchup IDs ------------------------------------ */
+  /* -------- Discover matchup IDs --------------------------------------- */
   async function discoverMatchups () {
     const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
     const ids = new Set();
@@ -97,111 +95,132 @@ const { load } = require('cheerio');
       const m = $(el).attr('href').match(/matchup\/(\d+)/);
       if (m) ids.add(+m[1]);
     });
-    if (!ids.size) throw new Error('Covers markup changed — no matchup IDs found');
+    if (!ids.size) throw new Error('Covers markup changed — no matchup IDs');
     return [...ids];
   }
 
-  /* ----------- Parse og:title fallback ---------------------------------- */
-  const namesFromOg = title => {
-    const parts = title.split(/\s+vs\.?\s+/i);
-    if (parts.length < 2) return [null, null];
-
-    const away = sanitize(parts[0]);
-    const home = sanitize(
-      parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]
-    );
-    return [away, home];
-  };
-
-  /* ----------- Scrape ONE matchup -------------------------------------- */
+  /* -------- Scrape ONE matchup ----------------------------------------- */
   async function scrapeMatchup (id) {
-    /* ---- hub page (team names / abbrs / date) ---- */
-    const hub   = await axios.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
-    const $hub  = load(hub.data);
-    const hubTx = $hub.text();
+    /* hub page */
+    const hub = await axios.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
+    const $H  = load(hub.data);
+    const hubText = $H.text();
 
-    let awayFN = sanitize($hub('div.matchup-team.away-team').attr('data-team-fullname'));
-    let homeFN = sanitize($hub('div.matchup-team.home-team').attr('data-team-fullname'));
-    let awayAb = sanitize($hub('div.matchup-team.away-team').attr('data-team-abbrev'));
-    let homeAb = sanitize($hub('div.matchup-team.home-team').attr('data-team-abbrev'));
+    let awayFN = sanitize($H('div.matchup-team.away-team').attr('data-team-fullname'));
+    let homeFN = sanitize($H('div.matchup-team.home-team').attr('data-team-fullname'));
+    let awayAb = sanitize($H('div.matchup-team.away-team').attr('data-team-abbrev'));
+    let homeAb = sanitize($H('div.matchup-team.home-team').attr('data-team-abbrev'));
 
+    /* fallback: og:title */
     if (!awayFN || !homeFN) {
-      const og = $hub('meta[property="og:title"]').attr('content') || '';
-      [awayFN, homeFN] = namesFromOg(og);
+      const og = $H('meta[property="og:title"]').attr('content') || '';
+      const parts = og.split(/\s+vs\.?\s+/i);
+      [awayFN, homeFN] = parts.length >= 2 ? parts : [null, null];
     }
 
     awayAb = awayAb || deriveAbbr(awayFN);
     homeAb = homeAb || deriveAbbr(homeFN);
 
-    const iso   = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
+    const iso   = $H('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
     const gDate = iso ? iso.split('T')[0] : null;
 
-    /* ---- stats pages (same HTML structure as R script) ---- */
+    /* stats pages */
     const stats = f =>
       `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/${f}/last3`;
 
     const [awayStats, homeStats] = await Promise.all([
-      axios.get(stats('FALSE')),   // away team column on the left
-      axios.get(stats('TRUE'))    // home team column on the left
+      axios.get(stats('FALSE')),
+      axios.get(stats('TRUE'))
     ]);
 
-    /* ---- helper to build one side’s ratios (mirrors your R) ---- */
-    const parseSide = (html, role) => {
+    /* ---- label helpers ------------------------------------------------- */
+    const norm = txt =>
+      txt.toLowerCase()
+         .replace(/\s+/g,  '')      /* remove spaces */
+         .replace(/yards|yds/g, '') /* yards/yds → '' */
+         .replace(/[^\w/]/g, '');   /* drop punctuation */
+
+    const WANT = {
+      passYPA : ['passyards/att', 'passyds/att'],
+      rushYPA : ['rushyards/att', 'rushyds/att'],
+      turnovers: ['turnovers']
+    };
+
+    const collectStats = (html, role) => {
       const $ = load(html.data);
-      /* row numbers in the R script (zero-based) */
-      const pick = (r, c) =>
-        +$('table.stats-table tbody tr').eq(r).find('td').eq(c).text().trim() || 0;
-      const avg  = r =>
-        +$('table.average-table tbody tr').eq(r).find('td').text().trim() || 0;
 
-      /*  R rows / cols
-          ────────────────────────────────────────────────
-          YPPA  row 10   | off col 0   | def col 4
-          YPRA  row  4   | off col 0   | def col 4
-          INT   row  2   | off col 0   | def col 4
-          FUM   row  3   | off col 0   | def col 4
-      */
-      const ypPaPickOff = pick(10, 0);
-      const ypRaPickOff = pick(4,  0);
-      const intPickOff  = pick(2,  0);
-      const fumPickOff  = pick(3,  0);
+      /* scan rows once – map label -> row element ------------------------ */
+      const rowMap = {};
+      $('table.stats-table tbody tr').each((_, tr) => {
+        const label = norm($(tr).find('th,td').first().text());
+        Object.values(WANT).forEach(keys => {
+          if (keys.includes(label)) rowMap[label] = $(tr);
+        });
+      });
 
-      const ypPaPickDef = pick(10, 4);
-      const ypRaPickDef = pick(4,  4);
-      const intPickDef  = pick(2,  4);
-      const fumPickDef  = pick(3,  4);
+      /* helper to pull col by role (0 = left team, 4 = opp) -------------- */
+      const colIdxThis = role === 'home' ? 0 : 0;     // this team’s col
+      const colIdxOpp  = role === 'home' ? 4 : 4;     // opponent col
 
-      const ypPaAvg = avg(10);
-      const ypRaAvg = avg(4);
-      const intAvg  = avg(2);
-      const fumAvg  = avg(3);
+      const pick = (labArr, col) => {
+        const row = rowMap[labArr.find(k => rowMap[k])];
+        return row ? +row.find('td').eq(col).text().trim() || 0 : null;
+      };
+
+      /* averages table has one numeric <td> per row ---------------------- */
+      const avg = labArr => {
+        const tr = $('table.average-table tbody tr')
+          .filter((_, r) => labArr.some(k => norm($(r).text()).startsWith(k)))
+          .first();
+        return tr.length ? +tr.find('td').text().trim() || 0 : null;
+      };
+
+      /* pull the six raw numbers we need --------------------------------- */
+      const passPickOff = pick(WANT.passYPA, colIdxThis);
+      const rushPickOff = pick(WANT.rushYPA, colIdxThis);
+      const toPickOff   = pick(WANT.turnovers, colIdxThis);
+
+      const passPickDef = pick(WANT.passYPA, colIdxOpp);
+      const rushPickDef = pick(WANT.rushYPA, colIdxOpp);
+      const toPickDef   = pick(WANT.turnovers, colIdxOpp);
+
+      const passAvg = avg(WANT.passYPA);
+      const rushAvg = avg(WANT.rushYPA);
+      const toAvg   = avg(WANT.turnovers);
+
+      /* tiny debug: warn once if something missing ----------------------- */
+      const missing = [passPickOff, rushPickOff, toPickOff,
+                       passPickDef, rushPickDef, toPickDef,
+                       passAvg, rushAvg, toAvg].some(v => v === null);
+      if (missing && collectStats._warned < 5) {
+        console.warn(`⚠️  unmatched label(s) for matchup ${id} (${role})`);
+        collectStats._warned = (collectStats._warned || 0) + 1;
+      }
 
       return {
         covers_id : id,
-        team_role : role,                          // 'home' | 'away'
+        team_role : role,
         team_name : role === 'home' ? homeFN : awayFN,
         team_abbr : role === 'home' ? homeAb : awayAb,
 
-        /* ---- OFFENCE ratios ---- */
-        yp_pa_off : safeDivide(ypPaPickOff, ypPaAvg),
-        yp_ra_off : safeDivide(ypRaPickOff, ypRaAvg),
-        tov_off   : safeDivide(intAvg + fumAvg, intPickOff + fumPickOff),
+        yp_pa_off : safeDivide(passPickOff, passAvg),
+        yp_ra_off : safeDivide(rushPickOff, rushAvg),
+        tov_off   : safeDivide(toAvg, toPickOff),
 
-        /* ---- DEFENCE ratios ---- */
-        yp_pa_def : safeDivide(ypPaAvg, ypPaPickDef),
-        yp_ra_def : safeDivide(ypRaAvg, ypRaPickDef),
-        tov_def   : safeDivide(intPickDef + fumPickDef, intAvg + fumAvg)
+        yp_pa_def : safeDivide(passAvg, passPickDef),
+        yp_ra_def : safeDivide(rushAvg, rushPickDef),
+        tov_def   : safeDivide(toPickDef, toAvg)
       };
     };
 
     return {
-      rows     : [parseSide(awayStats, 'away'), parseSide(homeStats, 'home')],
+      rows     : [collectStats(awayStats, 'away'), collectStats(homeStats, 'home')],
       gameDate : gDate,
-      hubText  : hubTx
+      hubText
     };
   }
 
-  /* ----------- Main run ------------------------------------------------- */
+  /* -------- Main run ---------------------------------------------------- */
   const ids = await discoverMatchups();
   console.log(`⛏️  Found ${ids.length} matchups for week ${WEEK}`);
 
@@ -239,11 +258,9 @@ const { load } = require('cheerio');
     }))
   );
 
-  /* ---- bulk-insert ratios --------------------------------------------- */
+  /* bulk-insert ratios --------------------------------------------------- */
   if (bulk.length) {
-    // team_last3 table has no team_abbr column
     const payload = bulk.map(({ team_abbr, ...rest }) => rest);
-
     const { error: upErr } = await nfl
       .from('team_last3')
       .upsert(payload, { onConflict: 'covers_id,team_role' });
