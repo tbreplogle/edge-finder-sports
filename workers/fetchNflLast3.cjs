@@ -89,14 +89,22 @@ const { load } = require('cheerio');
 
   /* -------- Discover matchup IDs --------------------------------------- */
   async function discoverMatchups () {
-    const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
-    const ids = new Set();
-    $("a[href*='/sport/football/nfl/matchup/']").each((_, el) => {
-      const m = $(el).attr('href').match(/matchup\/(\d+)/);
-      if (m) ids.add(+m[1]);
-    });
-    if (!ids.size) throw new Error('Covers markup changed — no matchup IDs');
-    return [...ids];
+    const q = nfl
+      .from('matchups')
+      .select('covers_id')
+      .eq('season', SEASON);
+  
+    if (WEEK != null) q.eq('week', WEEK);      // comment-out if you want full season
+  
+    const { data, error } = await q;
+    if (error) throw error;
+  
+    const ids = data.map(r => r.covers_id).filter(Boolean);
+    if (!ids.length) throw new Error(
+      `No matchup rows found for season ${SEASON}` +
+      (WEEK != null ? `, week ${WEEK}` : '')
+    );
+    return ids;
   }
 
   /* -------- Scrape ONE matchup ----------------------------------------- */
