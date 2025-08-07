@@ -4,7 +4,7 @@
 const { Blob } = require('buffer');
 if (typeof globalThis.File === 'undefined') {
   class File extends Blob {
-    constructor(parts, name, opts = {}) {
+    constructor (parts, name, opts = {}) {
       super(parts, opts);
       this.name         = String(name);
       this.lastModified = opts.lastModified ?? Date.now();
@@ -15,21 +15,20 @@ if (typeof globalThis.File === 'undefined') {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  CommonJS-friendly imports                                                 */
-/*  – everything that’s CJS can use require()                                 */
-/*  – ESM-only libs (p-limit, supabase-js) use dynamic import()               */
+/*  CJS-friendly static imports                                               */
 /* -------------------------------------------------------------------------- */
-const axios  = require('axios');
-const { load } = require('cheerio');
-
-const { default: pLimit }      = await import('p-limit');               // ← CHANGED
-const { createClient }         = await import('@supabase/supabase-js'); // ← CHANGED
+const axios     = require('axios');
+const { load }  = require('cheerio');
 
 /* -------------------------------------------------------------------------- */
-/*  Main body wrapped in async IIFE                                           */
+/*  Main body – EVERYTHING else sits inside one async IIFE                    */
 /* -------------------------------------------------------------------------- */
 (async () => {
-  /* ── Config ────────────────────────────────────────────────────────────── */
+  /* ---------- dynamic ESM-only deps ------------------------------------- */
+  const { default: pLimit }  = await import('p-limit');
+  const { createClient }     = await import('@supabase/supabase-js');
+
+  /* ---------- Config ---------------------------------------------------- */
   const sb = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE,
@@ -38,24 +37,26 @@ const { createClient }         = await import('@supabase/supabase-js'); // ← C
 
   const nfl    = sb.schema('nfl');
   const limit  = pLimit(16);
-  const SEASON = 2024;   // flip in August
-  const WEEK   = 17;     // soon dynamic
+  const SEASON = 2024;          // flip in August
+  const WEEK   = 17;            // soon dynamic
 
-  /* ── Helpers ───────────────────────────────────────────────────────────── */
-  const clean = s => s?.replace(/\u00A0/g, ' ').trim();
-  const sanitize = n => clean(n)
+  /* ---------- Helpers --------------------------------------------------- */
+  const clean     = s => s?.replace(/\u00A0/g, ' ').trim();
+  const sanitize  = n => clean(n)
     ?.replace(/\s+Stats.*$/i,  '')
     .replace(/\s+Team.*$/i,    '')
     .replace(/\s+Football$/i,  '');
-  const safeDivide = (n, d) => Number.isFinite(n / d) ? n / d : d === 0 ? 4 : null;
+  const safeDivide = (n, d) =>
+    Number.isFinite(n / d) ? n / d : d === 0 ? 4 : null;
+
   const logPg = e => console.error(
-    'STATUS:',  e.status,
+    'STATUS :', e.status,
     '\nMESSAGE:', e.message,
     '\nDETAIL :', e.details,
     '\nCODE   :', e.code
   );
 
-  /* ── Team dictionary ───────────────────────────────────────────────────── */
+  /* ---------- Team dictionary ------------------------------------------- */
   const { data: teams, error } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
@@ -64,17 +65,19 @@ const { createClient }         = await import('@supabase/supabase-js'); // ← C
   const NAME_MAP = Object.fromEntries(teams.map(t => [clean(t.team_name), t.team_id]));
   const ABBR_MAP = Object.fromEntries(teams.map(t => [t.abbreviation.toUpperCase(), t.team_id]));
 
-  function idFromNameOrAbbr(longName, abbr, hubText) {
+  const idFromNameOrAbbr = (longName, abbr, hubText) => {
     const name = clean(longName);
     if (NAME_MAP[name]) return NAME_MAP[name];
+
     const up = (abbr || '').toUpperCase();
     if (ABBR_MAP[up]) return ABBR_MAP[up];
+
     const cand = teams.filter(t =>
       t.team_name.startsWith(name) && hubText.includes(t.alt_name)
     );
     if (cand.length === 1) return cand[0].team_id;
     throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
-  }
+  };
 
   const deriveAbbr = n => {
     if (!n) return '';
@@ -82,8 +85,8 @@ const { createClient }         = await import('@supabase/supabase-js'); // ← C
     return caps ? caps.slice(-3).join('').toUpperCase() : '';
   };
 
-  /* ── Discover matchup IDs ──────────────────────────────────────────────── */
-  async function discoverMatchups() {
+  /* ---------- Discover matchup IDs -------------------------------------- */
+  async function discoverMatchups () {
     const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
     const ids = new Set();
     $("a[href*='/sport/football/nfl/matchup/']").each((_, el) => {
@@ -94,19 +97,20 @@ const { createClient }         = await import('@supabase/supabase-js'); // ← C
     return [...ids];
   }
 
-  /* ── Parse two club names from og:title ────────────────────────────────── */
-  function namesFromOg(title) {
+  /* ---------- Parse og:title helper ------------------------------------- */
+  const namesFromOg = title => {
     const parts = title.split(/\s+vs\.?\s+/i);
     if (parts.length < 2) return [null, null];
+
     const away = sanitize(parts[0]);
     const home = sanitize(
       parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]
     );
     return [away, home];
-  }
+  };
 
-  /* ── Scrape one matchup ────────────────────────────────────────────────── */
-  async function scrapeMatchup(id) {
+  /* ---------- Scrape a single matchup ----------------------------------- */
+  async function scrapeMatchup (id) {
     const hubHtml = await axios.get(
       `https://www.covers.com/sport/football/nfl/matchup/${id}`
     );
@@ -132,14 +136,15 @@ const { createClient }         = await import('@supabase/supabase-js'); // ← C
     const stats = f =>
       `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/${f}/last3`;
 
-    const [awayStats, homeStats] = await Promise.all([axios.get(stats('FALSE')), axios.get(stats('TRUE'))]);
+    const [awayStats, homeStats] = await Promise.all([
+      axios.get(stats('FALSE')),
+      axios.get(stats('TRUE'))
+    ]);
 
     const parseSide = (html, role) => {
       const $ = load(html.data);
-      const pick = (r, c) => +$('table.stats-table tbody tr').eq(r)
-        .find('td').eq(c).text().trim() || 0;
-      const avg  = r => +$('table.average-table tbody tr').eq(r)
-        .find('td').text().trim() || 0;
+      const pick = (r, c) => +$('table.stats-table tbody tr').eq(r).find('td').eq(c).text().trim() || 0;
+      const avg  = r     => +$('table.average-table tbody tr').eq(r).find('td').text().trim() || 0;
 
       return {
         covers_id : id,
@@ -162,7 +167,7 @@ const { createClient }         = await import('@supabase/supabase-js'); // ← C
     };
   }
 
-  /* ── Main run ──────────────────────────────────────────────────────────── */
+  /* ---------- Main run --------------------------------------------------- */
   const ids = await discoverMatchups();
   console.log(`⛏️  Found ${ids.length} matchups for week ${WEEK}`);
 
