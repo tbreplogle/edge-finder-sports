@@ -1,21 +1,32 @@
-import { Blob } from 'buffer';
-if (typeof globalThis.File === 'undefined') {
+/* fetchNflLast3.js ──────────────────────────────────────────────────────────
+   Runs on Node 18+ (CommonJS).  One file, no external polyfill needed.
+   Env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE
+   ------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/*  tiny polyfill for Undici’s File requirement                               */
+/* -------------------------------------------------------------------------- */
+const { Blob } = require('buffer');
+
+if (typeof global.File === 'undefined') {
   class File extends Blob {
-    constructor (parts, name, opts = {}) {
+    constructor(parts, name, opts = {}) {
       super(parts, opts);
       this.name         = String(name);
       this.lastModified = opts.lastModified ?? Date.now();
       this.type         = opts.type ?? '';
     }
   }
-  globalThis.File = File;
+  global.File = File;
 }
 
-/* eslint-disable no-console -------------------------------------------------*/
-import axios            from 'axios';
-import { load }         from 'cheerio';
-import pLimit           from 'p-limit';
-import { createClient } from '@supabase/supabase-js';
+/* -------------------------------------------------------------------------- */
+/*  deps (safe to load after the polyfill)                                    */
+/* -------------------------------------------------------------------------- */
+const axios            = require('axios');
+const { load }         = require('cheerio');
+const pLimit           = require('p-limit');
+const { createClient } = require('@supabase/supabase-js');
 
 /* -------------------------------------------------------------------------- */
 /*  Config                                                                    */
@@ -28,11 +39,11 @@ const sb = createClient(
 
 const nfl    = sb.schema('nfl');
 const limit  = pLimit(16);
-const SEASON = 2024;          // flip in August
-const WEEK   = 17;            // soon dynamic
+const SEASON = 2024;        // flip in August
+const WEEK   = 17;          // soon dynamic
 
 /* -------------------------------------------------------------------------- */
-/*  Helpers                                                                    */
+/*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */
 const clean = s => s?.replace(/\u00A0/g, ' ').trim();
 
@@ -42,10 +53,11 @@ const sanitize = n => clean(n)
   .replace(/\s+Team.*$/i,   '')
   .replace(/\s+Football$/i, '');
 
-const safeDivide = (n, d) => Number.isFinite(n / d) ? n / d : d === 0 ? 4 : null;
+const safeDivide = (n, d) =>
+  Number.isFinite(n / d) ? n / d : d === 0 ? 4 : null;
 
 const logPg = e => console.error(
-  'STATUS:', e.status,
+  'STATUS :', e.status,
   '\nMESSAGE:', e.message,
   '\nDETAIL :', e.details,
   '\nCODE   :', e.code
@@ -63,7 +75,7 @@ if (error) throw error;
 const NAME_MAP = Object.fromEntries(teams.map(t => [clean(t.team_name), t.team_id]));
 const ABBR_MAP = Object.fromEntries(teams.map(t => [t.abbreviation.toUpperCase(), t.team_id]));
 
-/* city‑only fallback uses nickname in hub text */
+/* city-only fallback uses nickname in hub text */
 function idFromNameOrAbbr(longName, abbr, hubText) {
   const name = clean(longName);
   if (NAME_MAP[name]) return NAME_MAP[name];
@@ -78,7 +90,7 @@ function idFromNameOrAbbr(longName, abbr, hubText) {
   throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
 }
 
-/* derive 3‑letter abbreviation if necessary */
+/* derive 3-letter abbreviation if necessary */
 const deriveAbbr = n => {
   if (!n) return '';
   const caps = n.match(/[A-Z]/g);
@@ -86,7 +98,7 @@ const deriveAbbr = n => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  Discover matchup IDs                                                      */
+/*  Discover matchup IDs (Covers)                                            */
 /* -------------------------------------------------------------------------- */
 async function discoverMatchups() {
   const $ = load((await axios.get('https://www.covers.com/sports/nfl/matchups')).data);
@@ -107,8 +119,6 @@ function namesFromOg(title) {
   if (parts.length < 2) return [null, null];
 
   const away = sanitize(parts[0]);
-
-  /* cut at first token like “Odds”, “Picks”, pipe, dash, etc. */
   const home = sanitize(
     parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]
   );
@@ -126,7 +136,7 @@ async function scrapeMatchup(id) {
   const $hub    = load(hubHtml.data);
   const hubText = $hub.text();
 
-  /* attempt 1: hidden data‑attributes */
+  /* attempt 1: hidden data-attributes */
   let awayFN = sanitize($hub('div.matchup-team.away-team').attr('data-team-fullname'));
   let homeFN = sanitize($hub('div.matchup-team.home-team').attr('data-team-fullname'));
   let awayAb = sanitize($hub('div.matchup-team.away-team').attr('data-team-abbrev'));
@@ -148,7 +158,10 @@ async function scrapeMatchup(id) {
   const stats = f =>
     `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/${f}/last3`;
 
-  const [awayStats, homeStats] = await Promise.all([axios.get(stats('FALSE')), axios.get(stats('TRUE'))]);
+  const [awayStats, homeStats] = await Promise.all([
+    axios.get(stats('FALSE')),
+    axios.get(stats('TRUE'))
+  ]);
 
   const parseSide = (html, role) => {
     const $ = load(html.data);
@@ -206,8 +219,8 @@ async function scrapeMatchup(id) {
           season       : SEASON,
           week         : WEEK,
           game_date    : gameDate,
-          home_team    : home.team_name,        
-          away_team    : away.team_name, 
+          home_team    : home.team_name,
+          away_team    : away.team_name,
           home_team_id : home.team_id,
           away_team_id : away.team_id
         }, { onConflict: 'covers_id' }).throwOnError();
@@ -220,21 +233,19 @@ async function scrapeMatchup(id) {
     }))
   );
 
-  /* bulk write last‑3 ratios --------------------------------------------- */
- // ── bulk write ratios ───────────────────────────────
- if (bulk.length) {
-      // team_last3 doesn’t have team_abbr – remove it
-      const payload = bulk.map(r => {
-        const { team_abbr, ...rest } = r;   // drop property
-        return rest;
-      });
-    
-       const { error: upErr } = await nfl
-         .from('team_last3')
-        .upsert(payload, { onConflict: 'covers_id,team_role' });
-       if (upErr) logPg(upErr);
-       else console.log(`🚀 Upserted ${payload.length} rows`);
-     }
+  /* bulk write last-3 ratios --------------------------------------------- */
+  if (bulk.length) {
+    const payload = bulk.map(r => {
+      const { team_abbr, ...rest } = r;   // drop property not in table
+      return rest;
+    });
+
+    const { error: upErr } = await nfl
+      .from('team_last3')
+      .upsert(payload, { onConflict: 'covers_id,team_role' });
+    if (upErr) logPg(upErr);
+    else console.log(`🚀 Upserted ${payload.length} rows`);
+  }
 
   console.log('🎉 Done');
   process.exit(0);
