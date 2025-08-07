@@ -1,9 +1,8 @@
-#workflow fetch-nfl-last3.yml
-name: 1‑Weekly NFL Last‑3 Scraper
+# .github/workflows/fetch-nfl-last3.yml
+name: 1-Weekly NFL Last-3 Scraper
 
 on:
-  # ──   09:15 AM America/Chicago  ───────────────────────────────
-  # CDT  = 15:15 UTC | CST = 16:15 UTC (DST shift is fine weekly)
+  # ── 09:15 AM America/Chicago every Tuesday ───────────────
   schedule:
     - cron: '15 15 * * TUE'
   workflow_dispatch:
@@ -17,21 +16,21 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
 
-    # ─── shared env vars ────────────────────────────────────────
     env:
-      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}   # ← key name in secrets
-      PUPPETEER_SKIP_DOWNLOAD:   'true'           # keeps setup‑node lean
-      NODE_ENV:                  production
+      SUPABASE_URL:            ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE:   ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      NODE_ENV:                production
 
     steps:
-      # ─── checkout & Node ──────────────────────────────────────
+      # ─── checkout & Node ──────────────────────────────────
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # ─── npm cache (same strategy you use for MLB) ────────────
+      # ─── npm cache (same pattern you use for MLB) ────────
       - name: Restore npm cache
         id: restore-cache
         uses: actions/cache@v4
@@ -41,10 +40,10 @@ jobs:
           restore-keys: |
             linux-npm-
 
-      # ─── install deps (only workers/) ─────────────────────────
+      # ─── install deps (just workers/) ────────────────────
       - name: Install JS deps
         working-directory: workers
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Save npm cache
         if: steps.restore-cache.outputs.cache-hit != 'true'
@@ -53,13 +52,13 @@ jobs:
           path: ~/.npm
           key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
 
-      # ─── run the NFL scraper ─────────────────────────────────
-      - name: Run NFL last‑3 scraper
+      # ─── run the NFL scraper  ────────────────────────────
+      - name: Run NFL last-3 scraper
         working-directory: workers
         run: |
-          DEBUG=${{ github.event.inputs.debug || 'false' }} node fetchNflLast3.js
+          DEBUG=${{ github.event.inputs.debug || 'false' }} node fetchNflLast3.cjs
 
-      # ─── optional: tail the IDs that were just saved ─────────
+      # ─── optional: tail the IDs that were just saved ─────
       - name: Log today’s matchup IDs (if script dropped file)
         if: always()
         run: |
