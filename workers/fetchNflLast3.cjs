@@ -15,12 +15,15 @@ if (typeof globalThis.File === 'undefined') {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Imports                                                                    */
+/*  CommonJS-friendly imports                                                 */
+/*  – everything that’s CJS can use require()                                 */
+/*  – ESM-only libs (p-limit, supabase-js) use dynamic import()               */
 /* -------------------------------------------------------------------------- */
-const axios            = require('axios');
-const { load }         = require('cheerio');
-const pLimit           = require('p-limit');
-const { createClient } = require('@supabase/supabase-js');
+const axios  = require('axios');
+const { load } = require('cheerio');
+
+const { default: pLimit }      = await import('p-limit');               // ← CHANGED
+const { createClient }         = await import('@supabase/supabase-js'); // ← CHANGED
 
 /* -------------------------------------------------------------------------- */
 /*  Main body wrapped in async IIFE                                           */
@@ -56,7 +59,6 @@ const { createClient } = require('@supabase/supabase-js');
   const { data: teams, error } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
-
   if (error) throw error;
 
   const NAME_MAP = Object.fromEntries(teams.map(t => [clean(t.team_name), t.team_id]));
