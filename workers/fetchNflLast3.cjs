@@ -92,19 +92,24 @@ const { load } = require('cheerio');
   };
 
   /* ---------- Discover matchup IDs ------------------------------------ */
-  async function discoverMatchups () {
-    const base = 'https://www.covers.com/sport/football/nfl/scores-matchups';
-    const url  = DISCOVER_DATE ? `${base}?selectedDate=${DISCOVER_DATE}` : base;
 
-    const $ = load((await axios.get(url)).data);
-    const ids = new Set();
-    $("a[href*='/sport/football/nfl/matchup/']").each((_, el) => {
-      const m = $(el).attr('href').match(/matchup\/(\d+)/);
-      if (m) ids.add(+m[1]);
-    });
-    if (!ids.size) throw new Error('Covers markup changed — no matchup IDs');
-    return [...ids];
-  }
+async function discoverMatchups () {
+  const base = 'https://www.covers.com/sports/nfl/matchups';   // ← fixed
+  const url  = DISCOVER_DATE ? `${base}?selectedDate=${DISCOVER_DATE}` : base;
+
+  const html = await axios.get(url);
+  const $    = load(html.data);
+
+  const ids = new Set();
+  $("a[href*='/sport/football/nfl/matchup/']").each((_, el) => {
+    const m = $(el).attr('href').match(/matchup\/(\d+)/);
+    if (m) ids.add(+m[1]);
+  });
+
+  if (!ids.size) throw new Error('Covers markup changed — no matchup IDs');
+  return [...ids];
+}
+
 
   /* ---------- Parse og:title helper ----------------------------------- */
   const namesFromOg = title => {
