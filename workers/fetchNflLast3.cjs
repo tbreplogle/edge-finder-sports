@@ -67,8 +67,9 @@ const { load } = require('cheerio');
   const NAME_MAP = Object.fromEntries(teams.map(t => [clean(t.team_name), t.team_id]));
   const ABBR_MAP = Object.fromEntries(teams.map(t => [t.abbreviation.toUpperCase(), t.team_id]));
 
-  const idFromNameOrAbbr = (longName, abbr, hubText) => {
-    const name = clean(longName);
+    const idFromNameOrAbbr = (longName, abbr, hubText) => {
+        // strip “Stats & Past Results – NFL Game on …” etc. FIRST 👇
+        const name = sanitize(longName);      //  <-- was clean(longName)
     if (NAME_MAP[name]) return NAME_MAP[name];
 
     const up = (abbr || '').toUpperCase();
