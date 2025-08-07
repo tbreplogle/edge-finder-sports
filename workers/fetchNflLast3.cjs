@@ -141,24 +141,53 @@ const { load }  = require('cheerio');
       axios.get(stats('TRUE'))
     ]);
 
-    const parseSide = (html, role) => {
-      const $ = load(html.data);
-      const pick = (r, c) => +$('table.stats-table tbody tr').eq(r).find('td').eq(c).text().trim() || 0;
-      const avg  = r     => +$('table.average-table tbody tr').eq(r).find('td').text().trim() || 0;
+/* ------------------------------------------------------------------ */
+/*  Replace the entire parseSide(…) helper with this new version      */
+/* ------------------------------------------------------------------ */
+const parseSide = (html, role) => {
+  const $ = load(html.data);
 
-      return {
-        covers_id : id,
-        team_role : role,
-        team_name : role === 'home' ? homeFN : awayFN,
-        team_abbr : role === 'home' ? homeAb : awayAb,
-        yp_pa_off : safeDivide(pick(10, 0), avg(10)),
-        yp_ra_off : safeDivide(pick(4, 0),  avg(4)),
-        tov_off   : safeDivide(avg(2) + avg(3), pick(2, 0) + pick(3, 0)),
-        yp_pa_def : safeDivide(avg(10), pick(10, 4)),
-        yp_ra_def : safeDivide(avg(4),  pick(4, 4)),
-        tov_def   : safeDivide(pick(2, 4) + pick(3, 4), avg(2) + avg(3))
-      };
-    };
+  // helper – find the row whose first <th> / <td> contains the label text
+  const cellVal = label =>
+    +$('table.stats-table tbody tr')
+        .filter((_, tr) => $(tr).text().trim().startsWith(label))
+        .find('td')                      // the numeric <td>
+        .eq( role === 'home' ? 0 : 4 )   // 0 = this team’s column, 4 = opp column
+        .text().trim() || 0;
+
+  const avgVal = label =>
+    +$('table.average-table tbody tr')
+        .filter((_, tr) => $(tr).text().trim().startsWith(label))
+        .find('td')                      // only one <td> in avg table
+        .text().trim() || 0;
+
+  // ── pull the numbers we need ─────────────────────────────────────
+  const yp_pa_pick = cellVal('Pass Yards / Att');
+  const yp_ra_pick = cellVal('Rush Yards / Att');
+  const tos_pick   = cellVal('Turnovers');
+
+  const yp_pa_avg  = avgVal('Pass Yards / Att');
+  const yp_ra_avg  = avgVal('Rush Yards / Att');
+  const tos_avg    = avgVal('Turnovers');
+
+  return {
+    covers_id : id,
+    team_role : role,
+    team_name : role === 'home' ? homeFN : awayFN,
+    team_abbr : role === 'home' ? homeAb : awayAb,
+
+    // offence ratios
+    yp_pa_off : safeDivide(yp_pa_pick, yp_pa_avg),
+    yp_ra_off : safeDivide(yp_ra_pick, yp_ra_avg),
+    tov_off   : safeDivide(tos_avg, tos_pick),
+
+    // defence ratios (opponent column vs. avg)
+    yp_pa_def : safeDivide(yp_pa_avg, yp_pa_pick),
+    yp_ra_def : safeDivide(yp_ra_avg, yp_ra_pick),
+    tov_def   : safeDivide(tos_pick, tos_avg)
+  };
+};
+
 
     return {
       rows     : [parseSide(awayStats, 'away'), parseSide(homeStats, 'home')],
