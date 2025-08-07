@@ -95,9 +95,9 @@ const { load } = require('cheerio');
 
   /* ---------- Discover matchup IDs -------------------------------------- */
   async function discoverMatchups () {
-    const url = DISCOVER_DATE
-      ? `https://www.covers.com/sports/nfl/matchups?selectedDate=${DISCOVER_DATE}`
-      : 'https://www.covers.com/sports/nfl/matchups';
+     const url = DISCOVER_DATE
+      ? `https://www.covers.com/sports/nfl/scores-matchups?selectedDate=${DISCOVER_DATE}`
+      : 'https://www.covers.com/sports/nfl/scores-matchups';
 
     const $ = load((await axios.get(url)).data);
     const ids = new Set();
