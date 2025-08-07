@@ -1,6 +1,6 @@
-/* -------------------------------------------------------------------------- */
-/*  Polyfill for File (needed by undici on Node ≤ 18)                         */
-/* -------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
+/*  Polyfill for File (needed by undici on Node ≤ 18)                     */
+/* ---------------------------------------------------------------------- */
 const { Blob } = require('buffer');
 if (typeof globalThis.File === 'undefined') {
   class File extends Blob {
@@ -14,21 +14,22 @@ if (typeof globalThis.File === 'undefined') {
   globalThis.File = File;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  CJS-friendly static imports                                               */
-/* -------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
+/*  CJS-friendly static imports                                           */
+/* ---------------------------------------------------------------------- */
 const axios    = require('axios');
 const { load } = require('cheerio');
 
-/* -------------------------------------------------------------------------- */
-/*  Main body – EVERYTHING else sits inside one async IIFE                    */
-/* -------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
+/*  Main body – everything else inside one async IIFE                     */
+/* ---------------------------------------------------------------------- */
 (async () => {
-  /* ---------- dynamic ESM-only deps ------------------------------------- */
+
+  /* ---------- dynamic ESM-only deps ----------------------------------- */
   const { default: pLimit }  = await import('p-limit');
   const { createClient }     = await import('@supabase/supabase-js');
 
-  /* ---------- Config ---------------------------------------------------- */
+  /* ---------- Config -------------------------------------------------- */
   const sb = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE,
@@ -37,25 +38,22 @@ const { load } = require('cheerio');
 
   const nfl    = sb.schema('nfl');
   const limit  = pLimit(16);
-  const SEASON = 2024;          // flip in August
-  const WEEK   = 17;            // soon dynamic
+  const SEASON = 2024;                 // flip in August
+  const WEEK   = 17;                   // soon dynamic
 
-  /*  If you want to scrape a specific “matchups?selectedDate=YYYY-MM-DD”
-      page (handy for testing historic weeks), set DISCOVER_DATE.
-      eg:  DISCOVER_DATE=2024-12-31 node fetchNflLast3.cjs                */
+  /*  To test historic boards set, e.g.
+      DISCOVER_DATE=2024-12-31 node fetchNflLast3.cjs                   */
   const DISCOVER_DATE = process.env.DISCOVER_DATE || null;
 
-  /* ---------- Helpers --------------------------------------------------- */
+  /* ---------- Helpers ------------------------------------------------- */
   const clean    = s => s?.replace(/\u00A0/g, ' ').trim();
   const sanitize = n => clean(n)
-    ?.replace(/\s+Stats.*$/i,  '')        // ← wipes the long suffixes
+    ?.replace(/\s+Stats.*$/i,  '')
     .replace(/\s+Team.*$/i,    '')
     .replace(/\s+Football$/i,  '');
 
   const safeDivide = (n, d) =>
-    d === 0 ? null               // or NaN if you prefer
-    : Number.isFinite(n / d) ? n / d
-    : null;
+    d === 0 ? null : Number.isFinite(n / d) ? n / d : null;
 
   const logPg = e => console.error(
     'STATUS :',  e.status,
@@ -64,7 +62,7 @@ const { load } = require('cheerio');
     '\nCODE   :', e.code
   );
 
-  /* ---------- Team dictionary ------------------------------------------- */
+  /* ---------- Team dictionary ----------------------------------------- */
   const { data: teams, error } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
@@ -74,7 +72,7 @@ const { load } = require('cheerio');
   const ABBR_MAP = Object.fromEntries(teams.map(t => [t.abbreviation.toUpperCase(), t.team_id]));
 
   const idFromNameOrAbbr = (longName, abbr, hubText) => {
-    const name = sanitize(longName);              // ← was clean()
+    const name = sanitize(longName);
     if (NAME_MAP[name]) return NAME_MAP[name];
 
     const up = (abbr || '').toUpperCase();
@@ -93,11 +91,10 @@ const { load } = require('cheerio');
     return caps ? caps.slice(-3).join('').toUpperCase() : '';
   };
 
-  /* ---------- Discover matchup IDs -------------------------------------- */
+  /* ---------- Discover matchup IDs ------------------------------------ */
   async function discoverMatchups () {
-     const url = DISCOVER_DATE
-      ? `https://www.covers.com/sports/nfl/scores-matchups?selectedDate=${DISCOVER_DATE}`
-      : 'https://www.covers.com/sports/nfl/scores-matchups';
+    const base = 'https://www.covers.com/sport/football/nfl/scores-matchups';
+    const url  = DISCOVER_DATE ? `${base}?selectedDate=${DISCOVER_DATE}` : base;
 
     const $ = load((await axios.get(url)).data);
     const ids = new Set();
@@ -109,7 +106,7 @@ const { load } = require('cheerio');
     return [...ids];
   }
 
-  /* ---------- Parse og:title helper ------------------------------------- */
+  /* ---------- Parse og:title helper ----------------------------------- */
   const namesFromOg = title => {
     const parts = title.split(/\s+vs\.?\s+/i);
     if (parts.length < 2) return [null, null];
@@ -121,7 +118,7 @@ const { load } = require('cheerio');
     return [away, home];
   };
 
-  /* ---------- Scrape a single matchup ----------------------------------- */
+  /* ---------- Scrape a single matchup --------------------------------- */
   async function scrapeMatchup (id) {
     const hubHtml = await axios.get(
       `https://www.covers.com/sport/football/nfl/matchup/${id}`
@@ -153,22 +150,19 @@ const { load } = require('cheerio');
       axios.get(stats('TRUE'))
     ]);
 
-    /* ---------- parseSide helper ---------------------------------------- */
     const parseSide = (html, role) => {
       const $ = load(html.data);
 
       const cellVal = label =>
         +$('table.stats-table tbody tr')
             .filter((_, tr) => $(tr).text().trim().startsWith(label))
-            .find('td')
-            .eq(role === 'home' ? 0 : 4)
+            .find('td').eq(role === 'home' ? 0 : 4)
             .text().trim() || 0;
 
       const avgVal = label =>
         +$('table.average-table tbody tr')
             .filter((_, tr) => $(tr).text().trim().startsWith(label))
-            .find('td')
-            .text().trim() || 0;
+            .find('td').text().trim() || 0;
 
       const yp_pa_pick = cellVal('Pass Yards / Att');
       const yp_ra_pick = cellVal('Rush Yards / Att');
@@ -181,7 +175,7 @@ const { load } = require('cheerio');
       return {
         covers_id : id,
         team_role : role,
-        team_name : role === 'home' ? homeFN : awayFN,   // already sanitized
+        team_name : role === 'home' ? homeFN : awayFN,
         team_abbr : role === 'home' ? homeAb : awayAb,
 
         yp_pa_off : safeDivide(yp_pa_pick, yp_pa_avg),
@@ -201,9 +195,9 @@ const { load } = require('cheerio');
     };
   }
 
-  /* ---------- Main run --------------------------------------------------- */
+  /* ---------- Main run -------------------------------------------------- */
   const ids = await discoverMatchups();
-  console.log(`⛏️  Found ${ids.length} matchups for week ${WEEK}`);
+  console.log(`⛏️  Found ${ids.length} matchups${DISCOVER_DATE ? ` for ${DISCOVER_DATE}` : ''}`);
 
   const bulk = [];
 
