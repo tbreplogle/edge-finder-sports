@@ -1,3 +1,16 @@
+import { Blob } from 'buffer';
+if (typeof globalThis.File === 'undefined') {
+  class File extends Blob {
+    constructor (parts, name, opts = {}) {
+      super(parts, opts);
+      this.name         = String(name);
+      this.lastModified = opts.lastModified ?? Date.now();
+      this.type         = opts.type ?? '';
+    }
+  }
+  globalThis.File = File;
+}
+
 /* eslint-disable no-console -------------------------------------------------*/
 import axios            from 'axios';
 import { load }         from 'cheerio';
