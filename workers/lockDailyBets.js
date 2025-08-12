@@ -1,4 +1,4 @@
-/*  Lock today’s ≥7-confidence bets (derived confidence) */
+/* Lock today’s ≥7-confidence bets (isotonic-calibrated + Kelly-based) */
 import { supabase, testConnection } from './lib/supabaseClient.js';
 
 function todayCT() {
@@ -8,75 +8,76 @@ function todayCT() {
   return ct.toISOString().slice(0, 10);
 }
 
-/* ML -> implied probability */
+/* Moneyline helpers */
 function impFromML(ml) {
-  return ml < 0
-    ? (-ml) / ((-ml) + 100.0)
-    : 100.0 / (ml + 100.0);
+  return ml < 0 ? (-ml) / ((-ml) + 100.0) : 100.0 / (ml + 100.0);
 }
-
-/* convert ML → stake needed to win exactly 100 */
-function stakeForWin100(ml) {
+function decimalReturn(ml) { // b = decimal_odds - 1
+  return ml >= 0 ? ml / 100.0 : 100.0 / (-ml);
+}
+function stakeForWin100(ml) { // fixed to win 100
   return ml < 0 ? Math.abs(ml) : +(10000 / ml).toFixed(2);
 }
-
-/* clamp helper */
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
-/* logistic helpers */
-const logit    = p => Math.log(p / (1 - p));
-const invlogit = z => 1 / (1 + Math.exp(-z));
+/* Load isotonic map: rows with {side,favdog,b_lo,b_hi,p_cal} */
+async function loadIsoMap() {
+  const { data, error } = await supabase
+    .from('v_mlb_iso_calib_map')
+    .select('side,favdog,b_lo,b_hi,p_cal')
+    .order('side', { ascending: true })
+    .order('favdog', { ascending: true })
+    .order('b_lo', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
 
-/* fetch calibration coeffs if available, else identity */
-async function getCalibration() {
-  try {
-    const { data, error } = await supabase
-      .from('v_mlb_calib_coeffs')
-      .select('slope,intercept')
-      .limit(1)
-      .maybeSingle();
-    if (error || !data) return { slope: 1, intercept: 0 };
-    return { slope: data.slope ?? 1, intercept: data.intercept ?? 0 };
-  } catch {
-    return { slope: 1, intercept: 0 };
+/* Find calibrated p by bin; fallback to raw p if no bin found */
+function isoCalibrate(p, side, ml, map) {
+  const favdog = ml < 0 ? 'fav' : 'dog';
+  const rows = mapByKey(map, side, favdog);
+  for (const r of rows) {
+    if (p >= r.b_lo && p <= r.b_hi) return clamp(r.p_cal, 1e-6, 1 - 1e-6);
   }
+  return clamp(p, 1e-6, 1 - 1e-6); // graceful fallback
+}
+function mapByKey(map, side, favdog) {
+  return map.filter(r => r.side === side && r.favdog === favdog);
 }
 
-/* apply calibration to raw model prob */
-function calibrate(p, slope, intercept) {
-  const p1 = clamp(p, 1e-6, 1 - 1e-6);
-  return invlogit(intercept + slope * logit(p1));
+/* Kelly */
+function kellyFraction(p, ml) {
+  const b = decimalReturn(ml);
+  return (b * p - (1 - p)) / b; // can be negative
 }
 
-/* small, data-driven context tweaks – no bullpens/lineups needed */
-const hardPenaltyTeams = new Set(['CHI. WHITE SOX', 'ATHLETICS', 'ARIZONA']); // soften later if results improve
+/* Context nudges (minimal; derived from your P&L) */
+const hardPenaltyTeams = new Set(['CHI. WHITE SOX', 'ATHLETICS', 'ARIZONA']);
 
-function adjustedEdge({ edge, ml, side, team }) {
-  let e = edge;
+function adjustKelly(k, { ml, side, team }) {
+  let kk = k;
 
-  // away sides underperform vs home -> small tax
-  if (side === 'away') e -= 0.010; // -1.0%
+  // Small favorites were a leak; require more margin there
+  if (ml <= -101 && ml >= -150) kk -= 0.015; // ~1.5% Kelly reduction
 
-  // small favorites are your leak -> extra gate
-  if (ml <= -101 && ml >= -150) e -= 0.015; // -1.5%
+  // Medium dogs have been your sweet spot; tiny bump
+  if (ml >= 121 && ml <= 200) kk += 0.003;
 
-  // medium dogs are your sweet spot -> tiny bump
-  if (ml >= 121 && ml <= 200) e += 0.003; // +0.3%
+  // Away sides underperform
+  if (side === 'away') kk -= 0.010;
 
-  // temporary team penalties (systematic bias)
-  if (hardPenaltyTeams.has(team)) e -= 0.020; // -2.0%
+  // Temporary systematic team penalties
+  if (hardPenaltyTeams.has(team)) kk -= 0.020;
 
-  return e;
+  return kk;
 }
 
-/* map edge -> 0..10 confidence
-   - minEdge = 1% -> conf 0
-   - 7% edge -> conf 10
-   So conf ~7 ≈ 5.5% adjusted edge. Tweak if too tight. */
-function confFromEdge(e) {
-  const minEdge = 0.01;
-  const maxEdge = 0.07;
-  const score = 10 * ((e - minEdge) / (maxEdge - minEdge));
+/* Kelly -> 0..10 confidence (monotone) */
+function confFromKelly(k) {
+  const kClamped = clamp(k, -0.05, 0.20);        // sanity
+  const kMin = 0.00;                             // 0% Kelly -> 0
+  const kMax = 0.08;                             // 8% Kelly -> 10
+  const score = 10 * ((kClamped - kMin) / (kMax - kMin));
   return +clamp(score, 0, 10).toFixed(1);
 }
 
@@ -84,14 +85,13 @@ async function lockDailyBets() {
   if (!(await testConnection())) throw new Error('DB connection failed');
   const today = todayCT();
 
-  const calib = await getCalibration();
+  const isoMap = await loadIsoMap();
 
-  // 1) pull today’s preds with model probs + market MLs
+  // 1) today’s preds (model probs + market MLs)
   const { data: preds, error: predErr } = await supabase
     .from('mlb_predictions_with_market')
     .select(`
-      matchup_id,
-      game_time_ct,
+      matchup_id, game_time_ct,
       home_team, away_team,
       home_market_ml, away_market_ml,
       home_pred_pct, away_pred_pct
@@ -100,7 +100,7 @@ async function lockDailyBets() {
     .lt ('game_time_ct', `${today}T23:59:59-05:00`);
   if (predErr) throw predErr;
 
-  // 2) meta for team IDs
+  // 2) team IDs
   const { data: metas, error: metaErr } = await supabase
     .from('mlb_matchups')
     .select('matchup_id, home_team_id, away_team_id')
@@ -108,7 +108,7 @@ async function lockDailyBets() {
   if (metaErr) throw metaErr;
   const metaById = Object.fromEntries((metas ?? []).map(m => [m.matchup_id, m]));
 
-  // 3) build bets using DERIVED confidence
+  // 3) build bets using calibrated Kelly-based confidence
   const bets = (preds ?? [])
     .filter(r =>
       r.home_market_ml != null && r.away_market_ml != null &&
@@ -118,27 +118,23 @@ async function lockDailyBets() {
     .map(r => {
       const meta = metaById[r.matchup_id];
 
-      // Calibrated probs
-      const pHome = calibrate(+r.home_pred_pct, calib.slope, calib.intercept);
-      const pAway = calibrate(+r.away_pred_pct, calib.slope, calib.intercept);
+      // Calibrate by segment bins
+      const pHome = isoCalibrate(+r.home_pred_pct, 'home', r.home_market_ml, isoMap);
+      const pAway = isoCalibrate(+r.away_pred_pct, 'away', r.away_market_ml, isoMap);
 
-      // Implied probs from market
-      const impHome = impFromML(r.home_market_ml);
-      const impAway = impFromML(r.away_market_ml);
+      // Kelly fractions
+      const kHomeRaw = kellyFraction(pHome, r.home_market_ml);
+      const kAwayRaw = kellyFraction(pAway, r.away_market_ml);
 
-      // Raw edges
-      const edgeHome = pHome - impHome;
-      const edgeAway = pAway - impAway;
+      // Context-adjusted Kelly
+      const kHome = adjustKelly(kHomeRaw, { ml: r.home_market_ml, side: 'home', team: r.home_team });
+      const kAway = adjustKelly(kAwayRaw, { ml: r.away_market_ml, side: 'away', team: r.away_team });
 
-      // Context-adjusted edges
-      const adjHome = adjustedEdge({ edge: edgeHome, ml: r.home_market_ml, side: 'home', team: r.home_team });
-      const adjAway = adjustedEdge({ edge: edgeAway, ml: r.away_market_ml, side: 'away', team: r.away_team });
+      // Confidence scores
+      const confHome = confFromKelly(kHome);
+      const confAway = confFromKelly(kAway);
 
-      // Confidence (0..10)
-      const confHome = confFromEdge(adjHome);
-      const confAway = confFromEdge(adjAway);
-
-      // choose side by higher confidence, not just model prob
+      // Pick higher confidence side
       const betHome = confHome >= confAway;
 
       const moneyline = betHome ? r.home_market_ml : r.away_market_ml;
@@ -152,17 +148,15 @@ async function lockDailyBets() {
         game_date  : today,
         team_id,
         team_name,
-        confidence,                // DERIVED confidence
+        confidence,   // 0..10
         moneyline,
         stake,
         to_win     : 100
       };
     })
-    // final: only keep ≥7 confidence
-    .filter(b => b.confidence >= 7.0);
+    .filter(b => b.confidence >= 7.0); // your existing gate
 
   console.log(`Locking ${bets.length} bets for ${today}`);
-
   if (!bets.length) return;
 
   const { error: upErr } = await supabase
