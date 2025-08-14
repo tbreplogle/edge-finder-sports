@@ -36,4 +36,4 @@ jobs:
 
       - name: Sync CFB games
         working-directory: workers
-        run: node syncCfbGames.js 2024     # change arg or drop for current year
+        run: node syncCfbGames.js 2025     # change arg or drop for current year
