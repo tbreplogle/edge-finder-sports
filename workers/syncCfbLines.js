@@ -20,7 +20,7 @@ const season = Number(process.argv[2]) || new Date().getFullYear();
 
 // ── fetch lines ─────────────────────────────────────────────────
 async function fetchLines() {
-  const url = `https://api.collegefootballdata.com/lines?year=${season}&provider=DraftKings`;
+  const url = `https://api.collegefootballdata.com/lines?year=${season}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } });
   if (!res.ok) throw new Error(`CFBD ${res.status}: ${await res.text()}`);
   return res.json();   // array of games, each with .lines[]
