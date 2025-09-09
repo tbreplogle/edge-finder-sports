@@ -43,13 +43,15 @@ const AX = axios.create({
     .replace(/\s+Team.*$/i, '')
     .replace(/\s+Football$/i, '');
 
-  const EPS = 0.01; // Laplace smoothing for zero-denominator TO ratios
-  const ratio = (num, den, eps = EPS) => {
-    const d = (den ?? 0) + eps;
-    const n = (num ?? 0);
-    const r = n / d;
-    return Number.isFinite(r) ? r : null;
-  };
+    const EPS = 0.01; // Laplace smoothing for TO ratios
+    const ratio = (num, den, eps = EPS) => {
+      const d = (den ?? 0) + eps;
+      const n = (num ?? 0);
+      const r = n / d;
+      if (!Number.isFinite(r)) return 4.0;
+      return Math.min(r, 4.0);   // cap at 4
+    };
+    
 
   const toNum = (txt) => {
     const n = parseFloat(String(txt).replace(/[^\d.\-]/g, ''));
