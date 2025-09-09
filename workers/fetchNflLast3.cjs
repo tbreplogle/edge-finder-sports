@@ -55,7 +55,7 @@ const AX = axios.create({
 
   const DEBUG = String(process.env.DEBUG || '').toLowerCase() === 'true';
 
-  const WEEKS_TABLE = process.env.NFL_WEEKS_TABLE || 'weeks';
+  const WEEKS_TABLE = process.env.NFL_WEEKS_CALENDAR || 'weeks';
 
   const namesFromOg = title => {
     const parts = title.split(/\s+vs\.?\s+/i);
