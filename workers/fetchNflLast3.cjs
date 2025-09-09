@@ -145,10 +145,9 @@ const AX = axios.create({
   };
 
   async function getActiveWeek() {
-    // Try preferred table (env or week_calendar), fallback to 'weeks' if relation missing
-    const tryTables = [WEEKS_TABLE, 'weeks'].filter(
-      (v, i, a) => v && a.indexOf(v) === i // de-dupe
-    );
+    // candidate tables: env override (or week_calendar), then 'weeks' as fallback
+    const tryTables = [(process.env.NFL_WEEKS_TABLE || 'week_calendar'), 'weeks']
+      .filter((v, i, a) => v && a.indexOf(v) === i);
   
     let rows = null;
     let used = null;
@@ -159,13 +158,8 @@ const AX = axios.create({
         .from(tbl)
         .select('season,week,start,finish')
         .order('start', { ascending: true });
-  
       if (!res.error) { rows = res.data; used = tbl; break; }
-  
-      // “relation does not exist” => code 42P01; keep a readable copy
-      lastErr = new Error(res.error.message || 'unknown select error');
-      lastErr.code = res.error.code;
-      // try next table
+      lastErr = res.error;
     }
   
     if (!rows) {
@@ -176,27 +170,45 @@ const AX = axios.create({
     }
     if (!rows.length) throw new Error(`No rows in nfl.${used}`);
   
-    const iso = d => (d instanceof Date ? d.toISOString().slice(0,10) : String(d));
-    const todayIso = iso(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })));
-    const today = new Date(todayIso);
+    const tzNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+    const today = new Date(tzNow.toISOString().slice(0,10)); // strip time
   
-    // exact containment first
-    let hit = rows.find(r => new Date(r.start) <= today && today <= new Date(r.finish));
-  
-    // else nearest (before => last row, after => first row)
-    if (!hit) {
-      const first = rows[0];
-      const last  = rows[rows.length - 1];
-      hit = (today < new Date(first.start)) ? first : last;
+    const inWindow = rows.find(r =>
+      new Date(r.start) <= today && today <= new Date(r.finish)
+    );
+    if (inWindow) {
+      return {
+        season:   inWindow.season,
+        week:     inWindow.week,
+        startIso: String(inWindow.start),
+        finishIso:String(inWindow.finish),
+      };
     }
   
+    // pick the NEXT upcoming week (start >= today)
+    const next = rows.find(r => new Date(r.start) >= today);
+    if (next) {
+      return {
+        season:   next.season,
+        week:     next.week,
+        startIso: String(next.start),
+        finishIso:String(next.finish),
+      };
+    }
+  
+    // past the season → last row; before the season → first row
+    const first = rows[0];
+    const last  = rows[rows.length - 1];
+    const pick  = (today < new Date(first.start)) ? first : last;
+  
     return {
-      season:   hit.season,
-      week:     hit.week,
-      startIso: String(hit.start),
-      finishIso:String(hit.finish),
+      season:   pick.season,
+      week:     pick.week,
+      startIso: String(pick.start),
+      finishIso:String(pick.finish),
     };
   }
+  
   
 
   const { data: teamsRaw, error: teamErr } = await nfl
