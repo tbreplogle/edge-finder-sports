@@ -55,7 +55,7 @@ const AX = axios.create({
 
   const DEBUG = String(process.env.DEBUG || '').toLowerCase() === 'true';
 
-  const WEEKS_TABLE = process.env.NFL_WEEKS_CALENDAR || 'weeks';
+  const WEEKS_TABLE = process.env.NFL_WEEKS_TABLE || 'week_calendar';
 
   const namesFromOg = title => {
     const parts = title.split(/\s+vs\.?\s+/i);
@@ -145,36 +145,59 @@ const AX = axios.create({
   };
 
   async function getActiveWeek() {
-    const rows = must(await nfl
-      .from(WEEKS_TABLE)
-      .select('season,week,start,finish')
-      .order('start', { ascending: true }));
-
-    if (!rows?.length) throw new Error(`No rows in nfl.${WEEKS_TABLE}`);
-
+    // Try preferred table (env or week_calendar), fallback to 'weeks' if relation missing
+    const tryTables = [WEEKS_TABLE, 'weeks'].filter(
+      (v, i, a) => v && a.indexOf(v) === i // de-dupe
+    );
+  
+    let rows = null;
+    let used = null;
+    let lastErr = null;
+  
+    for (const tbl of tryTables) {
+      const res = await nfl
+        .from(tbl)
+        .select('season,week,start,finish')
+        .order('start', { ascending: true });
+  
+      if (!res.error) { rows = res.data; used = tbl; break; }
+  
+      // “relation does not exist” => code 42P01; keep a readable copy
+      lastErr = new Error(res.error.message || 'unknown select error');
+      lastErr.code = res.error.code;
+      // try next table
+    }
+  
+    if (!rows) {
+      throw new Error(
+        `Could not read an NFL weeks table (tried: ${tryTables.join(', ')}). ` +
+        `Last error: ${lastErr?.code || ''} ${lastErr?.message || ''}`
+      );
+    }
+    if (!rows.length) throw new Error(`No rows in nfl.${used}`);
+  
     const iso = d => (d instanceof Date ? d.toISOString().slice(0,10) : String(d));
-    const todayIso = iso(todayCT());
+    const todayIso = iso(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })));
     const today = new Date(todayIso);
-
-    let hit = rows.find(r => {
-      const s = new Date(r.start);
-      const f = new Date(r.finish);
-      return s <= today && today <= f;
-    });
-
+  
+    // exact containment first
+    let hit = rows.find(r => new Date(r.start) <= today && today <= new Date(r.finish));
+  
+    // else nearest (before => last row, after => first row)
     if (!hit) {
       const first = rows[0];
       const last  = rows[rows.length - 1];
       hit = (today < new Date(first.start)) ? first : last;
     }
-
+  
     return {
-      season: hit.season,
-      week:   hit.week,
+      season:   hit.season,
+      week:     hit.week,
       startIso: String(hit.start),
-      finishIso: String(hit.finish),
+      finishIso:String(hit.finish),
     };
   }
+  
 
   const { data: teamsRaw, error: teamErr } = await nfl
     .from('teams')
