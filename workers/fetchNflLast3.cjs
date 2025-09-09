@@ -15,15 +15,11 @@ if (typeof globalThis.File === 'undefined') {
 }
 
 /* ---------------------------------------------------------------------- */
-/*  CJS-friendly static imports                                           */
-/* ---------------------------------------------------------------------- */
 const fs       = require('fs');
 const axios    = require('axios');
 const { load } = require('cheerio');
 
-/* ---------------------------------------------------------------------- */
-/*  Axios client with browser-like headers (avoid anti-bot markup)        */
-/* ---------------------------------------------------------------------- */
+/* Browsery client – avoid anti-bot markup */
 const AX = axios.create({
   headers: {
     'User-Agent':
@@ -34,46 +30,31 @@ const AX = axios.create({
     'Pragma': 'no-cache'
   },
   timeout: 20000,
-  // Treat 3xx as OK so we can follow server-side redirects manually if needed
   validateStatus: s => s >= 200 && s < 400
 });
 
-/* ---------------------------------------------------------------------- */
-/*  Main body – everything else inside one async IIFE                     */
-/* ---------------------------------------------------------------------- */
 (async () => {
-
-  /* ---------- dynamic ESM-only deps ----------------------------------- */
   const { default: pLimit }  = await import('p-limit');
   const { createClient }     = await import('@supabase/supabase-js');
 
-  /* ---------- Config -------------------------------------------------- */
-  const sb = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE,
-    { auth: { persistSession: false } }
-  );
-
+  const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE, {
+    auth: { persistSession: false }
+  });
   const nfl    = sb.schema('nfl');
-  const limit  = pLimit(12);           // don’t hammer; 12 is plenty
-  const SEASON = 2024;                 // flip in August as needed
-  const WEEK   = 17;                   // soon make dynamic if you want
+  const limit  = pLimit(12);
+  const SEASON = 2024;
+  const WEEK   = 17;
 
-  /*  To test historic boards set, e.g.
-      DISCOVER_DATE=2024-12-31 node fetchNflLast3.cjs                   */
   const DISCOVER_DATE = process.env.DISCOVER_DATE || null;
   const DEBUG = String(process.env.DEBUG || '').toLowerCase() === 'true';
 
-  /* ---------- Helpers ------------------------------------------------- */
   const clean = s => (s ?? '').replace(/\u00A0/g, ' ').trim();
-
   const sanitize = n => clean(n)
-    .replace(/\s+Stats.*$/i,  '')
-    .replace(/\s+Team.*$/i,   '')
+    .replace(/\s+Stats.*$/i, '')
+    .replace(/\s+Team.*$/i, '')
     .replace(/\s+Football$/i, '');
 
-  const safeDivide = (n, d) =>
-    d === 0 ? null : Number.isFinite(n / d) ? n / d : null;
+  const safeDivide = (n, d) => d === 0 ? null : Number.isFinite(n / d) ? n / d : null;
 
   const logPg = e => console.error(
     'STATUS :',  e?.status,
@@ -82,7 +63,7 @@ const AX = axios.create({
     '\nCODE   :', e?.code
   );
 
-  /* ---------- Team dictionary ----------------------------------------- */
+  /* ---------- Team dictionary ---------- */
   const { data: teams, error } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
@@ -98,10 +79,7 @@ const AX = axios.create({
     const up = (abbr || '').toUpperCase();
     if (ABBR_MAP[up]) return ABBR_MAP[up];
 
-    // Fallback: partial + alt_name presence in hub text
-    const cand = teams.filter(t =>
-      t.team_name.startsWith(name) && hubText.includes(t.alt_name)
-    );
+    const cand = teams.filter(t => t.team_name.startsWith(name) && hubText.includes(t.alt_name));
     if (cand.length === 1) return cand[0].team_id;
 
     throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
@@ -113,7 +91,7 @@ const AX = axios.create({
     return caps ? caps.slice(-3).join('').toUpperCase() : '';
   };
 
-  /* ---------- Discover matchup IDs ------------------------------------ */
+  /* ---------- Discover matchups ---------- */
   async function discoverMatchups () {
     const base = 'https://www.covers.com/sports/nfl/matchups';
     const url  = DISCOVER_DATE ? `${base}?selectedDate=${DISCOVER_DATE}` : base;
@@ -126,29 +104,62 @@ const AX = axios.create({
       const m = $(el).attr('href')?.match(/matchup\/(\d+)/);
       if (m) ids.add(+m[1]);
     });
-
     if (!ids.size) {
       const snippet = clean($('body').text()).slice(0, 300);
-      throw new Error(`No matchup IDs found. Likely anti-bot or markup change.\nBody snippet: ${snippet}`);
+      throw new Error(`No matchup IDs found. Possible anti-bot or markup change.\nBody snippet: ${snippet}`);
     }
     return [...ids];
   }
 
-  /* ---------- Parse og:title helper ----------------------------------- */
   const namesFromOg = title => {
     const parts = title.split(/\s+vs\.?\s+/i);
     if (parts.length < 2) return [null, null];
-
     const away = sanitize(parts[0]);
-    const home = sanitize(
-      parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]
-    );
+    const home = sanitize(parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]);
     return [away, home];
   };
 
-  /* ---------- Scrape a single matchup --------------------------------- */
+  /* ---------- Robust numeric grabbers (header-agnostic) ---------- */
+  const numsFromRowTds = ($, tr) => {
+    const out = [];
+    $(tr).find('td').each((_, td) => {
+      const txt = clean($(td).text());
+      const n = parseFloat(txt.replace(/[^\d.\-]/g, ''));
+      if (Number.isFinite(n)) out.push(n);
+    });
+    return out;
+  };
+
+  // From a given table+label, get [away, home] numbers by heuristics
+  function pickTwoNumbers ($, tableSel, labelLc, kind) {
+    const rows = $(`${tableSel} tbody tr`);
+    let hit = null;
+    rows.each((_, tr) => {
+      const first = clean($(tr).find('th,td').first().text()).toLowerCase();
+      if (first.startsWith(labelLc)) hit = tr;
+    });
+    if (!hit) throw new Error(`Row "${labelLc}" not found in ${tableSel}`);
+
+    const vals = numsFromRowTds($, hit);
+
+    // Heuristic filters by metric type (keeps the two “stat” columns, ignores ranks)
+    const plausible = (n) => {
+      if (kind === 'ypa')  return n > 1 && n < 20;   // yards/att
+      if (kind === 'tos')  return n >= 0 && n < 10;  // turnovers in last 3 avg
+      return Number.isFinite(n);
+    };
+    const filtered = vals.filter(plausible);
+
+    if (filtered.length < 2) {
+      throw new Error(`Could not find two plausible ${kind} numbers (vals=${JSON.stringify(vals)})`);
+    }
+
+    // Use the first two plausible values as [away, home] – Covers lists road team first
+    return [filtered[0], filtered[1]];
+  }
+
+  /* ---------- Scrape a single matchup ---------- */
   async function scrapeMatchup (id) {
-    // Hub page (for names + date)
     const hubRes  = await AX.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
     const $hub    = load(hubRes.data);
     const hubText = $hub.text();
@@ -162,53 +173,21 @@ const AX = axios.create({
       const og = $hub('meta[property="og:title"]').attr('content') || '';
       [awayFN, homeFN] = namesFromOg(og);
     }
-
     awayAb = awayAb || deriveAbbr(awayFN);
     homeAb = homeAb || deriveAbbr(homeFN);
 
     const iso   = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
     const gDate = iso ? iso.split('T')[0] : null;
 
-    // Single stats page contains both teams; choose TRUE/last3
+    // Stats page (contains both teams), timeframe: last3
     const statsUrl = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/TRUE/last3`;
     const statsRes = await AX.get(statsUrl);
     const $s       = load(statsRes.data);
 
-    // Validate presence of the expected tables
-    const hasStats   = $s('table.stats-table').length > 0;
-    const hasAverages= $s('table.average-table').length > 0;
-    if (!hasStats || !hasAverages) {
+    if ($s('table.stats-table').length === 0 || $s('table.average-table').length === 0) {
       const snippet = clean($s('body').text()).slice(0, 220);
       throw new Error(`Missing stats/average tables for ${id}. Snippet: ${snippet}`);
     }
-
-    // Identify which table columns are the two teams
-    const headers = [];
-    $s('table.stats-table thead th').each((i, th) => headers.push(clean($s(th).text())));
-    const homeCol = headers.findIndex(h => h && homeFN && h.includes(homeFN));
-    const awayCol = headers.findIndex(h => h && awayFN && h.includes(awayFN));
-
-    if (homeCol < 0 || awayCol < 0) {
-      throw new Error(`Could not locate team columns on stats page for ${id}. Headers: ${JSON.stringify(headers)}`);
-    }
-
-    // Generic row readers (case-insensitive "startsWith")
-    const findRow = (tableSel, labelLc) => {
-      const rows = $s(`${tableSel} tbody tr`);
-      let hit = null;
-      rows.each((_, tr) => {
-        const first = clean($s(tr).find('th,td').first().text()).toLowerCase();
-        if (first.startsWith(labelLc)) hit = tr;
-      });
-      return hit;
-    };
-
-    const numberAt = (tr, colIndex) => {
-      const td = $s(tr).find('td').eq(colIndex);
-      const n  = parseFloat(clean(td.text()).replace(/[^\d.\-]/g, ''));
-      if (!Number.isFinite(n)) throw new Error(`Bad number at col ${colIndex}: "${td.text()}"`);
-      return n;
-    };
 
     const L = {
       passYPA: 'pass yards / att',
@@ -216,34 +195,15 @@ const AX = axios.create({
       tos:     'turnovers'
     };
 
-    const rPickPass = findRow('table.stats-table',   L.passYPA);
-    const rPickRush = findRow('table.stats-table',   L.rushYPA);
-    const rPickTos  = findRow('table.stats-table',   L.tos);
-    const rAvgPass  = findRow('table.average-table', L.passYPA);
-    const rAvgRush  = findRow('table.average-table', L.rushYPA);
-    const rAvgTos   = findRow('table.average-table', L.tos);
+    // FROM stats-table (pick values) and average-table (league avg vs opp?) – we will compute ratios the same way you did:
+    // offense ratios = pick / avg, defense ratios = avg / pick (and turnovers flipped)
+    const [a_ypa_pick, h_ypa_pick] = pickTwoNumbers($s, 'table.stats-table',   L.passYPA, 'ypa');
+    const [a_rpa_pick, h_rpa_pick] = pickTwoNumbers($s, 'table.stats-table',   L.rushYPA, 'ypa');
+    const [a_tos_pick, h_tos_pick] = pickTwoNumbers($s, 'table.stats-table',   L.tos,     'tos');
 
-    if (!rPickPass || !rPickRush || !rPickTos || !rAvgPass || !rAvgRush || !rAvgTos) {
-      throw new Error(`Expected rows missing for matchup ${id}`);
-    }
-
-    // Away
-    const a_ypa_pick = numberAt(rPickPass, awayCol);
-    const a_rpa_pick = numberAt(rPickRush, awayCol);
-    const a_tos_pick = numberAt(rPickTos,  awayCol);
-
-    const a_ypa_avg  = numberAt(rAvgPass,  awayCol);
-    const a_rpa_avg  = numberAt(rAvgRush,  awayCol);
-    const a_tos_avg  = numberAt(rAvgTos,   awayCol);
-
-    // Home
-    const h_ypa_pick = numberAt(rPickPass, homeCol);
-    const h_rpa_pick = numberAt(rPickRush, homeCol);
-    const h_tos_pick = numberAt(rPickTos,  homeCol);
-
-    const h_ypa_avg  = numberAt(rAvgPass,  homeCol);
-    const h_rpa_avg  = numberAt(rAvgRush,  homeCol);
-    const h_tos_avg  = numberAt(rAvgTos,   homeCol);
+    const [a_ypa_avg,  h_ypa_avg ] = pickTwoNumbers($s, 'table.average-table', L.passYPA, 'ypa');
+    const [a_rpa_avg,  h_rpa_avg ] = pickTwoNumbers($s, 'table.average-table', L.rushYPA, 'ypa');
+    const [a_tos_avg,  h_tos_avg ] = pickTwoNumbers($s, 'table.average-table', L.tos,     'tos');
 
     const awayRow = {
       covers_id : id,
@@ -284,7 +244,7 @@ const AX = axios.create({
     return { rows: [awayRow, homeRow], gameDate: gDate, hubText };
   }
 
-  /* ---------- Main run -------------------------------------------------- */
+  /* ---------- Main run ---------- */
   const ids = await discoverMatchups();
   console.log(`⛏️  Found ${ids.length} matchups${DISCOVER_DATE ? ` for ${DISCOVER_DATE}` : ''}`);
 
@@ -302,6 +262,7 @@ const AX = axios.create({
         home.team_id = idFromNameOrAbbr(home.team_name, home.team_abbr, hubText);
         away.team_id = idFromNameOrAbbr(away.team_name, away.team_abbr, hubText);
 
+        // strip abbr before upsert
         bulk.push(
           { ...home, team_abbr: undefined },
           { ...away, team_abbr: undefined }
@@ -338,15 +299,10 @@ const AX = axios.create({
     console.error('⚠️  No rows to upsert (all matchups failed?)');
   }
 
-  // Write a tiny artifact so the workflow can cat it
   try {
-    const artifact = {
-      season: SEASON, week: WEEK,
-      count: wrote.length,
-      ids: wrote.slice(0, 20)
-    };
+    const artifact = { season: SEASON, week: WEEK, count: wrote.length, ids: wrote.slice(0, 20) };
     fs.writeFileSync('scrape-result.json', JSON.stringify(artifact, null, 2));
-  } catch { /* ignore */ }
+  } catch {}
 
   console.log('🎉 Done');
 })();
