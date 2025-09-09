@@ -1,25 +1,8 @@
-/* ---------------------------------------------------------------------- */
-/*  Polyfill for File (needed by undici on Node ≤ 18)                     */
-/* ---------------------------------------------------------------------- */
-const { Blob } = require('buffer');
-if (typeof globalThis.File === 'undefined') {
-  class File extends Blob {
-    constructor (parts, name, opts = {}) {
-      super(parts, opts);
-      this.name         = String(name);
-      this.lastModified = opts.lastModified ?? Date.now();
-      this.type         = opts.type ?? '';
-    }
-  }
-  globalThis.File = File;
-}
-
-/* ---------------------------------------------------------------------- */
 const fs       = require('fs');
 const axios    = require('axios');
 const { load } = require('cheerio');
 
-/* Browsery client – avoid anti-bot markup */
+/* Browsery client to avoid anti-bot HTML */
 const AX = axios.create({
   headers: {
     'User-Agent':
@@ -41,20 +24,24 @@ const AX = axios.create({
     auth: { persistSession: false }
   });
   const nfl    = sb.schema('nfl');
-  const limit  = pLimit(12);
-  const SEASON = 2024;
-  const WEEK   = 17;
+  const limit  = pLimit(10);
 
-  const DISCOVER_DATE = process.env.DISCOVER_DATE || null;
-  const DEBUG = String(process.env.DEBUG || '').toLowerCase() === 'true';
-
+  // ---------------------- helpers ----------------------
   const clean = s => (s ?? '').replace(/\u00A0/g, ' ').trim();
   const sanitize = n => clean(n)
     .replace(/\s+Stats.*$/i, '')
     .replace(/\s+Team.*$/i, '')
     .replace(/\s+Football$/i, '');
 
-  const safeDivide = (n, d) => d === 0 ? null : Number.isFinite(n / d) ? n / d : null;
+  const safeDivide = (n, d) => (d === 0 ? null : Number.isFinite(n/d) ? n/d : null);
+  const toNum = (txt) => {
+    const n = parseFloat(String(txt).replace(/[^\d.\-]/g, ''));
+    if (!Number.isFinite(n)) throw new Error(`Bad number: "${txt}"`);
+    return n;
+  };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const todayCT = () =>
+    new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
 
   const logPg = e => console.error(
     'STATUS :',  e?.status,
@@ -63,11 +50,55 @@ const AX = axios.create({
     '\nCODE   :', e?.code
   );
 
-  /* ---------- Team dictionary ---------- */
-  const { data: teams, error } = await nfl
+  const DEBUG = String(process.env.DEBUG || '').toLowerCase() === 'true';
+
+  // ---------------------- dynamic season/week ----------------------
+  // Table must have: season(int), week(int), start(date), finish(date)
+  const WEEKS_TABLE = process.env.NFL_WEEKS_TABLE || 'weeks';
+
+  async function getActiveWeek() {
+    const { data: rows, error } = await nfl
+      .from(WEEKS_TABLE)
+      .select('season,week,start,finish')
+      .order('start', { ascending: true });
+    if (error) throw error;
+    if (!rows?.length) throw new Error(`No rows in nfl.${WEEKS_TABLE}`);
+
+    const iso = d => (d instanceof Date ? d.toISOString().slice(0,10) : String(d));
+    const todayIso = iso(todayCT());
+    const today = new Date(todayIso);
+
+    // first try exact containment
+    let hit = rows.find(r => {
+      const s = new Date(r.start);
+      const f = new Date(r.finish);
+      return s <= today && today <= f;
+    });
+
+    if (!hit) {
+      // nearest week: if before the first, pick first; if after the last, pick last;
+      const first = rows[0];
+      const last  = rows[rows.length - 1];
+      if (today < new Date(first.start)) hit = first;
+      else hit = last;
+    }
+
+    const weekStart = new Date(hit.start);
+    const weekFinish= new Date(hit.finish);
+
+    return {
+      season: hit.season,
+      week:   hit.week,
+      startIso: iso(weekStart),
+      finishIso: iso(weekFinish),
+    };
+  }
+
+  // ---------------------- team dictionary ----------------------
+  const { data: teams, error: teamErr } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
-  if (error) throw error;
+  if (teamErr) throw teamErr;
 
   const NAME_MAP = Object.fromEntries(teams.map(t => [sanitize(t.team_name), t.team_id]));
   const ABBR_MAP = Object.fromEntries(teams.map(t => [String(t.abbreviation || '').toUpperCase(), t.team_id]));
@@ -75,7 +106,6 @@ const AX = axios.create({
   const idFromNameOrAbbr = (longName, abbr, hubText) => {
     const name = sanitize(longName);
     if (NAME_MAP[name]) return NAME_MAP[name];
-
     const up = (abbr || '').toUpperCase();
     if (ABBR_MAP[up]) return ABBR_MAP[up];
 
@@ -91,10 +121,11 @@ const AX = axios.create({
     return caps ? caps.slice(-3).join('').toUpperCase() : '';
   };
 
-  /* ---------- Discover matchups ---------- */
-  async function discoverMatchups () {
-    const base = 'https://www.covers.com/sports/nfl/matchups';
-    const url  = DISCOVER_DATE ? `${base}?selectedDate=${DISCOVER_DATE}` : base;
+  // ---------------------- discover matchups (week-wide) ----------------------
+  async function discoverMatchupsForDate(dateIso) {
+    const url = dateIso
+      ? `https://www.covers.com/sports/nfl/matchups?selectedDate=${dateIso}`
+      : 'https://www.covers.com/sports/nfl/matchups';
 
     const res = await AX.get(url);
     const $   = load(res.data);
@@ -104,13 +135,28 @@ const AX = axios.create({
       const m = $(el).attr('href')?.match(/matchup\/(\d+)/);
       if (m) ids.add(+m[1]);
     });
+    return ids;
+  }
+
+  async function discoverWeekIds(startIso, finishIso) {
+    const ids = new Set();
+    const days = [];
+    for (let d = new Date(startIso); d <= new Date(finishIso); d.setDate(d.getDate()+1)) {
+      days.push(d.toISOString().slice(0,10));
+    }
+    for (const day of days) {
+      const set = await discoverMatchupsForDate(day);
+      for (const id of set) ids.add(id);
+      // small politeness delay
+      await sleep(150);
+    }
     if (!ids.size) {
-      const snippet = clean($('body').text()).slice(0, 300);
-      throw new Error(`No matchup IDs found. Possible anti-bot or markup change.\nBody snippet: ${snippet}`);
+      throw new Error(`No matchup IDs found between ${startIso} and ${finishIso}.`);
     }
     return [...ids];
   }
 
+  // ---------------------- hub helpers ----------------------
   const namesFromOg = title => {
     const parts = title.split(/\s+vs\.?\s+/i);
     if (parts.length < 2) return [null, null];
@@ -119,47 +165,7 @@ const AX = axios.create({
     return [away, home];
   };
 
-  /* ---------- Robust numeric grabbers (header-agnostic) ---------- */
-  const numsFromRowTds = ($, tr) => {
-    const out = [];
-    $(tr).find('td').each((_, td) => {
-      const txt = clean($(td).text());
-      const n = parseFloat(txt.replace(/[^\d.\-]/g, ''));
-      if (Number.isFinite(n)) out.push(n);
-    });
-    return out;
-  };
-
-  // From a given table+label, get [away, home] numbers by heuristics
-  function pickTwoNumbers ($, tableSel, labelLc, kind) {
-    const rows = $(`${tableSel} tbody tr`);
-    let hit = null;
-    rows.each((_, tr) => {
-      const first = clean($(tr).find('th,td').first().text()).toLowerCase();
-      if (first.startsWith(labelLc)) hit = tr;
-    });
-    if (!hit) throw new Error(`Row "${labelLc}" not found in ${tableSel}`);
-
-    const vals = numsFromRowTds($, hit);
-
-    // Heuristic filters by metric type (keeps the two “stat” columns, ignores ranks)
-    const plausible = (n) => {
-      if (kind === 'ypa')  return n > 1 && n < 20;   // yards/att
-      if (kind === 'tos')  return n >= 0 && n < 10;  // turnovers in last 3 avg
-      return Number.isFinite(n);
-    };
-    const filtered = vals.filter(plausible);
-
-    if (filtered.length < 2) {
-      throw new Error(`Could not find two plausible ${kind} numbers (vals=${JSON.stringify(vals)})`);
-    }
-
-    // Use the first two plausible values as [away, home] – Covers lists road team first
-    return [filtered[0], filtered[1]];
-  }
-
-  /* ---------- Scrape a single matchup ---------- */
-  async function scrapeMatchup (id) {
+  async function getHubInfo(id) {
     const hubRes  = await AX.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
     const $hub    = load(hubRes.data);
     const hubText = $hub.text();
@@ -171,7 +177,12 @@ const AX = axios.create({
 
     if (!awayFN || !homeFN) {
       const og = $hub('meta[property="og:title"]').attr('content') || '';
-      [awayFN, homeFN] = namesFromOg(og);
+      const parts = og.split(/\s+vs\.?\s+/i);
+      if (parts.length >= 2) {
+        const away = sanitize(parts[0]);
+        const home = sanitize(parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]);
+        awayFN = awayFN || away; homeFN = homeFN || home;
+      }
     }
     awayAb = awayAb || deriveAbbr(awayFN);
     homeAb = homeAb || deriveAbbr(homeFN);
@@ -179,74 +190,149 @@ const AX = axios.create({
     const iso   = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
     const gDate = iso ? iso.split('T')[0] : null;
 
-    // Stats page (contains both teams), timeframe: last3
-    const statsUrl = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/TRUE/last3`;
-    const statsRes = await AX.get(statsUrl);
-    const $s       = load(statsRes.data);
+    return { awayFN, homeFN, awayAb, homeAb, gDate, hubText };
+  }
 
-    if ($s('table.stats-table').length === 0 || $s('table.average-table').length === 0) {
-      const snippet = clean($s('body').text()).slice(0, 220);
-      throw new Error(`Missing stats/average tables for ${id}. Snippet: ${snippet}`);
+  // ---------------------- R-style selectors (relaxed) ----------------------
+  const SEL = {
+    off: {
+      yppa:  'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(11) td:nth-child(1) span',
+      yra:   'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(5)  td:nth-child(1) span',
+      int:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(3)  td:nth-child(1) span',
+      fum:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(4)  td:nth-child(1) span',
+      la_yppa:'section:nth-of-type(1) table.average-table tbody tr:nth-child(11) td',
+      la_yra: 'section:nth-of-type(1) table.average-table tbody tr:nth-child(5)  td',
+      la_int: 'section:nth-of-type(2) table.average-table tbody tr:nth-child(3)  td',
+      la_fum: 'section:nth-of-type(2) table.average-table tbody tr:nth-child(4)  td',
+    },
+    def: {
+      yppa:  'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(11) td:nth-child(5) span',
+      yra:   'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(5)  td:nth-child(5) span',
+      int:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(3)  td:nth-child(5) span',
+      fum:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(4)  td:nth-child(5) span',
     }
+  };
 
-    const L = {
-      passYPA: 'pass yards / att',
-      rushYPA: 'rush yards / att',
-      tos:     'turnovers'
+  function variants(sel) {
+    return [
+      sel,
+      sel.replace('.football-stats-table', ''),
+      sel.replace('table.stats-table.football-stats-table', 'table.stats-table'),
+      sel.replace(/section:nth-of-type\(\d+\)\s+/g, '')
+    ];
+  }
+
+  const pick = ($, sel) => {
+    for (const v of variants(sel)) {
+      const el = $(v);
+      if (el.length) return toNum(el.first().text());
+    }
+    throw new Error(`Selector missing: ${sel}`);
+  };
+
+  async function fetch$ (url) {
+    for (let i=0; i<2; i++) {
+      const res = await AX.get(url);
+      const $   = load(res.data);
+      if ($('table.stats-table').length || $('table.average-table').length) return $;
+      if (i === 0) await sleep(600);
+    }
+    throw new Error(`No stats/average tables found at ${url}`);
+  }
+
+  async function scrapeRole(id, role) {
+    const urlTRUE  = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/TRUE/last3`;
+    const urlFALSE = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/FALSE/last3`;
+
+    const $off = await fetch$(role === 'home' ? urlTRUE  : urlFALSE);
+    const $def = await fetch$(role === 'home' ? urlFALSE : urlTRUE );
+
+    const OFF_YPA = pick($off, SEL.off.yppa);
+    const OFF_YRA = pick($off, SEL.off.yra);
+    const OFF_INT = pick($off, SEL.off.int);
+    const OFF_FUM = pick($off, SEL.off.fum);
+
+    const LA_YPA  = pick($off, SEL.off.la_yppa);
+    const LA_YRA  = pick($off, SEL.off.la_yra);
+    const LA_INT  = pick($off, SEL.off.la_int);
+    const LA_FUM  = pick($off, SEL.off.la_fum);
+
+    const DEF_YPA = pick($def, SEL.def.yppa);
+    const DEF_YRA = pick($def, SEL.def.yra);
+    const DEF_INT = pick($def, SEL.def.int);
+    const DEF_FUM = pick($def, SEL.def.fum);
+
+    return {
+      yp_pa_off : safeDivide(OFF_YPA, LA_YPA),
+      yp_ra_off : safeDivide(OFF_YRA, LA_YRA),
+      tov_off   : safeDivide(LA_INT + LA_FUM, OFF_INT + OFF_FUM),
+
+      yp_pa_def : safeDivide(LA_YPA, DEF_YPA),
+      yp_ra_def : safeDivide(LA_YRA, DEF_YRA),
+      tov_def   : safeDivide(DEF_INT + DEF_FUM, LA_INT + LA_FUM)
     };
+  }
 
-    // FROM stats-table (pick values) and average-table (league avg vs opp?) – we will compute ratios the same way you did:
-    // offense ratios = pick / avg, defense ratios = avg / pick (and turnovers flipped)
-    const [a_ypa_pick, h_ypa_pick] = pickTwoNumbers($s, 'table.stats-table',   L.passYPA, 'ypa');
-    const [a_rpa_pick, h_rpa_pick] = pickTwoNumbers($s, 'table.stats-table',   L.rushYPA, 'ypa');
-    const [a_tos_pick, h_tos_pick] = pickTwoNumbers($s, 'table.stats-table',   L.tos,     'tos');
+  async function scrapeMatchup(id) {
+    const hubRes  = await AX.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
+    const $hub    = load(hubRes.data);
+    const hubText = $hub.text();
 
-    const [a_ypa_avg,  h_ypa_avg ] = pickTwoNumbers($s, 'table.average-table', L.passYPA, 'ypa');
-    const [a_rpa_avg,  h_rpa_avg ] = pickTwoNumbers($s, 'table.average-table', L.rushYPA, 'ypa');
-    const [a_tos_avg,  h_tos_avg ] = pickTwoNumbers($s, 'table.average-table', L.tos,     'tos');
+    let awayFN = clean($hub('div.matchup-team.away-team').attr('data-team-fullname'));
+    let homeFN = clean($hub('div.matchup-team.home-team').attr('data-team-fullname'));
+    let awayAb = clean($hub('div.matchup-team.away-team').attr('data-team-abbrev'));
+    let homeAb = clean($hub('div.matchup-team.home-team').attr('data-team-abbrev'));
+
+    if (!awayFN || !homeFN) {
+      const og = $hub('meta[property="og:title"]').attr('content') || '';
+      const parts = og.split(/\s+vs\.?\s+/i);
+      if (parts.length >= 2) {
+        const away = sanitize(parts[0]);
+        const home = sanitize(parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]);
+        awayFN = awayFN || away; homeFN = homeFN || home;
+      }
+    }
+    awayAb = awayAb || deriveAbbr(awayFN);
+    homeAb = homeAb || deriveAbbr(homeFN);
+
+    const iso   = $hub('div.covers-CoversMatchupHub-GameInfo time').attr('datetime');
+    const gDate = iso ? iso.split('T')[0] : null;
+
+    const [awayRatios, homeRatios] = await Promise.all([
+      scrapeRole(id, 'away'),
+      scrapeRole(id, 'home')
+    ]);
 
     const awayRow = {
-      covers_id : id,
-      team_role : 'away',
-      team_name : awayFN,
-      team_abbr : awayAb,
-      yp_pa_off : safeDivide(a_ypa_pick, a_ypa_avg),
-      yp_ra_off : safeDivide(a_rpa_pick, a_rpa_avg),
-      tov_off   : safeDivide(a_tos_avg,  a_tos_pick),
-      yp_pa_def : safeDivide(a_ypa_avg,  a_ypa_pick),
-      yp_ra_def : safeDivide(a_rpa_avg,  a_rpa_pick),
-      tov_def   : safeDivide(a_tos_pick, a_tos_avg)
+      covers_id : id, team_role : 'away',
+      team_name : awayFN, team_abbr : awayAb, ...awayRatios
     };
-
     const homeRow = {
-      covers_id : id,
-      team_role : 'home',
-      team_name : homeFN,
-      team_abbr : homeAb,
-      yp_pa_off : safeDivide(h_ypa_pick, h_ypa_avg),
-      yp_ra_off : safeDivide(h_rpa_pick, h_rpa_avg),
-      tov_off   : safeDivide(h_tos_avg,  h_tos_pick),
-      yp_pa_def : safeDivide(h_ypa_avg,  h_ypa_pick),
-      yp_ra_def : safeDivide(h_rpa_avg,  h_rpa_pick),
-      tov_def   : safeDivide(h_tos_pick, h_tos_avg)
+      covers_id : id, team_role : 'home',
+      team_name : homeFN, team_abbr : homeAb, ...homeRatios
     };
 
-    // Sanity: ensure we got real numbers
-    const required = ['yp_pa_off','yp_ra_off','tov_off','yp_pa_def','yp_ra_def','tov_def'];
+    const req = ['yp_pa_off','yp_ra_off','tov_off','yp_pa_def','yp_ra_def','tov_def'];
     for (const r of [awayRow, homeRow]) {
-      for (const k of required) {
+      for (const k of req) {
         if (r[k] == null || !Number.isFinite(r[k])) {
-          throw new Error(`Metric ${k} is null/NaN for ${id} (${r.team_role})`);
+          throw new Error(`Null/NaN ${k} for ${id} (${r.team_role})`);
         }
       }
     }
 
-    return { rows: [awayRow, homeRow], gameDate: gDate, hubText };
+    awayRow.team_id = idFromNameOrAbbr(awayRow.team_name, awayRow.team_abbr, hubText);
+    homeRow.team_id = idFromNameOrAbbr(homeRow.team_name, homeRow.team_abbr, hubText);
+
+    return { rows: [awayRow, homeRow], gameDate: gDate };
   }
 
-  /* ---------- Main run ---------- */
-  const ids = await discoverMatchups();
-  console.log(`⛏️  Found ${ids.length} matchups${DISCOVER_DATE ? ` for ${DISCOVER_DATE}` : ''}`);
+  // ---------------------- RUN ----------------------
+  const { season, week, startIso, finishIso } = await getActiveWeek();
+  console.log(`📅 Active NFL window → season ${season}, week ${week}, ${startIso}…${finishIso}`);
+
+  const ids = await discoverWeekIds(startIso, finishIso);
+  console.log(`⛏️  Found ${ids.length} matchups across week ${week}`);
 
   const bulk = [];
   const wrote = [];
@@ -254,30 +340,27 @@ const AX = axios.create({
   await Promise.all(
     ids.map(id => limit(async () => {
       try {
-        const { rows, gameDate, hubText } = await scrapeMatchup(id);
+        const { rows, gameDate } = await scrapeMatchup(id);
 
         const home = rows.find(r => r.team_role === 'home');
         const away = rows.find(r => r.team_role === 'away');
 
-        home.team_id = idFromNameOrAbbr(home.team_name, home.team_abbr, hubText);
-        away.team_id = idFromNameOrAbbr(away.team_name, away.team_abbr, hubText);
-
-        // strip abbr before upsert
-        bulk.push(
-          { ...home, team_abbr: undefined },
-          { ...away, team_abbr: undefined }
-        );
-
         await nfl.from('matchups').upsert({
           covers_id    : id,
-          season       : SEASON,
-          week         : WEEK,
+          season       : season,
+          week         : week,
           game_date    : gameDate,
           home_team    : home.team_name,
           away_team    : away.team_name,
           home_team_id : home.team_id,
           away_team_id : away.team_id
         }, { onConflict: 'covers_id' }).throwOnError();
+
+        // strip abbr before team_last3 write
+        bulk.push(
+          { ...home, team_abbr: undefined },
+          { ...away, team_abbr: undefined }
+        );
 
         wrote.push(id);
         console.log(`✅ wrote matchup ${id}`);
@@ -300,8 +383,9 @@ const AX = axios.create({
   }
 
   try {
-    const artifact = { season: SEASON, week: WEEK, count: wrote.length, ids: wrote.slice(0, 20) };
-    fs.writeFileSync('scrape-result.json', JSON.stringify(artifact, null, 2));
+    fs.writeFileSync('scrape-result.json', JSON.stringify({
+      season, week, window: { startIso, finishIso }, ids: wrote
+    }, null, 2));
   } catch {}
 
   console.log('🎉 Done');
