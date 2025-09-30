@@ -273,7 +273,6 @@ function normTxt(s) {
     .toUpperCase();
 }
 
-// Build a map from the stats tables: { 'YARDS/PLAY': { off, def, la }, ... }
 function buildStatsMap($) {
   const map = {};
 
@@ -282,13 +281,12 @@ function buildStatsMap($) {
     return Number.isFinite(v) ? v : null;
   };
 
-  // Parse "Key Stats" / "More Stats" tables (structure varies!)
   $('table.stats-table').each((_, tbl) => {
     $(tbl).find('tbody tr').each((__, tr) => {
       const tds = $(tr).find('td');
       if (tds.length < 3) return;
 
-      // 1) Find the label cell (usually 3rd, else the longest text cell)
+      // 1) Find the label cell (usually 3rd; else the textiest)
       let labelIdx = 2;
       if (!tds.eq(labelIdx).text().trim()) {
         let bestLen = -1, bestIdx = -1;
@@ -302,36 +300,33 @@ function buildStatsMap($) {
       const label = normTxt(tds.eq(labelIdx).text());
       if (!label) return;
 
-      // 2) League Avg (LA) = last numeric cell in the row
-      let la = null;
+      // 2) LA = last numeric cell in row; also keep its index
+      let la = null, laIdx = -1;
       for (let i = tds.length - 1; i > labelIdx; i--) {
-        la = toNum(tds.eq(i).text());
-        if (la != null) break;
+        const v = toNum(tds.eq(i).text());
+        if (v != null) { la = v; laIdx = i; break; }
       }
 
-      // 3) OFF = nearest numeric cell to the LEFT of label
+      // 3) OFF = closest numeric LEFT of label
       let off = null;
       for (let i = labelIdx - 1; i >= 0; i--) {
-        off = toNum(tds.eq(i).text());
-        if (off != null) break;
+        const v = toNum(tds.eq(i).text());
+        if (v != null) { off = v; break; }
       }
 
-      // 4) DEF = nearest numeric cell to the RIGHT of label (but not LA)
+      // 4) DEF = rightmost numeric BEFORE LA (scan from laIdx-1 leftwards)
       let def = null;
-      for (let i = labelIdx + 1; i < tds.length; i++) {
+      const rightBound = (laIdx > -1 ? laIdx - 1 : tds.length - 1);
+      for (let i = rightBound; i > labelIdx; i--) {
         const v = toNum(tds.eq(i).text());
-        if (v == null) continue;
-        // avoid reusing LA if it’s the same cell
-        if (la != null && i === tds.length - 1) continue;
-        def = v;
-        break;
+        if (v != null) { def = v; break; }
       }
 
       map[label] = { off, def, la };
     });
   });
 
-  // Merge any standalone "average-table" (sometimes LA lives here)
+  // Merge any standalone league-average table if present
   $('table.average-table').each((_, tbl) => {
     $(tbl).find('tbody tr').each((__, tr) => {
       const tds = $(tr).find('td');
