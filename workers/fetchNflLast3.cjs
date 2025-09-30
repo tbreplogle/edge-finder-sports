@@ -179,7 +179,7 @@ const AX = axios.create({
   for (const [nick, arr] of nickBuckets.entries()) {
     if (arr.length === 1) NICK_MAP[nick] = arr[0];
   }
-  
+
 // --- DEBUG: show what we can resolve ---
 if (process.env.DEBUG?.toLowerCase() === 'true') {
   const sample = ['TEXANS','COWBOYS','BRONCOS','49ERS','RAIDERS',
@@ -196,6 +196,58 @@ if (process.env.DEBUG?.toLowerCase() === 'true') {
     const hits = teams.filter(t => HT.includes(UP(sanitize(t.team_name))));
     return hits.length === 1 ? hits[0].team_id : null;
   }
+// ---- HARD NICKNAME ALIASES (derives ids from your teams table) ----
+const _BY_FULL = new Map(teams.map(t => [UP(sanitize(t.team_name)), t.team_id]));
+const _id = (full) => _BY_FULL.get(UP(full));  // full = "City Nickname"
+
+const HARD_ALIAS = {
+  TEXANS:      _id('Houston Texans'),
+  COLTS:       _id('Indianapolis Colts'),
+  JAGUARS:     _id('Jacksonville Jaguars'),
+  TITANS:      _id('Tennessee Titans'),
+
+  CHIEFS:      _id('Kansas City Chiefs'),
+  BRONCOS:     _id('Denver Broncos'),
+  RAIDERS:     _id('Las Vegas Raiders'),
+  CHARGERS:    _id('Los Angeles Chargers'),
+
+  BILLS:       _id('Buffalo Bills'),
+  DOLPHINS:    _id('Miami Dolphins'),
+  PATRIOTS:    _id('New England Patriots'),
+  JETS:        _id('New York Jets'),
+
+  RAVENS:      _id('Baltimore Ravens'),
+  BENGALS:     _id('Cincinnati Bengals'),
+  BROWNS:      _id('Cleveland Browns'),
+  STEELERS:    _id('Pittsburgh Steelers'),
+
+  COWBOYS:     _id('Dallas Cowboys'),
+  GIANTS:      _id('New York Giants'),
+  EAGLES:      _id('Philadelphia Eagles'),
+  COMMANDERS:  _id('Washington Commanders'),
+
+  BEARS:       _id('Chicago Bears'),
+  LIONS:       _id('Detroit Lions'),
+  PACKERS:     _id('Green Bay Packers'),
+  VIKINGS:     _id('Minnesota Vikings'),
+
+  FALCONS:     _id('Atlanta Falcons'),
+  PANTHERS:    _id('Carolina Panthers'),
+  SAINTS:      _id('New Orleans Saints'),
+  BUCCANEERS:  _id('Tampa Bay Buccaneers'),
+
+  CARDINALS:   _id('Arizona Cardinals'),
+  RAMS:        _id('Los Angeles Rams'),
+  '49ERS':     _id('San Francisco 49ers'),
+  SEAHAWKS:    _id('Seattle Seahawks'),
+};
+
+// Optional sanity check while DEBUG=true:
+if (String(process.env.DEBUG || '').toLowerCase() === 'true') {
+  const missing = Object.entries(HARD_ALIAS).filter(([,v]) => !v).map(([k])=>k);
+  if (missing.length) console.warn('HARD_ALIAS missing ids for:', missing);
+}
+
 
   function idFromNameOrAbbr(longName, abbr, hubText) {
     const nameU = UP(sanitize(longName));
