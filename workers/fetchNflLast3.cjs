@@ -249,21 +249,30 @@ if (String(process.env.DEBUG || '').toLowerCase() === 'true') {
 }
 
 
-  function idFromNameOrAbbr(longName, abbr, hubText) {
-    const nameU = UP(sanitize(longName));
-    const abbrU = UP(abbr);
+function idFromNameOrAbbr(longName, abbr, hubText) {
+  const nameU = UP(sanitize(longName));   // e.g., "TEXANS", "NEW YORK GIANTS"
+  const abbrU = UP(abbr || '');           // often one letter on Covers
 
-    if (NAME_MAP[nameU]) return NAME_MAP[nameU];
-    if (abbrU.length >= 2 && ABBR_MAP[abbrU]) return ABBR_MAP[abbrU];
+  // 1) Exact full team name (if Covers ever gives it)
+  if (NAME_MAP[nameU]) return NAME_MAP[nameU];
 
-    const lastWord = nameU.split(/\s+/).pop();
-    if (lastWord && NICK_MAP[lastWord]) return NICK_MAP[lastWord];
+  // 2) Real abbreviation (must be >= 2 chars; ignore 1-char junk like "T")
+  if (abbrU.length >= 2 && ABBR_MAP[abbrU]) return ABBR_MAP[abbrU];
 
-    const id = uniqueFromHubText(hubText);
-    if (id) return id;
+  // 3) Last-word nickname via hard alias (this is the key fix)
+  const lastWord = nameU.split(/\s+/).pop();  // TEXANS, GIANTS, 49ERS, etc.
+  if (lastWord && HARD_ALIAS[lastWord]) return HARD_ALIAS[lastWord];
 
-    throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
-  }
+  // 4) DB-derived nickname/alt_name (nice-to-have if present)
+  if (lastWord && NICK_MAP[lastWord]) return NICK_MAP[lastWord];
+
+  // 5) Fallback: unique full-name hit in the page text
+  const id = uniqueFromHubText(hubText);
+  if (id) return id;
+
+  throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
+}
+
 
   const deriveAbbr = n => {
     if (!n) return '';
