@@ -277,19 +277,24 @@ function normTxt(s) {
 function buildStatsMap($) {
   const map = {};
 
-  // Parse "Key Stats" / "More Stats" tables
+  const toNum = (x) => {
+    const v = parseFloat(String(x).replace(/[^\d.\-]/g, ''));
+    return Number.isFinite(v) ? v : null;
+  };
+
+  // Parse "Key Stats" / "More Stats" tables (structure varies!)
   $('table.stats-table').each((_, tbl) => {
     $(tbl).find('tbody tr').each((__, tr) => {
       const tds = $(tr).find('td');
       if (tds.length < 3) return;
 
-      // Stat label is usually 3rd cell; fallback = longest text cell
+      // 1) Find the label cell (usually 3rd, else the longest text cell)
       let labelIdx = 2;
       if (!tds.eq(labelIdx).text().trim()) {
         let bestLen = -1, bestIdx = -1;
         tds.each((i, td) => {
-          const l = normTxt($(td).text()).length;
-          if (l > bestLen) { bestLen = l; bestIdx = i; }
+          const L = normTxt($(td).text()).length;
+          if (L > bestLen) { bestLen = L; bestIdx = i; }
         });
         if (bestIdx >= 0) labelIdx = bestIdx;
       }
@@ -297,41 +302,51 @@ function buildStatsMap($) {
       const label = normTxt(tds.eq(labelIdx).text());
       if (!label) return;
 
-      const offCol = 0;                // OFFENSE value
-      const laCol  = tds.length - 1;   // last col is League Avg on these tables
+      // 2) League Avg (LA) = last numeric cell in the row
+      let la = null;
+      for (let i = tds.length - 1; i > labelIdx; i--) {
+        la = toNum(tds.eq(i).text());
+        if (la != null) break;
+      }
 
-      // DEFENSE value is to the right; typical layout puts it at col 4 (0-based),
-      // but we clamp within bounds to survive small shifts.
-      const defCol = Math.min(4, tds.length - 2);
+      // 3) OFF = nearest numeric cell to the LEFT of label
+      let off = null;
+      for (let i = labelIdx - 1; i >= 0; i--) {
+        off = toNum(tds.eq(i).text());
+        if (off != null) break;
+      }
 
-      const toNum = (x) => {
-        const v = parseFloat(String(x).replace(/[^\d.\-]/g, ''));
-        return Number.isFinite(v) ? v : null;
-      };
-
-      const off = toNum(tds.eq(offCol).text());
-      const def = toNum(tds.eq(defCol).text());
-      const la  = toNum(tds.eq(laCol).text());
+      // 4) DEF = nearest numeric cell to the RIGHT of label (but not LA)
+      let def = null;
+      for (let i = labelIdx + 1; i < tds.length; i++) {
+        const v = toNum(tds.eq(i).text());
+        if (v == null) continue;
+        // avoid reusing LA if it’s the same cell
+        if (la != null && i === tds.length - 1) continue;
+        def = v;
+        break;
+      }
 
       map[label] = { off, def, la };
     });
   });
 
-  // Some pages also render a separate "average-table" – merge those LAs
+  // Merge any standalone "average-table" (sometimes LA lives here)
   $('table.average-table').each((_, tbl) => {
     $(tbl).find('tbody tr').each((__, tr) => {
       const tds = $(tr).find('td');
       if (tds.length < 2) return;
       const label = normTxt(tds.eq(0).text());
-      const la = parseFloat(String(tds.eq(1).text()).replace(/[^\d.\-]/g, ''));
+      const la    = toNum(tds.eq(1).text());
       if (!label) return;
       map[label] ??= {};
-      if (!Number.isFinite(map[label].la)) map[label].la = Number.isFinite(la) ? la : null;
+      if (map[label].la == null && la != null) map[label].la = la;
     });
   });
 
   return map;
 }
+
 
 // Pull one number by label (supporting synonyms) and which column we need
 function getStat(map, labels, which) {
