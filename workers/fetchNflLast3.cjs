@@ -179,6 +179,16 @@ const AX = axios.create({
   for (const [nick, arr] of nickBuckets.entries()) {
     if (arr.length === 1) NICK_MAP[nick] = arr[0];
   }
+  
+// --- DEBUG: show what we can resolve ---
+if (process.env.DEBUG?.toLowerCase() === 'true') {
+  const sample = ['TEXANS','COWBOYS','BRONCOS','49ERS','RAIDERS',
+                  'TITANS','GIANTS','DOLPHINS','BUCCANEERS','COMMANDERS',
+                  'LIONS','PATRIOTS','CHIEFS','VIKINGS'];
+  console.log('DBG NAME_MAP has HOUSTON TEXANS?', !!NAME_MAP['HOUSTON TEXANS']);
+  console.log('DBG NICK_MAP keys sample:', sample.map(k => [k, !!NICK_MAP[k]]));
+}
+
 
   // 4) Fallback: unique full-name mention in hub text
   function uniqueFromHubText(hubText) {
