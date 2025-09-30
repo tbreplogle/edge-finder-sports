@@ -39,10 +39,15 @@ const AX = axios.create({
   const limit  = pLimit(10);
 
   const clean = s => (s ?? '').replace(/\u00A0/g, ' ').trim();
+
   const sanitize = n => clean(n)
-    .replace(/\s+Stats.*$/i, '')
-    .replace(/\s+Team.*$/i, '')
-    .replace(/\s+Football$/i, '');
+    .replace(/\s+Stats.*$/i, '')           // drop "... Stats …"
+    .replace(/\s+Team.*$/i, '')            // drop "... Team …"
+    .replace(/\s+Football$/i, '')          // drop trailing "Football"
+    .replace(/\s+Game\s*Overview[,]?.*$/i, '') // NEW: drop "Game Overview," junk
+    .replace(/[,\|\u2013\u2014\-]+$/g, '') // trim trailing punctuation
+    .replace(/\s{2,}/g, ' ')               // collapse spaces
+    .trim();
 
   const EPS = 0.01; // Laplace smoothing for TO ratios
   const ratio = (num, den, eps = EPS) => {
