@@ -40,13 +40,15 @@ const AX = axios.create({
 
   const clean = s => (s ?? '').replace(/\u00A0/g, ' ').trim();
 
-  const sanitize = n => clean(n)
-    .replace(/\s+Stats.*$/i, '')           // drop "... Stats …"
-    .replace(/\s+Team.*$/i, '')            // drop "... Team …"
-    .replace(/\s+Football$/i, '')          // drop trailing "Football"
-    .replace(/\s+Game\s*Overview[,]?.*$/i, '') // NEW: drop "Game Overview," junk
-    .replace(/[,\|\u2013\u2014\-]+$/g, '') // trim trailing punctuation
-    .replace(/\s{2,}/g, ' ')               // collapse spaces
+  // Hardened sanitize: trims “Game Overview,” and trailing punctuation
+  const sanitize = n => (String(n ?? ''))
+    .replace(/\u00A0/g, ' ')
+    .replace(/\s+Stats.*$/i, '')
+    .replace(/\s+Team.*$/i, '')
+    .replace(/\s+Football$/i, '')
+    .replace(/\s+Game\s*Overview[,]?.*$/i, '')
+    .replace(/[,\|\u2013\u2014\-]+$/g, '')
+    .replace(/\s{2,}/g, ' ')
     .trim();
 
   const EPS = 0.01; // Laplace smoothing for TO ratios
@@ -135,7 +137,7 @@ const AX = axios.create({
     };
   }
 
-  // ---------------------- team dictionary (RESILIENT) ----------------------
+  // ---------------------- team dictionary (ROBUST) ----------------------
   const { data: teams, error: teamErr } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
@@ -143,52 +145,58 @@ const AX = axios.create({
 
   const UP = s => String(s || '').toUpperCase().trim();
 
-  // Full official names → id
+  // 1) Full names → id
   const NAME_MAP = Object.fromEntries(
     teams.map(t => [UP(sanitize(t.team_name)), t.team_id])
   );
 
-  // Abbreviations (ignore junk 1-char “abbrs” some pages emit)
+  // 2) Abbreviations (ignore 0/1-char junk like "T","C")
   const ABBR_MAP = Object.fromEntries(
     teams
       .filter(t => UP(t.abbreviation).length >= 2)
       .map(t => [UP(t.abbreviation), t.team_id])
   );
 
-  // Nicknames: last token of team_name (e.g., TEXANS, 49ERS), plus alt_name
-  const NICK_MAP = {};
+  // 3) Unique nicknames (last word of team_name) + alt_name
+  const nickBuckets = new Map(); // NICK -> [team_id,...]
   for (const t of teams) {
     const full = UP(sanitize(t.team_name));
     const parts = full.split(/\s+/);
-    const nick = parts[parts.length - 1];   // e.g., TEXANS, COWBOYS, 49ERS
-    if (nick) NICK_MAP[nick] = t.team_id;
-
+    const nick  = parts[parts.length - 1];
+    if (nick) {
+      const arr = nickBuckets.get(nick) || [];
+      arr.push(t.team_id);
+      nickBuckets.set(nick, arr);
+    }
     const alt = UP(sanitize(t.alt_name || ''));
-    if (alt) NICK_MAP[alt] = t.team_id;     // e.g., WASHINGTON, JETS (if you store these)
+    if (alt) {
+      const arr = nickBuckets.get(alt) || [];
+      arr.push(t.team_id);
+      nickBuckets.set(alt, arr);
+    }
+  }
+  const NICK_MAP = {};
+  for (const [nick, arr] of nickBuckets.entries()) {
+    if (arr.length === 1) NICK_MAP[nick] = arr[0];
   }
 
-  // fuzzy single-team detector via hub text (as a last resort)
+  // 4) Fallback: unique full-name mention in hub text
   function uniqueFromHubText(hubText) {
     const HT = UP(hubText || '');
-    const found = teams.filter(t => HT.includes(UP(sanitize(t.team_name))));
-    return found.length === 1 ? found[0].team_id : null;
+    const hits = teams.filter(t => HT.includes(UP(sanitize(t.team_name))));
+    return hits.length === 1 ? hits[0].team_id : null;
   }
 
   function idFromNameOrAbbr(longName, abbr, hubText) {
     const nameU = UP(sanitize(longName));
     const abbrU = UP(abbr);
 
-    // 1) Exact full name
     if (NAME_MAP[nameU]) return NAME_MAP[nameU];
-
-    // 2) Real abbreviation (>= 2 chars)
     if (abbrU.length >= 2 && ABBR_MAP[abbrU]) return ABBR_MAP[abbrU];
 
-    // 3) Nickname (last word: TEXANS, 49ERS, COWBOYS, etc.)
     const lastWord = nameU.split(/\s+/).pop();
     if (lastWord && NICK_MAP[lastWord]) return NICK_MAP[lastWord];
 
-    // 4) Fallback: unique match in hub text
     const id = uniqueFromHubText(hubText);
     if (id) return id;
 
@@ -254,6 +262,10 @@ const AX = axios.create({
       const [a, h] = namesFromOg(og);
       awayFN = awayFN || a; homeFN = homeFN || h;
     }
+    // sanitize before deriving abbr/mapping (kills “Game Overview,” etc.)
+    awayFN = sanitize(awayFN);
+    homeFN = sanitize(homeFN);
+
     awayAb = awayAb || deriveAbbr(awayFN);
     homeAb = homeAb || deriveAbbr(homeFN);
 
@@ -263,149 +275,88 @@ const AX = axios.create({
     return { awayFN, homeFN, awayAb, homeAb, gDate, hubText };
   }
 
-  // ---------------------- R-style selectors (relaxed) ----------------------
-  // ---- Label-based extractors (robust to row-order/markup tweaks) ----
-function normTxt(s) {
-  return String(s || '')
-    .replace(/\u00A0/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-}
-
-function buildStatsMap($) {
-  const map = {};
-
-  const toNum = (x) => {
-    const v = parseFloat(String(x).replace(/[^\d.\-]/g, ''));
-    return Number.isFinite(v) ? v : null;
-  };
-
-  $('table.stats-table').each((_, tbl) => {
-    $(tbl).find('tbody tr').each((__, tr) => {
-      const tds = $(tr).find('td');
-      if (tds.length < 3) return;
-
-      // 1) Find the label cell (usually 3rd; else the textiest)
-      let labelIdx = 2;
-      if (!tds.eq(labelIdx).text().trim()) {
-        let bestLen = -1, bestIdx = -1;
-        tds.each((i, td) => {
-          const L = normTxt($(td).text()).length;
-          if (L > bestLen) { bestLen = L; bestIdx = i; }
-        });
-        if (bestIdx >= 0) labelIdx = bestIdx;
-      }
-
-      const label = normTxt(tds.eq(labelIdx).text());
-      if (!label) return;
-
-      // 2) LA = last numeric cell in row; also keep its index
-      let la = null, laIdx = -1;
-      for (let i = tds.length - 1; i > labelIdx; i--) {
-        const v = toNum(tds.eq(i).text());
-        if (v != null) { la = v; laIdx = i; break; }
-      }
-
-      // 3) OFF = closest numeric LEFT of label
-      let off = null;
-      for (let i = labelIdx - 1; i >= 0; i--) {
-        const v = toNum(tds.eq(i).text());
-        if (v != null) { off = v; break; }
-      }
-
-      // 4) DEF = rightmost numeric BEFORE LA (scan from laIdx-1 leftwards)
-      let def = null;
-      const rightBound = (laIdx > -1 ? laIdx - 1 : tds.length - 1);
-      for (let i = rightBound; i > labelIdx; i--) {
-        const v = toNum(tds.eq(i).text());
-        if (v != null) { def = v; break; }
-      }
-
-      map[label] = { off, def, la };
-    });
-  });
-
-  // Merge any standalone league-average table if present
-  $('table.average-table').each((_, tbl) => {
-    $(tbl).find('tbody tr').each((__, tr) => {
-      const tds = $(tr).find('td');
-      if (tds.length < 2) return;
-      const label = normTxt(tds.eq(0).text());
-      const la    = toNum(tds.eq(1).text());
-      if (!label) return;
-      map[label] ??= {};
-      if (map[label].la == null && la != null) map[label].la = la;
-    });
-  });
-
-  return map;
-}
-
-
-// Pull one number by label (supporting synonyms) and which column we need
-function getStat(map, labels, which) {
-  const keys = Array.isArray(labels) ? labels : [labels];
-  for (const k of keys) {
-    const row = map[normTxt(k)];
-    if (row) return which === 'off' ? row.off : which === 'def' ? row.def : row.la;
-  }
-  return null;
-}
-
-async function scrapeRole(id, role) {
-  const urlTRUE  = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/TRUE/last3`;
-  const urlFALSE = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/FALSE/last3`;
-
-  // offense page uses OFFENSE column; defense page uses DEFENSE column
-  const $off = load((await AX.get(role === 'home' ? urlTRUE  : urlFALSE)).data);
-  const $def = load((await AX.get(role === 'home' ? urlFALSE : urlTRUE )).data);
-
-  const offMap = buildStatsMap($off);
-  const defMap = buildStatsMap($def);
-
-  // Labels (with synonyms seen on Covers)
-  const LBL_YPP = ['YARDS/PLAY', 'YDS/PLAY'];
-  const LBL_YPR = ['YARDS/RUSH', 'YDS/RUSH'];
-  const LBL_INT = ['INTERCEPTIONS', 'INTERCEPTS'];
-  const LBL_FUM = ['FUMBLES'];
-
-  const OFF_YPA = getStat(offMap, LBL_YPP, 'off');
-  const LA_YPA  = getStat(offMap, LBL_YPP, 'la');
-
-  const OFF_YRA = getStat(offMap, LBL_YPR, 'off');
-  const LA_YRA  = getStat(offMap, LBL_YPR, 'la');
-
-  // TOs: offense page shows OFF ints/fums + LA; defense page shows DEF ints/fums
-  const OFF_INT = getStat(offMap, LBL_INT, 'off');
-  const OFF_FUM = getStat(offMap, LBL_FUM, 'off');
-  const LA_INT  = getStat(offMap, LBL_INT, 'la');
-  const LA_FUM  = getStat(offMap, LBL_FUM, 'la');
-
-  const DEF_YPA = getStat(defMap, LBL_YPP, 'def');
-  const DEF_YRA = getStat(defMap, LBL_YPR, 'def');
-  const DEF_INT = getStat(defMap, LBL_INT, 'def');
-  const DEF_FUM = getStat(defMap, LBL_FUM, 'def');
-
-  const need = { OFF_YPA, LA_YPA, OFF_YRA, LA_YRA, OFF_INT, OFF_FUM, LA_INT, LA_FUM, DEF_YPA, DEF_YRA, DEF_INT, DEF_FUM };
-  for (const [k, v] of Object.entries(need)) {
-    if (v == null || !Number.isFinite(v)) {
-      throw new Error(`Missing stat "${k}" for ${id} (${role}); label drift`);
+  // ---------------------- R-style selectors (your original ones) ----------------------
+  const SEL = {
+    off: {
+      yppa:  'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(11) td:nth-child(1) span',
+      yra:   'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(5)  td:nth-child(1) span',
+      int:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(3)  td:nth-child(1) span',
+      fum:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(4)  td:nth-child(1) span',
+      la_yppa:'section:nth-of-type(1) table.average-table tbody tr:nth-child(11) td',
+      la_yra: 'section:nth-of-type(1) table.average-table tbody tr:nth-child(5)  td',
+      la_int: 'section:nth-of-type(2) table.average-table tbody tr:nth-child(3)  td',
+      la_fum: 'section:nth-of-type(2) table.average-table tbody tr:nth-child(4)  td',
+    },
+    def: {
+      yppa:  'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(11) td:nth-child(5) span',
+      yra:   'section:nth-of-type(1) table.stats-table.football-stats-table tbody tr:nth-child(5)  td:nth-child(5) span',
+      int:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(3)  td:nth-child(5) span',
+      fum:   'section:nth-of-type(2) table.stats-table.football-stats-table tbody tr:nth-child(4)  td:nth-child(5) span',
     }
+  };
+
+  function variants(sel) {
+    return [
+      sel,
+      sel.replace('.football-stats-table', ''),
+      sel.replace('table.stats-table.football-stats-table', 'table.stats-table'),
+      sel.replace(/section:nth-of-type\(\d+\)\s+/g, '')
+    ];
   }
 
-  // Same ratios you were computing
-  return {
-    yp_pa_off : ratio(OFF_YPA, LA_YPA),
-    yp_ra_off : ratio(OFF_YRA, LA_YRA),
-    tov_off   : ratio(LA_INT + LA_FUM, OFF_INT + OFF_FUM),
-
-    yp_pa_def : ratio(LA_YPA, DEF_YPA),
-    yp_ra_def : ratio(LA_YRA, DEF_YRA),
-    tov_def   : ratio(DEF_INT + DEF_FUM, LA_INT + LA_FUM)
+  const pick = ($, sel) => {
+    for (const v of variants(sel)) {
+      const el = $(v);
+      if (el.length) return toNum(el.first().text());
+    }
+    throw new Error(`Selector missing: ${sel}`);
   };
-}
 
+  async function fetch$ (url) {
+    for (let i=0; i<2; i++) {
+      const res = await AX.get(url);
+      const $   = load(res.data);
+      if ($('table.stats-table').length || $('table.average-table').length) return $;
+      if (i === 0) await sleep(600);
+    }
+    throw new Error(`No stats/average tables found at ${url}`);
+  }
+
+  // Build the 6 ratios for a ROLE ("home" or "away") using the nth-child selectors
+  async function scrapeRole(id, role) {
+    const urlTRUE  = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/TRUE/last3`;
+    const urlFALSE = `https://www.covers.com/sport/football/nfl/matchup/${id}/stats-analysis/FALSE/last3`;
+
+    // offense page uses column 1; defense page uses column 5
+    const $off = await fetch$(role === 'home' ? urlTRUE  : urlFALSE);
+    const $def = await fetch$(role === 'home' ? urlFALSE : urlTRUE );
+
+    const OFF_YPA = pick($off, SEL.off.yppa);
+    const OFF_YRA = pick($off, SEL.off.yra);
+    const OFF_INT = pick($off, SEL.off.int);
+    const OFF_FUM = pick($off, SEL.off.fum);
+
+    const LA_YPA  = pick($off, SEL.off.la_yppa);
+    const LA_YRA  = pick($off, SEL.off.la_yra);
+    const LA_INT  = pick($off, SEL.off.la_int);
+    const LA_FUM  = pick($off, SEL.off.la_fum);
+
+    const DEF_YPA = pick($def, SEL.def.yppa);
+    const DEF_YRA = pick($def, SEL.def.yra);
+    const DEF_INT = pick($def, SEL.def.int);
+    const DEF_FUM = pick($def, SEL.def.fum);
+
+    // Ratios with smoothing for TOs
+    return {
+      yp_pa_off : ratio(OFF_YPA, LA_YPA),
+      yp_ra_off : ratio(OFF_YRA, LA_YRA),
+      tov_off   : ratio(LA_INT + LA_FUM, OFF_INT + OFF_FUM),
+
+      yp_pa_def : ratio(LA_YPA, DEF_YPA),
+      yp_ra_def : ratio(LA_YRA, DEF_YRA),
+      tov_def   : ratio(DEF_INT + DEF_FUM, LA_INT + LA_FUM)
+    };
+  }
 
   async function scrapeMatchup(id) {
     // Get hub info once so we have names/abbrs + hubText for mapping fallbacks
@@ -427,6 +378,8 @@ async function scrapeRole(id, role) {
         awayFN = awayFN || away; homeFN = homeFN || home;
       }
     }
+
+    // sanitize before abbr/mapping
     awayFN = sanitize(awayFN);
     homeFN = sanitize(homeFN);
 
@@ -460,7 +413,7 @@ async function scrapeRole(id, role) {
       }
     }
 
-    // Robust ID mapping using name, abbr (>=2), nickname, hub text
+    // Robust ID mapping using name, abbr (>=2), unique nickname, hub text
     awayRow.team_id = idFromNameOrAbbr(awayRow.team_name, awayRow.team_abbr, hubText);
     homeRow.team_id = idFromNameOrAbbr(homeRow.team_name, homeRow.team_abbr, hubText);
 
