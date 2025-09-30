@@ -417,16 +417,23 @@ function idFromNameOrAbbr(longName, abbr, hubText) {
     const DEF_INT = pick($def, SEL.def.int);
     const DEF_FUM = pick($def, SEL.def.fum);
 
-    // Ratios with smoothing for TOs
-    return {
-      yp_pa_off : ratio(OFF_YPA, LA_YPA),
-      yp_ra_off : ratio(OFF_YRA, LA_YRA),
-      tov_off   : ratio(LA_INT + LA_FUM, OFF_INT + OFF_FUM),
+// Ratios with smoothing for TOs
+const ratios = {
+  yp_pa_off : ratio(OFF_YPA, LA_YPA),
+  yp_ra_off : ratio(OFF_YRA, LA_YRA),
+  tov_off   : ratio(LA_INT + LA_FUM, OFF_INT + OFF_FUM),
 
-      yp_pa_def : ratio(LA_YPA, DEF_YPA),
-      yp_ra_def : ratio(LA_YRA, DEF_YRA),
-      tov_def   : ratio(DEF_INT + DEF_FUM, LA_INT + LA_FUM)
-    };
+  yp_pa_def : ratio(LA_YPA, DEF_YPA),
+  yp_ra_def : ratio(LA_YRA, DEF_YRA),
+  tov_def   : ratio(DEF_INT + DEF_FUM, LA_INT + LA_FUM)
+};
+
+if (String(process.env.DEBUG || '').toLowerCase() === 'true') {
+  console.log(`DBG ratios for ${id} (${role}):`, ratios);
+}
+
+return ratios;
+
   }
 
   async function scrapeMatchup(id) {
@@ -551,12 +558,28 @@ function idFromNameOrAbbr(longName, abbr, hubText) {
 
     if (bulk.length) {
       const up2 = await nfl.from('team_last3')
-        .upsert(bulk, { onConflict: 'covers_id,team_role' });
+        .upsert(bulk, { onConflict: 'covers_id,team_role' })
+        .select();
+    
       if (up2.error) throw new Error(up2.error.message || fmtErr(up2.error));
-      console.log(`🚀 Upserted ${bulk.length} rows`);
+      console.log(`🚀 Upserted/updated ${up2.data?.length || 0} rows`);
+    
+      if (String(process.env.DEBUG || '').toLowerCase() === 'true') {
+        console.log('DBG sample written row:', up2.data?.[0]);
+      }
+    
+      // Read back the first game we wrote to confirm the DB has what we expect
+      if (String(process.env.DEBUG || '').toLowerCase() === 'true' && wrote.length) {
+        const check = await nfl.from('team_last3')
+          .select('*')
+          .eq('covers_id', wrote[0])
+          .order('team_role', { ascending: true });
+        console.log('DBG read-back from DB:', check.data);
+      }
     } else {
       console.error('⚠️  No rows to upsert (all matchups failed?)');
     }
+    
 
     try {
       fs.writeFileSync('scrape-result.json', JSON.stringify({
