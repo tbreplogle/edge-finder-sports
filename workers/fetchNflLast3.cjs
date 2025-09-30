@@ -1,3 +1,4 @@
+/* fetchNflLast3.cjs — Covers “last3” scraper with resilient team mapping */
 const fs       = require('fs');
 const axios    = require('axios');
 const { load } = require('cheerio');
@@ -43,15 +44,14 @@ const AX = axios.create({
     .replace(/\s+Team.*$/i, '')
     .replace(/\s+Football$/i, '');
 
-    const EPS = 0.01; // Laplace smoothing for TO ratios
-    const ratio = (num, den, eps = EPS) => {
-      const d = (den ?? 0) + eps;
-      const n = (num ?? 0);
-      const r = n / d;
-      if (!Number.isFinite(r)) return 4.0;
-      return Math.min(r, 4.0);   // cap at 4
-    };
-    
+  const EPS = 0.01; // Laplace smoothing for TO ratios
+  const ratio = (num, den, eps = EPS) => {
+    const d = (den ?? 0) + eps;
+    const n = (num ?? 0);
+    const r = n / d;
+    if (!Number.isFinite(r)) return 4.0;
+    return Math.min(r, 4.0);   // cap at 4
+  };
 
   const toNum = (txt) => {
     const n = parseFloat(String(txt).replace(/[^\d.\-]/g, ''));
@@ -130,24 +130,66 @@ const AX = axios.create({
     };
   }
 
-  // ---------------------- team dictionary ----------------------
+  // ---------------------- team dictionary (RESILIENT) ----------------------
   const { data: teams, error: teamErr } = await nfl
     .from('teams')
     .select('team_id,team_name,abbreviation,alt_name');
   if (teamErr) throw new Error(teamErr.message || fmtErr(teamErr));
 
-  const NAME_MAP = Object.fromEntries(teams.map(t => [sanitize(t.team_name), t.team_id]));
-  const ABBR_MAP = Object.fromEntries(teams.map(t => [String(t.abbreviation || '').toUpperCase(), t.team_id]));
+  const UP = s => String(s || '').toUpperCase().trim();
 
-  const idFromNameOrAbbr = (longName, abbr, hubText) => {
-    const name = sanitize(longName);
-    if (NAME_MAP[name]) return NAME_MAP[name];
-    const up = (abbr || '').toUpperCase();
-    if (ABBR_MAP[up]) return ABBR_MAP[up];
-    const cand = teams.filter(t => t.team_name.startsWith(name) && hubText.includes(t.alt_name));
-    if (cand.length === 1) return cand[0].team_id;
+  // Full official names → id
+  const NAME_MAP = Object.fromEntries(
+    teams.map(t => [UP(sanitize(t.team_name)), t.team_id])
+  );
+
+  // Abbreviations (ignore junk 1-char “abbrs” some pages emit)
+  const ABBR_MAP = Object.fromEntries(
+    teams
+      .filter(t => UP(t.abbreviation).length >= 2)
+      .map(t => [UP(t.abbreviation), t.team_id])
+  );
+
+  // Nicknames: last token of team_name (e.g., TEXANS, 49ERS), plus alt_name
+  const NICK_MAP = {};
+  for (const t of teams) {
+    const full = UP(sanitize(t.team_name));
+    const parts = full.split(/\s+/);
+    const nick = parts[parts.length - 1];   // e.g., TEXANS, COWBOYS, 49ERS
+    if (nick) NICK_MAP[nick] = t.team_id;
+
+    const alt = UP(sanitize(t.alt_name || ''));
+    if (alt) NICK_MAP[alt] = t.team_id;     // e.g., WASHINGTON, JETS (if you store these)
+  }
+
+  // fuzzy single-team detector via hub text (as a last resort)
+  function uniqueFromHubText(hubText) {
+    const HT = UP(hubText || '');
+    const found = teams.filter(t => HT.includes(UP(sanitize(t.team_name))));
+    return found.length === 1 ? found[0].team_id : null;
+  }
+
+  function idFromNameOrAbbr(longName, abbr, hubText) {
+    const nameU = UP(sanitize(longName));
+    const abbrU = UP(abbr);
+
+    // 1) Exact full name
+    if (NAME_MAP[nameU]) return NAME_MAP[nameU];
+
+    // 2) Real abbreviation (>= 2 chars)
+    if (abbrU.length >= 2 && ABBR_MAP[abbrU]) return ABBR_MAP[abbrU];
+
+    // 3) Nickname (last word: TEXANS, 49ERS, COWBOYS, etc.)
+    const lastWord = nameU.split(/\s+/).pop();
+    if (lastWord && NICK_MAP[lastWord]) return NICK_MAP[lastWord];
+
+    // 4) Fallback: unique match in hub text
+    const id = uniqueFromHubText(hubText);
+    if (id) return id;
+
     throw new Error(`Unmapped team: "${longName}" / "${abbr}"`);
-  };
+  }
+
   const deriveAbbr = n => {
     if (!n) return '';
     const caps = n.match(/[A-Z]/g);
@@ -204,12 +246,8 @@ const AX = axios.create({
 
     if (!awayFN || !homeFN) {
       const og = $hub('meta[property="og:title"]').attr('content') || '';
-      const parts = og.split(/\s+vs\.?\s+/i);
-      if (parts.length >= 2) {
-        const away = sanitize(parts[0]);
-        const home = sanitize(parts[1].split(/\s(?:Odds|Picks|Predictions|Preview|Betting|-\s|\|\s)/i)[0]);
-        awayFN = awayFN || away; homeFN = homeFN || home;
-      }
+      const [a, h] = namesFromOg(og);
+      awayFN = awayFN || a; homeFN = homeFN || h;
     }
     awayAb = awayAb || deriveAbbr(awayFN);
     homeAb = homeAb || deriveAbbr(homeFN);
@@ -304,6 +342,7 @@ const AX = axios.create({
   }
 
   async function scrapeMatchup(id) {
+    // Get hub info once so we have names/abbrs + hubText for mapping fallbacks
     const hubRes  = await AX.get(`https://www.covers.com/sport/football/nfl/matchup/${id}`);
     const $hub    = load(hubRes.data);
     const hubText = $hub.text();
@@ -322,6 +361,9 @@ const AX = axios.create({
         awayFN = awayFN || away; homeFN = homeFN || home;
       }
     }
+    awayFN = sanitize(awayFN);
+    homeFN = sanitize(homeFN);
+
     awayAb = awayAb || deriveAbbr(awayFN);
     homeAb = homeAb || deriveAbbr(homeFN);
 
@@ -352,6 +394,7 @@ const AX = axios.create({
       }
     }
 
+    // Robust ID mapping using name, abbr (>=2), nickname, hub text
     awayRow.team_id = idFromNameOrAbbr(awayRow.team_name, awayRow.team_abbr, hubText);
     homeRow.team_id = idFromNameOrAbbr(homeRow.team_name, homeRow.team_abbr, hubText);
 
