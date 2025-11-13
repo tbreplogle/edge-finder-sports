@@ -1,0 +1,39 @@
+name: Sync CFB A-Test Team Season Metrics
+
+on:
+  schedule:
+    - cron: '0 15 * * 1'   # Mondays 15:00 UTC – adjust if you want
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CFBD_API_KEY:              ${{ secrets.CFBD_API_KEY }}
+      PUPPETEER_SKIP_DOWNLOAD:   'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Restore npm cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
+
+      - name: Install deps (workers/)
+        working-directory: workers
+        run: npm install --no-audit --no-fund
+
+      - name: Sync CFB A-Test team season metrics
+        working-directory: workers
+        run: node syncCfbATestTeamSeasonMetrics.js
