@@ -2,7 +2,7 @@
 // ────────────────────────────────────────────────────────────────
 // Pull CFBD advanced season stats and upsert them into
 // cfb.a_test_team_season_metrics (one row per team/season).
-// Uses all features needed for the 2025 rating_raw formula.
+// Uses all features needed for the rating_raw formula.
 // ────────────────────────────────────────────────────────────────
 
 // ── optional .env load for local dev ────────────────────────────
@@ -45,6 +45,7 @@ try {
     const url =
       `https://api.collegefootballdata.com/stats/season/advanced` +
       `?year=${season}&excludeGarbageTime=true&startWeek=1`;
+  
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${CFBD_API_KEY}` },
     });
@@ -77,69 +78,74 @@ try {
         team_id: id,
   
         // offense rushing / passing / std / PD / line / open / second-level
-        off_rush_success:         offRush.successRate ?? null,
-        off_ppa:                  off.ppa ?? null,
-        off_pass_success:         offPass.successRate ?? null,
-        off_success:              off.successRate ?? null,
-        off_explosiveness:        off.explosiveness ?? null,
-        off_total_ppa:            off.totalPPA ?? null,
-        off_power_success:        off.powerSuccess ?? null,
-        off_stuff_rate:           off.stuffRate ?? null,
-        off_plays:                off.plays ?? null,
+        off_rush_success:              offRush.successRate ?? null,
+        off_ppa:                       off.ppa ?? null,
+        off_pass_success:              offPass.successRate ?? null,
+        off_success:                   off.successRate ?? null,
+        off_explosiveness:             off.explosiveness ?? null,
+        off_total_ppa:                 off.totalPPA ?? null,
+        off_power_success:             off.powerSuccess ?? null,
+        off_stuff_rate:                off.stuffRate ?? null,
+        off_plays:                     off.plays ?? null,
+        off_drives:                    off.drives ?? null,                 // NEW
   
-        off_line_yards:           off.lineYards ?? null,
-        off_line_yards_total:     off.lineYardsTotal ?? null,
-        off_second_level_yards:   off.secondLevelYards ?? null,
-        off_open_field_yards:     off.openFieldYards ?? null,
+        off_line_yards:                off.lineYards ?? null,
+        off_line_yards_total:          off.lineYardsTotal ?? null,
+        off_second_level_yards:        off.secondLevelYards ?? null,
+        off_second_level_yards_total:  off.secondLevelYardsTotal ?? null,  // NEW
+        off_open_field_yards:          off.openFieldYards ?? null,
+        off_open_field_yards_total:    off.openFieldYardsTotal ?? null,    // NEW
   
-        off_sd_ppa:               offStd.ppa ?? null,
-        off_sd_success:           offStd.successRate ?? null,
-        off_sd_explosiveness:     offStd.explosiveness ?? null,
+        off_sd_ppa:                    offStd.ppa ?? null,
+        off_sd_success:                offStd.successRate ?? null,
+        off_sd_explosiveness:          offStd.explosiveness ?? null,
   
-        off_pd_ppa:               offPD.ppa ?? null,
-        off_pd_success:           offPD.successRate ?? null,
-        off_pd_explosiveness:     offPD.explosiveness ?? null,
+        off_pd_ppa:                    offPD.ppa ?? null,
+        off_pd_success:                offPD.successRate ?? null,
+        off_pd_explosiveness:          offPD.explosiveness ?? null,
   
-        off_rush_ppa:             offRush.ppa ?? null,
-        off_rush_total_ppa:       offRush.totalPPA ?? null,
-        off_rush_explosiveness:   offRush.explosiveness ?? null,
+        off_rush_ppa:                  offRush.ppa ?? null,
+        off_rush_total_ppa:            offRush.totalPPA ?? null,
+        off_rush_explosiveness:        offRush.explosiveness ?? null,
   
-        off_pass_ppa:             offPass.ppa ?? null,
-        off_pass_total_ppa:       offPass.totalPPA ?? null,
-        off_pass_explosiveness:   offPass.explosiveness ?? null,
+        off_pass_ppa:                  offPass.ppa ?? null,
+        off_pass_total_ppa:            offPass.totalPPA ?? null,
+        off_pass_explosiveness:        offPass.explosiveness ?? null,
   
         // defense side mirrors
-        def_success:              def.successRate ?? null,
-        def_ppa:                  def.ppa ?? null,
-        def_explosiveness:        def.explosiveness ?? null,
-        def_total_ppa:            def.totalPPA ?? null,
-        def_power_success:        def.powerSuccess ?? null,
-        def_stuff_rate:           def.stuffRate ?? null,
-        def_plays:                def.plays ?? null,
-        def_drives:               def.drives ?? null,
+        def_success:                   def.successRate ?? null,
+        def_ppa:                       def.ppa ?? null,
+        def_explosiveness:             def.explosiveness ?? null,
+        def_total_ppa:                 def.totalPPA ?? null,
+        def_power_success:             def.powerSuccess ?? null,
+        def_stuff_rate:                def.stuffRate ?? null,
+        def_plays:                     def.plays ?? null,
+        def_drives:                    def.drives ?? null,
   
-        def_line_yards:           def.lineYards ?? null,
-        def_line_yards_total:     def.lineYardsTotal ?? null,
-        def_second_level_yards:   def.secondLevelYards ?? null,
-        def_second_level_yards_total: def.secondLevelYardsTotal ?? null,
-        def_open_field_yards:     def.openFieldYards ?? null,
-        def_open_field_yards_total: def.openFieldYardsTotal ?? null,
+        def_line_yards:                def.lineYards ?? null,
+        def_line_yards_total:          def.lineYardsTotal ?? null,
+        def_second_level_yards:        def.secondLevelYards ?? null,
+        def_second_level_yards_total:  def.secondLevelYardsTotal ?? null,
+        def_open_field_yards:          def.openFieldYards ?? null,
+        def_open_field_yards_total:    def.openFieldYardsTotal ?? null,
   
-        def_sd_ppa:               defStd.ppa ?? null,
-        def_sd_success:           defStd.successRate ?? null,
-        def_sd_explosiveness:     defStd.explosiveness ?? null,
+        def_sd_ppa:                    defStd.ppa ?? null,
+        def_sd_success:                defStd.successRate ?? null,
+        def_sd_explosiveness:          defStd.explosiveness ?? null,
   
-        def_pd_ppa:               defPD.ppa ?? null,
-        def_pd_success:           defPD.successRate ?? null,
+        def_pd_ppa:                    defPD.ppa ?? null,
+        def_pd_success:                defPD.successRate ?? null,
+        def_pd_explosiveness:          defPD.explosiveness ?? null,        // NEW
   
-        def_rush_ppa:             defRush.ppa ?? null,
-        def_rush_total_ppa:       defRush.totalPPA ?? null,
-        def_rush_success:         defRush.successRate ?? null,
+        def_rush_ppa:                  defRush.ppa ?? null,
+        def_rush_total_ppa:            defRush.totalPPA ?? null,
+        def_rush_success:              defRush.successRate ?? null,
+        def_rush_explosiveness:        defRush.explosiveness ?? null,      // NEW
   
-        def_pass_ppa:             defPass.ppa ?? null,
-        def_pass_total_ppa:       defPass.totalPPA ?? null,
-        def_pass_success:         defPass.successRate ?? null,
-        def_pass_explosiveness:   defPass.explosiveness ?? null,
+        def_pass_ppa:                  defPass.ppa ?? null,
+        def_pass_total_ppa:            defPass.totalPPA ?? null,
+        def_pass_success:              defPass.successRate ?? null,
+        def_pass_explosiveness:        defPass.explosiveness ?? null,
   
         updated_at: new Date().toISOString(),
       };
