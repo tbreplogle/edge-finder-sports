@@ -8,7 +8,7 @@ on:
 
 env:
   # Update this each season if you want to lock to a specific year
-  CBB_SEASON: '2025'
+  CBB_SEASON: '2026'
 
 jobs:
   sync-cbb:
