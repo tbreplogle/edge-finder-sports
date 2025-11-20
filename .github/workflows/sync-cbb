@@ -1,0 +1,73 @@
+name: Sync CBB Data & Predictions
+
+on:
+  # Run every day at 08:00 UTC (~2 AM CST / 3 AM CDT)
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync-cbb:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CFBD_API_KEY:              ${{ secrets.CFBD_API_KEY }}   # same key for CBB API
+      PUPPETEER_SKIP_DOWNLOAD:   'true'
+      CBB_SEASON:                '2025'                        # update each year or let scripts default
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Restore npm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: linux-npm-${{ hashFiles('**/package-lock.json') }}-v1
+          restore-keys: |
+            linux-npm-
+
+      - name: Install deps (workers/)
+        working-directory: workers
+        run: npm install --no-audit --no-fund
+
+      # 1) Teams (cheap, keeps IDs/names in sync)
+      - name: Sync CBB Teams
+        working-directory: workers
+        run: node syncCbbTeams.js
+
+      # 2) Games (schedule + results). Script should handle:
+      #    - backfill last few days
+      #    - load next N days
+      - name: Sync CBB Games
+        working-directory: workers
+        run: node syncCbbGames.js $CBB_SEASON
+
+      # 3) Team game stats (boxscores) for recently completed games
+      - name: Sync CBB Team Game Stats
+        working-directory: workers
+        run: node syncCbbTeamGameStats.js $CBB_SEASON
+
+      # 4) Team season stats (season-to-date aggregates)
+      - name: Sync CBB Team Season Stats
+        working-directory: workers
+        run: node syncCbbTeamSeasonStats.js $CBB_SEASON
+
+      # 5) Betting lines (today + near future, and recent closes if you want)
+      - name: Sync CBB Betting Lines
+        working-directory: workers
+        run: node syncCbbGameLines.js $CBB_SEASON
+
+      # 6) Model predictions for this season's games
+      #    This script should:
+      #      - select games for today / upcoming from cbb.games
+      #      - join to cbb.game_spread_features
+      #      - call predict_margin + margin_to_win_prob (or compute in SQL)
+      #      - insert into cbb.model_predictions (or whatever table you choose)
+      - name: Score CBB Games (Model Predictions)
+        working-directory: workers
+        run: node scoreCbbGames.js $CBB_SEASON
