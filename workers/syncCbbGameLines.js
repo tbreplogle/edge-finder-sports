@@ -34,7 +34,7 @@ try {
   
     const url =
       `https://api.collegebasketballdata.com/lines` +
-      `?season=${season}`; // add start/end date, provider filters if needed
+      `?season=${season}`; // adjust params (dates, provider) if needed
   
     const res = await fetch(url, {
       headers: {
@@ -48,6 +48,7 @@ try {
   
     const lines = await res.json();
   
+    // Map API response into rows for cbb.game_lines
     const rows = lines.flatMap(l => {
       if (!l.gameId) {
         console.warn('⚠️ Missing gameId on line object – skipping', l);
@@ -83,22 +84,28 @@ try {
   
     console.log('Sample line row:', rows[0]);
   
-    // OPTIONAL BUT RECOMMENDED: filter to only games that exist in cbb.games
+    // Filter to only games that exist in cbb.games for this season,
+    // so we don't violate the FK constraint.
     const { data: games, error: gamesError } = await supabase
       .from('games')
-      .select('id');
+      .select('game_id, season')
+      .eq('season', season);
   
     if (gamesError) {
       throw gamesError;
     }
   
-    const validGameIds = new Set(games.map(g => g.id));
+    if (!games || games.length === 0) {
+      console.warn(`⚠️ No games found in cbb.games for season ${season}. Skipping lines upsert.`);
+      return;
+    }
+  
+    const validGameIds = new Set(games.map(g => g.game_id));
     const filteredRows = rows.filter(r => validGameIds.has(r.game_id));
   
     console.log(
-      `Prepared ${rows.length} rows, ${filteredRows.length} match existing games, ${
-        rows.length - filteredRows.length
-      } skipped due to missing game_id in cbb.games`
+      `Prepared ${rows.length} rows, ${filteredRows.length} match existing games, ` +
+      `${rows.length - filteredRows.length} skipped due to missing game_id in cbb.games for season ${season}`
     );
   
     if (!filteredRows.length) {
@@ -115,8 +122,8 @@ try {
   }
   
   // CLI guard
-if (import.meta.url === `file://${process.argv[1]}`) {
-    // read season from CLI: node syncCbbGameLines.js 2026
+  if (import.meta.url === `file://${process.argv[1]}`) {
+    // Usage: node syncCbbGameLines.js 2026
     const seasonArg = process.argv[2];
     let season = Number(seasonArg);
   
@@ -132,4 +139,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(1);
     });
   }
+  
+  export { run };
   
