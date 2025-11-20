@@ -51,62 +51,82 @@ try {
   
     const nowIso = new Date().toISOString();
   
-    const rows = games.map((g) => {
-      const game_id = pick(g, ['id', 'gameId']);
-      const seasonVal = pick(g, ['season', 'year']) ?? season;
-      const season_type = pick(g, ['seasonType', 'season_type']);
-      const startDateRaw = pick(g, ['startDate', 'start_date']);
-      const neutral_site = pick(g, ['neutralSite', 'neutral_site']);
-      const conference_game = pick(g, ['conferenceGame', 'conference_game']);
-      const game_type = pick(g, ['gameType', 'game_type']);
-      const tournament = pick(g, ['tournament']);
-      const home_team_id = pick(g, ['homeTeamId', 'home_team_id']);
-      const home_team = pick(g, ['homeTeam', 'home_team']);
-      const away_team_id = pick(g, ['awayTeamId', 'away_team_id']);
-      const away_team = pick(g, ['awayTeam', 'away_team']);
-      const home_points = pick(g, ['homePoints', 'home_points']);
-      const away_points = pick(g, ['awayPoints', 'away_points']);
-      const home_winner = pick(g, ['homeWinner', 'home_winner']);
-      const away_winner = pick(g, ['awayWinner', 'away_winner']);
+    const rows = games
+      .map((g) => {
+        const game_id = pick(g, ['id', 'gameId']);
+        const seasonVal = pick(g, ['season', 'year']) ?? season;
+        const season_type = pick(g, ['seasonType', 'season_type']);
+        const startDateRaw = pick(g, ['startDate', 'start_date']);
+        const neutral_site = pick(g, ['neutralSite', 'neutral_site']);
+        const conference_game = pick(g, ['conferenceGame', 'conference_game']);
+        const game_type = pick(g, ['gameType', 'game_type']);
+        const tournament = pick(g, ['tournament']);
+        const home_team_id = pick(g, ['homeTeamId', 'home_team_id']);
+        const home_team = pick(g, ['homeTeam', 'home_team']);
+        const away_team_id = pick(g, ['awayTeamId', 'away_team_id']);
+        const away_team = pick(g, ['awayTeam', 'away_team']);
+        const home_points = pick(g, ['homePoints', 'home_points']);
+        const away_points = pick(g, ['awayPoints', 'away_points']);
+        const home_winner = pick(g, ['homeWinner', 'home_winner']);
+        const away_winner = pick(g, ['awayWinner', 'away_winner']);
   
-      if (!game_id) {
-        console.warn('Skipping game with no id:', g);
-        return null;
-      }
+        if (!game_id) {
+          console.warn('Skipping game with no id:', g);
+          return null;
+        }
   
-      const start_date = startDateRaw ? startDateRaw.slice(0, 10) : null;
+        const start_date = startDateRaw ? startDateRaw.slice(0, 10) : null;
   
-      return {
-        game_id,
-        season: seasonVal,
-        season_type,
-        start_date,
-        start_time: startDateRaw ?? null,
-        neutral_site: neutral_site ?? null,
-        conference_game: conference_game ?? null,
-        game_type,
-        tournament,
-        home_team_id,
-        home_team,
-        away_team_id,
-        away_team,
-        home_points,
-        away_points,
-        home_winner,
-        away_winner,
-        data: g,
-        updated_at: nowIso,
-      };
-    }).filter(Boolean);
+        return {
+          game_id,
+          season: seasonVal,
+          season_type,
+          start_date,
+          start_time: startDateRaw ?? null,
+          neutral_site: neutral_site ?? null,
+          conference_game: conference_game ?? null,
+          game_type,
+          tournament,
+          home_team_id,
+          home_team,
+          away_team_id,
+          away_team,
+          home_points,
+          away_points,
+          home_winner,
+          away_winner,
+          data: g,
+          updated_at: nowIso,
+        };
+      })
+      .filter(Boolean);
   
     if (!rows.length) {
       console.log('Nothing to upsert.');
       return;
     }
   
+    // 🔴 IMPORTANT: de-duplicate by game_id to avoid
+    // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    const dedupMap = new Map();
+    for (const row of rows) {
+      if (!dedupMap.has(row.game_id)) {
+        dedupMap.set(row.game_id, row);
+      } else {
+        // if you want, you could merge here instead of ignoring
+        // const existing = dedupMap.get(row.game_id);
+        // dedupMap.set(row.game_id, { ...existing, ...row });
+      }
+    }
+    const dedupedRows = Array.from(dedupMap.values());
+  
+    console.log(
+      `Upserting ${dedupedRows.length} unique games (from ${rows.length} raw rows)...`
+    );
+  
     const { error, count } = await supabase
       .from('games')
-      .upsert(rows, {
+      .upsert(dedupedRows, {
         onConflict: 'game_id',
         ignoreDuplicates: false,
         count: 'exact',
