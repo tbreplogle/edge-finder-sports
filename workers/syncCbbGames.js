@@ -1,7 +1,8 @@
 // workers/syncCbbGames.js
 // -----------------------
-// Fetch season games from CollegeBasketballData and upsert into cbb.games
+// Fetch CBB games for a season and upsert into cbb.games.
 
+// optional dotenv for local dev
 try {
     const { config } = await import('dotenv');
     config();
@@ -12,7 +13,7 @@ try {
   import fetch from 'node-fetch';
   import { createClient } from '@supabase/supabase-js';
   
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CFBD_API_KEY } = process.env;
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CFBD_API_KEY, CBB_SEASON } = process.env;
   
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !CFBD_API_KEY) {
     console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / CFBD_API_KEY');
@@ -32,11 +33,20 @@ try {
   };
   
   async function run(seasonArg) {
-    const season = seasonArg ? Number(seasonArg) : new Date().getFullYear();
+    let season;
+    if (seasonArg) {
+      season = Number(seasonArg);
+    } else if (CBB_SEASON) {
+      season = Number(CBB_SEASON);
+    } else {
+      season = 2026;
+    }
+  
     console.log(`Syncing CBB games for season ${season}...`);
   
     const url = new URL('https://api.collegebasketballdata.com/games');
-    url.searchParams.set('year', season);
+    url.searchParams.set('season', season);          // use season, not year
+    url.searchParams.set('season_type', 'regular');  // regular season only
   
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${CFBD_API_KEY}` },
@@ -54,17 +64,20 @@ try {
     const rows = games
       .map((g) => {
         const game_id = pick(g, ['id', 'gameId']);
-        const seasonVal = pick(g, ['season', 'year']) ?? season;
+        const seasonVal = pick(g, ['season']) ?? season;
         const season_type = pick(g, ['seasonType', 'season_type']);
         const startDateRaw = pick(g, ['startDate', 'start_date']);
+  
         const neutral_site = pick(g, ['neutralSite', 'neutral_site']);
         const conference_game = pick(g, ['conferenceGame', 'conference_game']);
         const game_type = pick(g, ['gameType', 'game_type']);
         const tournament = pick(g, ['tournament']);
+  
         const home_team_id = pick(g, ['homeTeamId', 'home_team_id']);
         const home_team = pick(g, ['homeTeam', 'home_team']);
         const away_team_id = pick(g, ['awayTeamId', 'away_team_id']);
         const away_team = pick(g, ['awayTeam', 'away_team']);
+  
         const home_points = pick(g, ['homePoints', 'home_points']);
         const away_points = pick(g, ['awayPoints', 'away_points']);
         const home_winner = pick(g, ['homeWinner', 'home_winner']);
@@ -106,16 +119,12 @@ try {
       return;
     }
   
-    // 🔴 IMPORTANT: de-duplicate by game_id to avoid
+    // De-duplicate by game_id to avoid
     // "ON CONFLICT DO UPDATE command cannot affect row a second time"
     const dedupMap = new Map();
     for (const row of rows) {
       if (!dedupMap.has(row.game_id)) {
         dedupMap.set(row.game_id, row);
-      } else {
-        // if you want, you could merge here instead of ignoring
-        // const existing = dedupMap.get(row.game_id);
-        // dedupMap.set(row.game_id, { ...existing, ...row });
       }
     }
     const dedupedRows = Array.from(dedupMap.values());
@@ -136,6 +145,7 @@ try {
     console.log(`✅ Upserted ${count} rows into cbb.games.`);
   }
   
+  // CLI entry
   if (import.meta.url === `file://${process.argv[1]}`) {
     run(process.argv[2]).catch((err) => {
       console.error(err);

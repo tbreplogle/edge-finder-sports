@@ -1,9 +1,10 @@
 // workers/syncCbbTeamSeasonStats.js
 // ----------------------------------------------
-// Pull CBB team season stats from CBBD API and
-// upsert into cbb.team_season_stats.
+// Pull CBB team season stats from CollegeBasketballData
+// and upsert into cbb.team_season_stats.
 // ----------------------------------------------
 
+// optional dotenv for local dev
 try {
     const { config } = await import('dotenv');
     config();
@@ -14,11 +15,7 @@ try {
   import fetch from 'node-fetch';
   import { createClient } from '@supabase/supabase-js';
   
-  const {
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY,
-    CFBD_API_KEY, // same key works for CBB API
-  } = process.env;
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CFBD_API_KEY, CBB_SEASON } = process.env;
   
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !CFBD_API_KEY) {
     console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / CFBD_API_KEY');
@@ -27,29 +24,44 @@ try {
   
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
-    db:   { schema: 'cbb' },
+    db: { schema: 'cbb' },
   });
   
-  // map team name -> team_id
+  // helper to pick first non-nullish field
+  const pick = (obj, keys) => {
+    for (const k of keys) {
+      if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+    }
+    return null;
+  };
+  
   async function getTeamMap() {
     const { data, error } = await supabase
       .from('teams')
       .select('team_id, team');
   
     if (error) throw error;
-    return Object.fromEntries(data.map(r => [r.team, r.team_id]));
+    return Object.fromEntries(data.map((r) => [r.team, r.team_id]));
   }
   
-  async function run(season = 2026) {
-    // NOTE: adjust query params (seasonType, etc.) to match CBB API docs
-    const url =
-      `https://api.collegebasketballdata.com/stats/team/season` +
-      `?year=${season}`;
+  async function run(seasonArg) {
+    let season;
+    if (seasonArg) {
+      season = Number(seasonArg);
+    } else if (CBB_SEASON) {
+      season = Number(CBB_SEASON);
+    } else {
+      season = 2026;
+    }
   
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${CFBD_API_KEY}`,
-      },
+    console.log(`Syncing CBB team season stats for season ${season}...`);
+  
+    const url = new URL('https://api.collegebasketballdata.com/stats/team/season');
+    url.searchParams.set('season', season);           // REQUIRED by API
+    url.searchParams.set('season_type', 'regular');   // optional but recommended
+  
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${CFBD_API_KEY}` },
     });
   
     if (!res.ok) {
@@ -57,26 +69,36 @@ try {
     }
   
     const stats = await res.json();
-    const teamMap = await getTeamMap();
+    console.log(`Got ${stats.length} team season stat rows from API`);
   
-    const rows = stats.flatMap(s => {
-      const teamId = teamMap[s.team];
+    const teamMap = await getTeamMap();
+    const nowIso = new Date().toISOString();
+  
+    const rows = stats.flatMap((s) => {
+      const teamName = pick(s, ['team', 'school', 'name']);
+      const teamId = teamMap[teamName];
+  
       if (!teamId) {
-        console.warn(`⚠️ Unknown team "${s.team}" – skipping`);
+        console.warn(`⚠️ Unknown team "${teamName}" – skipping`);
         return [];
       }
   
-      const off = s.teamStats ?? {};
-      const def = s.opponentStats ?? {};
-      const off4 = (off.fourFactors ?? {});
-      const def4 = (def.fourFactors ?? {});
+      const conference = pick(s, ['conference']);
+      const pace = pick(s, ['pace']);
+  
+      // Try both CBB-style (teamStats/opponentStats) and CFBD-style (offense/defense)
+      const off = s.teamStats ?? s.offense ?? {};
+      const def = s.opponentStats ?? s.defense ?? {};
+  
+      const off4 = off.fourFactors ?? {};
+      const def4 = def.fourFactors ?? {};
   
       return {
         season,
         team_id: teamId,
-        conference: s.conference ?? null,
+        conference: conference ?? null,
   
-        pace: s.pace ?? null,
+        pace: pace ?? null,
   
         team_rating: off.rating ?? null,
         opp_rating: def.rating ?? null,
@@ -97,7 +119,7 @@ try {
         wins: s.wins ?? null,
         losses: s.losses ?? null,
   
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       };
     });
   
@@ -110,15 +132,19 @@ try {
   
     const { error, count } = await supabase
       .from('team_season_stats')
-      .upsert(rows, { ignoreDuplicates: false, count: 'exact' });
+      .upsert(rows, {
+        onConflict: 'season,team_id',
+        ignoreDuplicates: false,
+        count: 'exact',
+      });
   
     if (error) throw error;
     console.log(`✅ Upserted ${count} rows into cbb.team_season_stats.`);
   }
   
-  // CLI guard
+  // CLI entry
   if (import.meta.url === `file://${process.argv[1]}`) {
-    run().catch(err => {
+    run(process.argv[2]).catch((err) => {
       console.error(err);
       process.exit(1);
     });
