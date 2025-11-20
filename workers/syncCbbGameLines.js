@@ -34,7 +34,7 @@ try {
     // CFBD-style football endpoint is /betting/lines; CBBD will have an analogous one.
     const url =
       `https://api.collegebasketballdata.com/lines` +
-      `?year=${season}`; // add start/end date, provider filters if needed
+      `?season=${season}`; // add start/end date, provider filters if needed
   
     const res = await fetch(url, {
       headers: {

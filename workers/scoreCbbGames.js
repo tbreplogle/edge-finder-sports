@@ -60,7 +60,7 @@ try {
   }
   
   async function run(seasonArg) {
-    const season = seasonArg ? Number(seasonArg) : new Date().getFullYear();
+    const season = seasonArg ? Number(seasonArg) : new Date().getFullseason();
     const today = new Date().toISOString().slice(0, 10);
   
     console.log(`Scoring CBB games for season ${season}, date >= ${today}...`);
