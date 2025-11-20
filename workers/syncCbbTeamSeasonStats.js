@@ -40,7 +40,7 @@ try {
     return Object.fromEntries(data.map(r => [r.team, r.team_id]));
   }
   
-  async function run(season = 2025) {
+  async function run(season = 2026) {
     // NOTE: adjust query params (seasonType, etc.) to match CBB API docs
     const url =
       `https://api.collegebasketballdata.com/stats/team/season` +

@@ -29,7 +29,7 @@ try {
     db:   { schema: 'cbb' },
   });
   
-  async function run(season = 2025) {
+  async function run(season = 2026) {
     // TODO: confirm the exact endpoint + params from CBBD docs.
     // CFBD-style football endpoint is /betting/lines; CBBD will have an analogous one.
     const url =
