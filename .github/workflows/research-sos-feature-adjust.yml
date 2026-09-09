@@ -6,8 +6,7 @@ on:
       - research-sos-feature-adjust-20260909
     paths:
       - research/sos_feature_adjust_backtest.py
-      - research/sos_feature_adjust_backtest_v2.py
-      - research/inspect_cfbd_game_advanced.py
+      - research/sos_feature_adjust_backtest_v3.py
       - .github/workflows/research-sos-feature-adjust.yml
   workflow_dispatch:
 
@@ -21,13 +20,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Inspect CFBD game advanced schema
-        run: python research/inspect_cfbd_game_advanced.py
-      - name: Run isolated historical SOS test
-        run: python research/sos_feature_adjust_backtest_v2.py
+      - name: Run full feature-level SOS replacement backtest
+        run: python research/sos_feature_adjust_backtest_v3.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: sos-feature-adjust-results
-          path: sos_feature_adjust_results.json
+          name: sos-feature-adjust-results-v3
+          path: sos_feature_adjust_results_v3.json
           if-no-files-found: warn
