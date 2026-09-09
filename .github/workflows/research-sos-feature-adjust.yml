@@ -6,6 +6,7 @@ on:
       - research-sos-feature-adjust-20260909
     paths:
       - research/sos_feature_adjust_backtest.py
+      - research/sos_feature_adjust_backtest_v2.py
       - .github/workflows/research-sos-feature-adjust.yml
   workflow_dispatch:
 
@@ -20,8 +21,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Run isolated historical SOS test
-        run: python research/sos_feature_adjust_backtest.py
+        run: python research/sos_feature_adjust_backtest_v2.py
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sos-feature-adjust-results
           path: sos_feature_adjust_results.json
+          if-no-files-found: warn
