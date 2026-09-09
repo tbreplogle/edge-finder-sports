@@ -1,6 +1,12 @@
 name: Research SOS Feature Adjustment
 
 on:
+  push:
+    branches:
+      - research-sos-feature-adjust-20260909
+    paths:
+      - research/sos_feature_adjust_backtest.py
+      - .github/workflows/research-sos-feature-adjust.yml
   workflow_dispatch:
 
 jobs:
@@ -10,8 +16,6 @@ jobs:
       CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: research-sos-feature-adjust-20260909
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
