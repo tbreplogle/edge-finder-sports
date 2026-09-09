@@ -7,6 +7,7 @@ on:
     paths:
       - research/sos_feature_adjust_backtest.py
       - research/sos_feature_adjust_backtest_v3.py
+      - research/sos_hybrid_backtest_v4.py
       - .github/workflows/research-sos-feature-adjust.yml
   workflow_dispatch:
 
@@ -20,11 +21,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Run full feature-level SOS replacement backtest
-        run: python research/sos_feature_adjust_backtest_v3.py
+      - name: Run hybrid feature-level plus damped WIN50 backtest
+        run: python research/sos_hybrid_backtest_v4.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: sos-feature-adjust-results-v3
-          path: sos_feature_adjust_results_v3.json
+          name: sos-hybrid-results-v4
+          path: sos_hybrid_results_v4.json
           if-no-files-found: warn
