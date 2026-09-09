@@ -1,0 +1,23 @@
+name: Research SOS Feature Adjustment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research-sos-feature-adjust-20260909
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run isolated historical SOS test
+        run: python research/sos_feature_adjust_backtest.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sos-feature-adjust-results
+          path: sos_feature_adjust_results.json
